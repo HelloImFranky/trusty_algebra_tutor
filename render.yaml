@@ -32,7 +32,19 @@ services:
         generateValue: true # Render generates a strong secret for you
       - key: PORT
         value: '4000'
-      # Optional: enables the AI tutor chat. Leave unset and the app falls back
-      # to the built-in step-by-step hints. Set it in the Render dashboard.
+      # Optional AI tutor chat — set these in the Render dashboard. Leave them
+      # unset and the app uses the built-in step-by-step hints. For a free open
+      # model on Hugging Face, set TUTOR_PROVIDER=openai, HF_TOKEN=hf_..., and
+      # TUTOR_MODEL=Qwen/Qwen2.5-7B-Instruct. For Claude, set ANTHROPIC_API_KEY.
+      - key: TUTOR_PROVIDER
+        sync: false
+      - key: TUTOR_MODEL
+        sync: false
+      - key: TUTOR_BASE_URL
+        sync: false
+      - key: HF_TOKEN
+        sync: false
+      - key: TUTOR_API_KEY
+        sync: false
       - key: ANTHROPIC_API_KEY
         sync: false

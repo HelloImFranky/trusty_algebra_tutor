@@ -87,11 +87,57 @@ present, otherwise Node 20+ and PostgreSQL):
 
 ### Turning on the AI tutor chat (optional)
 
-The step-by-step hints work out of the box. The conversational AI tutor is
-optional and only needs a [Claude API key](https://console.anthropic.com/):
-set `ANTHROPIC_API_KEY` in the Render dashboard (Option A), or add a line
-`ANTHROPIC_API_KEY=sk-...` to a file named `.env` next to `docker-compose.yml`
-(Option B). Without it, the app quietly falls back to the built-in hint ladder.
+The step-by-step hints work out of the box with **no** LLM. The conversational
+"I don't get it" tutor is optional and **provider-agnostic** — point it at a
+free open model, a self-hosted model, or Claude. Whichever you choose, it gets
+the same scaffold-constrained system prompt (teach the classroom method, never
+give the final answer, age-appropriate, EN/ES) and grading always stays in the
+deterministic math engine. If nothing is configured, the app quietly falls back
+to the built-in hint ladder.
+
+**Option 1 — Free open math model on Hugging Face.** Get a free token at
+[huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) and set:
+
+```
+TUTOR_PROVIDER=openai
+HF_TOKEN=hf_xxx
+TUTOR_MODEL=Qwen/Qwen2.5-7B-Instruct
+```
+
+[Qwen2.5-7B-Instruct](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct) is
+Apache-2.0, strong at math, follows instructions well, and speaks Spanish — a
+good fit for the tutoring role. For a math-specialized model use
+[`Qwen/Qwen2.5-Math-7B-Instruct`](https://huggingface.co/Qwen/Qwen2.5-Math-7B-Instruct)
+(see the note below). Hugging Face's free tier is rate-limited — great for a
+pilot; for a full class, self-host (Option 2) or use a paid provider.
+
+**Option 2 — Self-hosted model (free and private).** Run any model with
+[Ollama](https://ollama.com) (`ollama pull qwen2.5` then `ollama serve`) or
+vLLM/TGI/LM Studio, and point the app at it — no key, and **student chat never
+leaves your machine** (a real COPPA/FERPA win, since prompts are also
+PII-scrubbed before sending):
+
+```
+TUTOR_PROVIDER=openai
+TUTOR_BASE_URL=http://localhost:11434/v1   # Ollama
+TUTOR_MODEL=qwen2.5
+```
+
+**Option 3 — Claude.** Set `ANTHROPIC_API_KEY=sk-...` (auto-detected). Highest
+quality and strongest guardrails; paid.
+
+> **Tutor vs. solver — worth knowing.** Math-*solver* models (Qwen2.5-Math,
+> Mathstral, DeepSeek-Math) are tuned to *produce answers and full solutions*,
+> which is the opposite of what a Socratic tutor should do — they can be more
+> likely to blurt the answer or drift off the scaffold than a good general
+> instruct model. Because our grading is deterministic (the CAS math engine)
+> and the free step-by-step hint ladder is the primary help path, the LLM is
+> only the "explain it to me differently" layer, so either kind works — but if
+> the tutor gives away answers, prefer a general instruct model
+> (`Qwen2.5-7B-Instruct`, `Llama-3.1-8B-Instruct`) over a pure solver.
+
+Set these in the Render dashboard (Option A hosting) or in a `.env` file next
+to `docker-compose.yml` (Option B). See `.env.example`.
 
 ### Configuration (all optional)
 
@@ -99,8 +145,12 @@ set `ANTHROPIC_API_KEY` in the Render dashboard (Option A), or add a line
 |---|---|---|
 | `DATABASE_URL` | `postgres://tutor:tutor@localhost:5432/algebra_tutor` | Postgres connection |
 | `JWT_SECRET` | auto-generated & persisted | login-token signing key; set it to share one across multiple instances |
-| `ANTHROPIC_API_KEY` | *(unset)* | enables the AI tutor chat; without it the app uses the deterministic hint ladder |
-| `ANTHROPIC_MODEL` | `claude-opus-4-8` | tutor model |
+| `TUTOR_PROVIDER` | auto-detect | `openai` (Hugging Face / self-hosted / OpenAI-compatible), `anthropic`, or `none` |
+| `HF_TOKEN` / `TUTOR_API_KEY` | *(unset)* | bearer token for the OpenAI-compatible endpoint |
+| `TUTOR_BASE_URL` | `https://router.huggingface.co/v1` | OpenAI-compatible endpoint (e.g. `http://localhost:11434/v1` for Ollama) |
+| `TUTOR_MODEL` | `Qwen/Qwen2.5-7B-Instruct` | model id for the OpenAI-compatible endpoint |
+| `ANTHROPIC_API_KEY` | *(unset)* | use Claude for the tutor (auto-detected if set) |
+| `ANTHROPIC_MODEL` | `claude-opus-4-8` | Claude model |
 | `PORT` | `4000` | port the app listens on |
 | `DATA_DIR` | `server/.data` | where the generated login key is stored |
 

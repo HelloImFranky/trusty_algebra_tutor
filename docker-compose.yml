@@ -26,9 +26,17 @@ services:
       dockerfile: Dockerfile
     environment:
       DATABASE_URL: postgres://tutor:tutor@db:5432/algebra_tutor
-      # Optional AI tutor key; blank is fine (app falls back to built-in hints).
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       PORT: '4000'
+      # Optional AI tutor chat. Put any of these in a ".env" file next to this
+      # one (see .env.example); all blank is fine — the app falls back to the
+      # built-in step-by-step hints. Pick a free open model on Hugging Face, a
+      # self-hosted model, or Claude.
+      TUTOR_PROVIDER: ${TUTOR_PROVIDER:-}
+      TUTOR_BASE_URL: ${TUTOR_BASE_URL:-}
+      TUTOR_MODEL: ${TUTOR_MODEL:-}
+      HF_TOKEN: ${HF_TOKEN:-}
+      TUTOR_API_KEY: ${TUTOR_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     volumes:
       - appdata:/data # persists the auto-generated login secret
     depends_on:
