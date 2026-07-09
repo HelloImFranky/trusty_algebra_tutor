@@ -1,17 +1,16 @@
 [
   {
     "lesson": "1.1",
-    "title": "Exponents Rules",
+    "title": "Square Roots & Cube Roots",
     "images": [
-      "/scaffolds/1-1-exponents-rules-1.jpg"
+      "/scaffolds/1-1-square-roots-cube-roots-1.jpg"
     ]
   },
   {
     "lesson": "1.1",
-    "title": "Square Roots & Cube Roots",
+    "title": "Exponents Rules",
     "images": [
-      "/scaffolds/1-1-square-roots-cube-roots-1.jpg",
-      "/scaffolds/1-1-square-roots-cube-roots-2.jpg"
+      "/scaffolds/1-1-exponents-rules-1.jpg"
     ]
   },
   {
@@ -58,16 +57,16 @@
   },
   {
     "lesson": "2.2",
-    "title": "Multi-Step Simplifying Polynomials",
+    "title": "Simplifying Expressions & Polynomials, Standard Form",
     "images": [
-      "/scaffolds/2-2-multi-step-simplifying-polynomials-1.jpg"
+      "/scaffolds/2-2-simplifying-expressions-polynomials-standard-1.jpg"
     ]
   },
   {
     "lesson": "2.2",
-    "title": "Simplifying Expressions & Polynomials, Standard Form",
+    "title": "Multi-Step Simplifying Polynomials",
     "images": [
-      "/scaffolds/2-2-simplifying-expressions-polynomials-stan-1.jpg"
+      "/scaffolds/2-2-multi-step-simplifying-polynomials-1.jpg"
     ]
   },
   {
@@ -86,16 +85,16 @@
   },
   {
     "lesson": "2.3",
-    "title": "Multiplying Binomials",
+    "title": "Multiplying Monomials and Polynomials",
     "images": [
-      "/scaffolds/2-3-multiplying-binomials-1.jpg"
+      "/scaffolds/2-3-multiplying-monomials-and-polynomials-1.jpg"
     ]
   },
   {
     "lesson": "2.3",
-    "title": "Multiplying Monomials and Polynomials",
+    "title": "Multiplying Binomials",
     "images": [
-      "/scaffolds/2-3-multiplying-monomials-and-polynomials-1.jpg"
+      "/scaffolds/2-3-multiplying-binomials-1.jpg"
     ]
   },
   {
@@ -109,7 +108,21 @@
     "lesson": "3.1",
     "title": "Solving Equations Review (two-step equations)",
     "images": [
-      "/scaffolds/3-1-solving-equations-review-two-step-equati-1.jpg"
+      "/scaffolds/3-1-solving-equations-review-two-step-equations-1.jpg"
+    ]
+  },
+  {
+    "lesson": "3.1",
+    "title": "Solving Multi-Step Equations",
+    "images": [
+      "/scaffolds/3-1-solving-multi-step-equations-1.jpg"
+    ]
+  },
+  {
+    "lesson": "3.2",
+    "title": "Solving Equations with Variables on Both Sides",
+    "images": [
+      "/scaffolds/3-2-solving-equations-with-variables-on-both-sid-1.jpg"
     ]
   },
   {
@@ -120,31 +133,10 @@
     ]
   },
   {
-    "lesson": "3.2",
-    "title": "Solving Equations with Variables on Both Sides",
-    "images": [
-      "/scaffolds/3-2-solving-equations-with-variables-on-both-1.jpg"
-    ]
-  },
-  {
-    "lesson": "3.3",
-    "title": "Real-world inequalities",
-    "images": [
-      "/scaffolds/3-3-real-world-inequalities-1.jpg"
-    ]
-  },
-  {
     "lesson": "3.3",
     "title": "Solving Inequalities Review (two-step inequalities)",
     "images": [
-      "/scaffolds/3-3-solving-inequalities-review-two-step-ine-1.jpg"
-    ]
-  },
-  {
-    "lesson": "3.3",
-    "title": "Solving Inequalities with Variables on Both Sides",
-    "images": [
-      "/scaffolds/3-3-solving-inequalities-with-variables-on-b-1.jpg"
+      "/scaffolds/3-3-solving-inequalities-review-two-step-inequal-1.jpg"
     ]
   },
   {
@@ -155,10 +147,38 @@
     ]
   },
   {
+    "lesson": "3.3",
+    "title": "Solving Inequalities with Variables on Both Sides",
+    "images": [
+      "/scaffolds/3-3-solving-inequalities-with-variables-on-both--1.jpg"
+    ]
+  },
+  {
+    "lesson": "3.3",
+    "title": "Real-world inequalities",
+    "images": [
+      "/scaffolds/3-3-real-world-inequalities-1.jpg"
+    ]
+  },
+  {
     "lesson": "4.1",
     "title": "Understanding Functions",
     "images": [
       "/scaffolds/4-1-understanding-functions-1.jpg"
+    ]
+  },
+  {
+    "lesson": "4.2",
+    "title": "Input/Output \u2014 Evaluating Functions",
+    "images": [
+      "/scaffolds/4-2-input-output-evaluating-functions-1.jpg"
+    ]
+  },
+  {
+    "lesson": "4.2",
+    "title": "Equality of Functions",
+    "images": [
+      "/scaffolds/4-2-equality-of-functions-1.jpg"
     ]
   },
   {
@@ -184,26 +204,9 @@
   },
   {
     "lesson": "4.2",
-    "title": "Equality of Functions",
-    "images": [
-      "/scaffolds/4-2-equality-of-functions-1.jpg"
-    ]
-  },
-  {
-    "lesson": "4.2",
-    "title": "Input/Output \u2014 Evaluating Functions",
-    "images": [
-      "/scaffolds/4-2-input-output-evaluating-functions-1.jpg"
-    ]
-  },
-  {
-    "lesson": "4.2",
     "title": "Interpreting Graphs",
     "images": [
-      "/scaffolds/4-2-interpreting-graphs-1.jpg",
-      "/scaffolds/4-2-interpreting-graphs-2.jpg",
-      "/scaffolds/4-2-interpreting-graphs-3.jpg",
-      "/scaffolds/4-2-interpreting-graphs-4.jpg"
+      "/scaffolds/4-2-interpreting-graphs-1.jpg"
     ]
   },
   {
@@ -217,30 +220,28 @@
     "lesson": "5.1",
     "title": "Identifying Linear Functions \u2014 Tables & Word Problems",
     "images": [
-      "/scaffolds/5-1-identifying-linear-functions-tables-word-1.jpg"
+      "/scaffolds/5-1-identifying-linear-functions-tables-word-pro-1.jpg"
     ]
   },
   {
     "lesson": "5.1",
     "title": "Unit 5 Vocabulary",
     "images": [
-      "/scaffolds/5-1-unit-5-vocabulary-1.jpg",
-      "/scaffolds/5-1-unit-5-vocabulary-2.jpg",
-      "/scaffolds/5-1-unit-5-vocabulary-3.jpg"
+      "/scaffolds/5-1-unit-5-vocabulary-1.jpg"
     ]
   },
   {
     "lesson": "5.2",
     "title": "Finding Slope and Intercepts from a graph",
     "images": [
-      "/scaffolds/5-2-finding-slope-and-intercepts-from-a-grap-1.jpg"
+      "/scaffolds/5-2-finding-slope-and-intercepts-from-a-graph-1.jpg"
     ]
   },
   {
     "lesson": "5.2",
     "title": "Finding Slope and Intercepts from a table",
     "images": [
-      "/scaffolds/5-2-finding-slope-and-intercepts-from-a-tabl-1.jpg"
+      "/scaffolds/5-2-finding-slope-and-intercepts-from-a-table-1.jpg"
     ]
   },
   {
@@ -252,30 +253,9 @@
   },
   {
     "lesson": "5.3",
-    "title": "Graphing y = mx + b",
-    "images": [
-      "/scaffolds/5-3-graphing-y-mx-b-1.jpg"
-    ]
-  },
-  {
-    "lesson": "5.3",
-    "title": "Interpreting & Modeling Linear Functions",
-    "images": [
-      "/scaffolds/5-3-interpreting-modeling-linear-functions-1.jpg"
-    ]
-  },
-  {
-    "lesson": "5.3",
     "title": "Intro to Graphing with Desmos",
     "images": [
       "/scaffolds/5-3-intro-to-graphing-with-desmos-1.jpg"
-    ]
-  },
-  {
-    "lesson": "5.3",
-    "title": "Linear Regression & Correlation Coefficient",
-    "images": [
-      "/scaffolds/5-3-linear-regression-correlation-coefficien-1.jpg"
     ]
   },
   {
@@ -287,48 +267,65 @@
   },
   {
     "lesson": "5.3",
+    "title": "Graphing y = mx + b",
+    "images": [
+      "/scaffolds/5-3-graphing-y-mx-b-1.jpg"
+    ]
+  },
+  {
+    "lesson": "5.3",
     "title": "Writing Linear Functions",
     "images": [
       "/scaffolds/5-3-writing-linear-functions-1.jpg"
     ]
   },
   {
+    "lesson": "5.3",
+    "title": "Interpreting & Modeling Linear Functions",
+    "images": [
+      "/scaffolds/5-3-interpreting-modeling-linear-functions-1.jpg"
+    ]
+  },
+  {
+    "lesson": "5.3",
+    "title": "Linear Regression & Correlation Coefficient",
+    "images": [
+      "/scaffolds/5-3-linear-regression-correlation-coefficient-1.jpg"
+    ]
+  },
+  {
     "lesson": "5.4",
     "title": "Solving Systems of Linear Equations by Graphing",
     "images": [
-      "/scaffolds/5-4-solving-systems-of-linear-equations-by-g-1.jpg"
+      "/scaffolds/5-4-solving-systems-of-linear-equations-by-graph-1.jpg"
     ]
   },
   {
     "lesson": "5.4",
     "title": "Solving Systems of Linear Equations by Substitution",
     "images": [
-      "/scaffolds/5-4-solving-systems-of-linear-equations-by-s-1.jpg"
-    ]
-  },
-  {
-    "lesson": "5.5",
-    "title": "Graphing Linear Inequalities & Systems of Inequalities",
-    "images": [
-      "/scaffolds/5-5-graphing-linear-inequalities-systems-of--1.jpg",
-      "/scaffolds/5-5-graphing-linear-inequalities-systems-of--2.jpg",
-      "/scaffolds/5-5-graphing-linear-inequalities-systems-of--3.jpg",
-      "/scaffolds/5-5-graphing-linear-inequalities-systems-of--4.jpg"
+      "/scaffolds/5-4-solving-systems-of-linear-equations-by-subst-1.jpg"
     ]
   },
   {
     "lesson": "5.5",
     "title": "Solving Systems of Linear Equations by Elimination",
     "images": [
-      "/scaffolds/5-5-solving-systems-of-linear-equations-by-e-1.jpg",
-      "/scaffolds/5-5-solving-systems-of-linear-equations-by-e-2.jpg"
+      "/scaffolds/5-5-solving-systems-of-linear-equations-by-elimi-1.jpg"
     ]
   },
   {
     "lesson": "5.5",
     "title": "Systems \u2014 Cumulative Review (choosing a method)",
     "images": [
-      "/scaffolds/5-5-systems-cumulative-review-choosing-a-met-1.jpg"
+      "/scaffolds/5-5-systems-cumulative-review-choosing-a-method-1.jpg"
+    ]
+  },
+  {
+    "lesson": "5.5",
+    "title": "Graphing Linear Inequalities & Systems of Inequalities",
+    "images": [
+      "/scaffolds/5-5-graphing-linear-inequalities-systems-of-ineq-1.jpg"
     ]
   },
   {
@@ -349,8 +346,7 @@
     "lesson": "6.2",
     "title": "Exponential Growth vs Decay",
     "images": [
-      "/scaffolds/6-2-exponential-growth-vs-decay-1.jpg",
-      "/scaffolds/6-2-exponential-growth-vs-decay-2.jpg"
+      "/scaffolds/6-2-exponential-growth-vs-decay-1.jpg"
     ]
   },
   {
@@ -362,10 +358,9 @@
   },
   {
     "lesson": "7.1",
-    "title": "Factoring Polynomials by using GCF",
+    "title": "Greatest Common Factor (GCF) of Monomials",
     "images": [
-      "/scaffolds/7-1-factoring-polynomials-by-using-gcf-1.jpg",
-      "/scaffolds/7-1-factoring-polynomials-by-using-gcf-2.jpg"
+      "/scaffolds/7-1-greatest-common-factor-gcf-of-monomials-1.jpg"
     ]
   },
   {
@@ -377,16 +372,9 @@
   },
   {
     "lesson": "7.1",
-    "title": "Greatest Common Factor (GCF) of Monomials",
+    "title": "Factoring Polynomials by using GCF",
     "images": [
-      "/scaffolds/7-1-greatest-common-factor-gcf-of-monomials-1.jpg"
-    ]
-  },
-  {
-    "lesson": "7.2",
-    "title": "Factoring Polynomials: Mixed Practice",
-    "images": [
-      "/scaffolds/7-2-factoring-polynomials-mixed-practice-1.jpg"
+      "/scaffolds/7-1-factoring-polynomials-by-using-gcf-1.jpg"
     ]
   },
   {
@@ -400,8 +388,21 @@
     "lesson": "7.2",
     "title": "Factoring a Difference of Squares (DOTS METHOD)",
     "images": [
-      "/scaffolds/7-2-factoring-a-difference-of-squares-dots-m-1.jpg",
-      "/scaffolds/7-2-factoring-a-difference-of-squares-dots-m-2.jpg"
+      "/scaffolds/7-2-factoring-a-difference-of-squares-dots-metho-1.jpg"
+    ]
+  },
+  {
+    "lesson": "7.2",
+    "title": "Factoring Polynomials: Mixed Practice",
+    "images": [
+      "/scaffolds/7-2-factoring-polynomials-mixed-practice-1.jpg"
+    ]
+  },
+  {
+    "lesson": "8.1",
+    "title": "Solving ax\u00b2\u2212c=0 using Square Roots",
+    "images": [
+      "/scaffolds/8-1-solving-ax-c-0-using-square-roots-1.jpg"
     ]
   },
   {
@@ -415,59 +416,35 @@
     "lesson": "8.1",
     "title": "Solving a(x+b)\u00b2=c using Square Roots",
     "images": [
-      "/scaffolds/8-1-solving-a-x-b-c-using-square-roots-1.jpg",
-      "/scaffolds/8-1-solving-a-x-b-c-using-square-roots-2.jpg"
-    ]
-  },
-  {
-    "lesson": "8.1",
-    "title": "Solving ax\u00b2\u2212c=0 using Square Roots",
-    "images": [
-      "/scaffolds/8-1-solving-ax-c-0-using-square-roots-1.jpg"
+      "/scaffolds/8-1-solving-a-x-b-c-using-square-roots-1.jpg"
     ]
   },
   {
     "lesson": "8.2",
     "title": "Solving Quadratic Equations by Factoring (a=1)",
     "images": [
-      "/scaffolds/8-2-solving-quadratic-equations-by-factoring-1.jpg",
-      "/scaffolds/8-2-solving-quadratic-equations-by-factoring-2.jpg"
+      "/scaffolds/8-2-solving-quadratic-equations-by-factoring-a-1-1.jpg"
     ]
   },
   {
     "lesson": "8.2",
     "title": "Solving Quadratics by Completing the Square",
     "images": [
-      "/scaffolds/8-2-solving-quadratics-by-completing-the-squ-1.jpg"
-    ]
-  },
-  {
-    "lesson": "8.2",
-    "title": "Solving Quadratics using Different Methods",
-    "images": [
-      "/scaffolds/8-2-solving-quadratics-using-different-metho-1.jpg"
+      "/scaffolds/8-2-solving-quadratics-by-completing-the-square-1.jpg"
     ]
   },
   {
     "lesson": "8.2",
     "title": "Solving Quadratics using the Quadratic Formula",
     "images": [
-      "/scaffolds/8-2-solving-quadratics-using-the-quadratic-f-1.jpg",
-      "/scaffolds/8-2-solving-quadratics-using-the-quadratic-f-2.jpg"
+      "/scaffolds/8-2-solving-quadratics-using-the-quadratic-formu-1.jpg"
     ]
   },
   {
-    "lesson": "8.3",
-    "title": "Axis of Symmetry",
+    "lesson": "8.2",
+    "title": "Solving Quadratics using Different Methods",
     "images": [
-      "/scaffolds/8-3-axis-of-symmetry-1.jpg"
-    ]
-  },
-  {
-    "lesson": "8.3",
-    "title": "Completing the Square to Identify the Vertex",
-    "images": [
-      "/scaffolds/8-3-completing-the-square-to-identify-the-ve-1.jpg"
+      "/scaffolds/8-2-solving-quadratics-using-different-methods-1.jpg"
     ]
   },
   {
@@ -479,16 +456,23 @@
   },
   {
     "lesson": "8.3",
-    "title": "Identifying the VERTEX (graph, table, vertex-form)",
+    "title": "Using the Graphing Calculator",
     "images": [
-      "/scaffolds/8-3-identifying-the-vertex-graph-table-verte-1.jpg"
+      "/scaffolds/8-3-using-the-graphing-calculator-1.jpg"
     ]
   },
   {
     "lesson": "8.3",
-    "title": "Identifying the Zeros/X-intercepts/Roots",
+    "title": "Identifying the VERTEX (graph, table, vertex-form)",
     "images": [
-      "/scaffolds/8-3-identifying-the-zeros-x-intercepts-roots-1.jpg"
+      "/scaffolds/8-3-identifying-the-vertex-graph-table-vertex-fo-1.jpg"
+    ]
+  },
+  {
+    "lesson": "8.3",
+    "title": "Completing the Square to Identify the Vertex",
+    "images": [
+      "/scaffolds/8-3-completing-the-square-to-identify-the-vertex-1.jpg"
     ]
   },
   {
@@ -500,9 +484,16 @@
   },
   {
     "lesson": "8.3",
-    "title": "Using the Graphing Calculator",
+    "title": "Axis of Symmetry",
     "images": [
-      "/scaffolds/8-3-using-the-graphing-calculator-1.jpg"
+      "/scaffolds/8-3-axis-of-symmetry-1.jpg"
+    ]
+  },
+  {
+    "lesson": "8.3",
+    "title": "Identifying the Zeros/X-intercepts/Roots",
+    "images": [
+      "/scaffolds/8-3-identifying-the-zeros-x-intercepts-roots-1.jpg"
     ]
   },
   {
@@ -523,15 +514,14 @@
     "lesson": "9.1",
     "title": "Transforming Functions",
     "images": [
-      "/scaffolds/9-1-transforming-functions-1.jpg",
-      "/scaffolds/9-1-transforming-functions-2.jpg"
+      "/scaffolds/9-1-transforming-functions-1.jpg"
     ]
   },
   {
     "lesson": "9.2",
     "title": "Identifying Quadratic vs Exponential vs Linear Functions",
     "images": [
-      "/scaffolds/9-2-identifying-quadratic-vs-exponential-vs--1.jpg"
+      "/scaffolds/9-2-identifying-quadratic-vs-exponential-vs-line-1.jpg"
     ]
   },
   {

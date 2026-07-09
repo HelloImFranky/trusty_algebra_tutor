@@ -61,8 +61,8 @@ const dict = {
     guardianView: 'Family view',
     minutes: 'min',
     offlineQueued: 'Saved offline — will sync when you reconnect.',
-    classroomScaffold: 'Classroom Scaffold',
-    scaffoldNote: 'The original scaffold notes from class — same steps your teacher uses.',
+    classroomScaffold: 'Original scaffold notes from class',
+    scaffoldNote: 'Your class scaffolds, exactly as they were made — tap a topic to open it.',
   },
   es: {
     appName: 'Tutor de Álgebra',
@@ -122,8 +122,8 @@ const dict = {
     guardianView: 'Vista familiar',
     minutes: 'min',
     offlineQueued: 'Guardado sin conexión — se sincronizará al reconectar.',
-    classroomScaffold: 'Andamiaje de la Clase',
-    scaffoldNote: 'Las notas de andamiaje originales de la clase (en inglés) — los mismos pasos que usa tu maestra.',
+    classroomScaffold: 'Notas de andamiaje originales de la clase',
+    scaffoldNote: 'Los andamiajes de tu clase, tal como se hicieron (en inglés) — toca un tema para abrirlo.',
   },
 } as const;
 

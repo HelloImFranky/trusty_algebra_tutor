@@ -30,7 +30,10 @@ function loadScaffoldImages(): ScaffoldImageEntry[] {
     path.dirname(url.fileURLToPath(import.meta.url)),
     '../content/scaffoldImages.json',
   );
-  if (!fs.existsSync(file)) return [];
+  if (!fs.existsSync(file)) {
+    console.warn(`scaffoldImages.json not found at ${file} — scaffolds will have no images`);
+    return [];
+  }
   try {
     return JSON.parse(fs.readFileSync(file, 'utf8')) as ScaffoldImageEntry[];
   } catch (err) {
@@ -42,15 +45,20 @@ function loadScaffoldImages(): ScaffoldImageEntry[] {
 /**
  * Sync the original classroom scaffold sections onto their lessons.
  * Idempotent (delete + insert per lesson) so content edits land on reseed
- * without touching the rest of the curriculum. Sections that exist only as
- * images in the source document (no extractable text) are appended from the
- * image manifest with an empty body.
+ * without touching the rest of the curriculum.
+ *
+ * The scaffolds document is the source of truth: each lesson gets the
+ * sections of the image manifest (the document, section by section, in its
+ * teaching order), and the transcribed text rides along as a fallback body
+ * where a transcription exists. Lessons the manifest doesn't cover fall back
+ * to their transcribed sections so a stale/absent manifest degrades to text
+ * rather than to nothing.
  */
 export async function seedScaffolds(): Promise<void> {
   const imageEntries = loadScaffoldImages();
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const imagesFor = (lesson: string, title: string) =>
-    imageEntries.find((e) => e.lesson === lesson && norm(e.title) === norm(title))?.images ?? [];
+  const bodyFor = (lesson: string, title: string) =>
+    (classroomScaffolds[lesson] ?? []).find((s) => norm(s.title) === norm(title))?.body ?? '';
 
   const lessonCodes = new Set([
     ...Object.keys(classroomScaffolds),
@@ -66,21 +74,15 @@ export async function seedScaffolds(): Promise<void> {
     const lessonId = lesson.rows[0].id;
     await pool.query('DELETE FROM lesson_scaffolds WHERE lesson_id=$1', [lessonId]);
 
-    const textSections = classroomScaffolds[code] ?? [];
+    const entries = imageEntries.filter((e) => e.lesson === code);
+    const sections = entries.length
+      ? entries.map((e) => ({ title: e.title, body: bodyFor(code, e.title), images: e.images }))
+      : (classroomScaffolds[code] ?? []).map((s) => ({ ...s, images: [] as string[] }));
     let position = 0;
-    const seen = new Set<string>();
-    for (const s of textSections) {
-      seen.add(norm(s.title));
+    for (const s of sections) {
       await pool.query(
         'INSERT INTO lesson_scaffolds(lesson_id, position, title, body_md, images) VALUES ($1,$2,$3,$4,$5)',
-        [lessonId, ++position, s.title, s.body, imagesFor(code, s.title)],
-      );
-    }
-    // image-only sections from the source document
-    for (const e of imageEntries.filter((e) => e.lesson === code && !seen.has(norm(e.title)))) {
-      await pool.query(
-        'INSERT INTO lesson_scaffolds(lesson_id, position, title, body_md, images) VALUES ($1,$2,$3,$4,$5)',
-        [lessonId, ++position, e.title, '', e.images],
+        [lessonId, ++position, s.title, s.body, s.images],
       );
     }
   }

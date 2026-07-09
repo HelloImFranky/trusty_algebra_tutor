@@ -1,37 +1,163 @@
 #!/usr/bin/env python3
 """
-Bring the images/diagrams from the "Algebra Scaffolds__891" document into the
-app, attached to the scaffold section each one belongs to.
+Bring the original classroom scaffolds from the "Algebra Scaffolds__891"
+document into the app, one image set per scaffold section, attached to the
+lesson each section teaches.
 
 Usage:
-    python3 scripts/ingest_scaffold_images.py <scaffolds.pdf | scaffolds.docx>
+    python3 scripts/ingest_scaffold_images.py "scripts/Algebra Scaffolds__891.docx"
+    python3 scripts/ingest_scaffold_images.py scaffolds.pdf
 
-Preferred input is the PDF export (File > Download > PDF): the scaffolds are a
-mix of embedded images AND vector-drawn math/graphs, so each page is rendered
-whole (and whitespace-cropped) to preserve every worked example, diagram, and
-anchor chart exactly as the teacher made it. Each page maps to one scaffold
-section by the fixed table below.
-
-A .docx export is also accepted (extracts embedded raster images by heading);
-that path loses vector-drawn content, so the PDF is recommended.
+A .docx input is converted to PDF first (requires LibreOffice: `soffice`).
+The document is one continuous flow — each scaffold starts with its title
+paragraph and runs until the next title — so instead of assuming fixed page
+breaks, the script finds every section title in the rendered PDF and slices
+the document between consecutive titles. Each slice is rendered whole
+(text, tables, photos, and vector-drawn math alike), whitespace-cropped,
+and stitched into the section's image(s). Nothing is re-typeset: students
+see the scaffold exactly as it was made for class.
 
 Outputs:
-    web/public/scaffolds/<lesson>-<slug>-<n>.<ext>   image files
-    server/src/content/scaffoldImages.json           section -> images manifest
+    web/public/scaffolds/<lesson>-<slug>-<n>.jpg    section images
+    server/src/content/scaffoldImages.json          lesson/section -> images
 
-Then run `npm run seed` to sync the manifest into lesson_scaffolds.images.
+Then run `npm run seed` (happens automatically on server start) to sync the
+manifest into lesson_scaffolds.images.
+
+Dependencies: pymupdf, pillow  (pip install pymupdf pillow)
 """
-import hashlib
+from __future__ import annotations
+
+import io
 import json
 import re
+import shutil
+import subprocess
 import sys
-import zipfile
-import xml.etree.ElementTree as ET
+import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 OUT_DIR = REPO / "web/public/scaffolds"
 MANIFEST = REPO / "server/src/content/scaffoldImages.json"
+
+ZOOM = 2.0            # ~144 dpi render
+JPEG_QUALITY = 78
+CROP_PAD = 18         # px of white padding kept around content after autocrop
+PIECE_GAP = 28        # px between stitched page-pieces of one section
+MAX_IMAGE_H = 6200    # split a section into multiple images past this height
+MIN_CONTENT = 40      # pieces smaller than this (px) are blank -> skipped
+
+# ---------------------------------------------------------------------------
+# The scaffold sections, in document order. Each entry is:
+#   (lesson code, section title, [search aliases])
+# The title is the canonical name used across the app (it matches the
+# transcribed sections in server/src/content/classroomScaffolds.ts). The
+# aliases are text snippets actually present in the document's title
+# paragraph, used to locate the section's start. When no alias is given the
+# title itself is searched (punctuation-insensitively).
+# ---------------------------------------------------------------------------
+SECTIONS: list[tuple[str, str, list[str]]] = [
+    ("1.5", "Converting Measurements", []),
+    ("1.5", "Converting Rates", []),
+    ("1.1", "Square Roots & Cube Roots", []),
+    ("1.1", "Exponents Rules", []),
+    ("1.4", "Rational vs Irrational", []),
+    ("1.6", "Properties of Real Numbers", []),
+    ("2.1", "Classifying Polynomials", []),
+    ("2.1", "Evaluating Polynomials & Expressions", []),
+    ("2.2", "Simplifying Expressions & Polynomials, Standard Form",
+     ["Simplifying Expressions & Polynomials"]),
+    ("2.2", "Multi-Step Simplifying Polynomials", []),
+    ("2.2", "Writing Expressions", []),
+    ("2.3", "Adding vs Subtracting Polynomials", []),
+    ("2.3", "Multiplying Monomials and Polynomials", []),
+    ("2.3", "Multiplying Binomials", []),
+    ("2.3", "Multiplying Polynomials", []),
+    ("3.1", "Solving Equations Review (two-step equations)",
+     ["Solving Equations Review"]),
+    ("3.1", "Solving Multi-Step Equations", []),
+    ("3.2", "Solving Equations with Variables on Both Sides", []),
+    ("3.3", "Solving Inequalities Review (two-step inequalities)",
+     ["Solving Inequalities Review"]),
+    ("3.3", "Solving Multi-Step Inequalities", []),
+    ("3.3", "Solving Inequalities with Variables on Both Sides", []),
+    ("3.3", "Real-world inequalities", []),
+    ("3.2", "Literal Equations", []),
+    ("4.1", "Understanding Functions", []),
+    ("4.2", "Input/Output — Evaluating Functions",
+     ["Input/Output - Evaluating Functions", "Evaluating Functions"]),
+    ("4.2", "Equality of Functions", []),
+    ("4.2", "Adding, Subtracting & Multiplying Functions",
+     ["Adding & Subtracting Functions"]),
+    ("4.2", "Domain & Range", []),
+    ("4.2", "Domain & Range Real-World Application",
+     ["Real-World Application"]),
+    ("4.2", "Interpreting Graphs", []),
+    ("5.3", "Intro to Graphing with Desmos", ["Intro to Graphing"]),
+    ("5.1", "Identifying Linear Functions — EQUATIONS",
+     ["Identifying Linear Functions - EQUATIONS"]),
+    ("5.1", "Identifying Linear Functions — Tables & Word Problems",
+     ["Identifying Linear Functions - Tables"]),
+    ("5.2", "Finding Slope and Intercepts from a graph", []),
+    ("5.2", "Finding Slope and Intercepts from a table", []),
+    ("5.3", "Slope-Intercept Form", []),
+    ("5.2", "Rate of Change", []),
+    ("5.3", "Graphing y = mx + b", ["Graphing y=mx+b", "Graphing y = mx + b"]),
+    ("5.3", "Writing Linear Functions", []),
+    ("5.3", "Interpreting & Modeling Linear Functions",
+     ["Interpreting & Modeling"]),
+    ("5.3", "Linear Regression & Correlation Coefficient",
+     ["Linear Regression"]),
+    ("5.4", "Solving Systems of Linear Equations by Graphing", []),
+    ("5.4", "Solving Systems of Linear Equations by Substitution", []),
+    ("5.5", "Solving Systems of Linear Equations by Elimination", []),
+    ("5.5", "Systems — Cumulative Review (choosing a method)",
+     ["Cumulative Review"]),
+    ("5.5", "Graphing Linear Inequalities & Systems of Inequalities",
+     ["Graphing Linear Inequalities"]),
+    ("5.1", "Unit 5 Vocabulary", ["Linear Functions Vocabulary"]),
+    ("6.1", "Graphing Exponential Functions", []),
+    ("6.1", "Writing Exponential Functions", []),
+    ("6.2", "Exponential Growth vs Decay", []),
+    ("6.2", "Linear vs Exponential", []),
+    ("7.1", "Greatest Common Factor (GCF) of Monomials",
+     ["Greatest Common Factor"]),
+    ("7.1", "Factors Cheat Sheet", ["FACTORS CHEAT SHEET"]),
+    ("7.1", "Factoring Polynomials by using GCF", []),
+    ("7.2", "Factoring Trinomials when a=1", ["Factoring Trinomials"]),
+    ("7.2", "Factoring a Difference of Squares (DOTS METHOD)",
+     ["Difference of Squares"]),
+    ("7.2", "Factoring Polynomials: Mixed Practice", ["Mixed Practice"]),
+    ("9.2", "Identifying Quadratic vs Exponential vs Linear Functions",
+     ["Identifying Quadratic"]),
+    ("8.1", "Solving ax²−c=0 using Square Roots", ["using Square Roots"]),
+    ("8.1", "RECALL: Simplifying Radicals", ["Simplifying Radicals"]),
+    ("8.1", "Solving a(x+b)²=c using Square Roots", ["using Square Roots"]),
+    ("8.2", "Solving Quadratic Equations by Factoring (a=1)",
+     ["Solving Quadratic Equations by Factoring"]),
+    ("8.2", "Solving Quadratics by Completing the Square", []),
+    ("8.2", "Solving Quadratics using the Quadratic Formula",
+     ["Solving Quadratics using the"]),
+    ("8.2", "Solving Quadratics using Different Methods",
+     ["Different Methods"]),
+    ("8.3", "Graphing Quadratic Functions", []),
+    ("8.3", "Using the Graphing Calculator", ["Graphing Calculator"]),
+    ("8.3", "Identifying the VERTEX (graph, table, vertex-form)",
+     ["Identifying the"]),
+    ("8.3", "Completing the Square to Identify the Vertex",
+     ["Completing the Square to Identify"]),
+    ("8.3", "Minimum vs Maximum", []),
+    ("8.3", "Axis of Symmetry", []),
+    ("8.3", "Identifying the Zeros/X-intercepts/Roots", ["Identifying the"]),
+    ("8.4", "Examples of Real-World Quadratics", ["Real-World Quadratics"]),
+    ("8.4", "System of Linear & Quadratic Equations",
+     ["System of Linear & Quadratic"]),
+    ("9.1", "Transforming Functions", []),
+    ("9.2", "Piecewise Functions", []),
+]
+
+MAX_LOOKAHEAD_PAGES = 8  # a section never starts more than this far ahead
 
 
 def norm(s: str) -> str:
@@ -39,259 +165,187 @@ def norm(s: str) -> str:
 
 
 def slugify(title: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:40] or "img"
+    return re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:44] or "img"
 
 
-# ---------------------------------------------------------------------------
-# PDF path: fixed page -> (lesson, section title) map for the 92-page export.
-# Section titles match server/src/content/classroomScaffolds.ts (normalized)
-# so images merge into the existing text section; titles with no text match
-# become image-only sections. Continuation pages repeat their parent's entry.
-# ---------------------------------------------------------------------------
-PDF_PAGE_MAP = {
-    1: ("1.5", "Converting Measurements"),
-    2: ("1.5", "Converting Rates"),
-    3: ("1.1", "Square Roots & Cube Roots"),
-    4: ("1.1", "Square Roots & Cube Roots"),
-    5: ("1.1", "Exponents Rules"),
-    6: ("1.4", "Rational vs Irrational"),
-    7: ("1.6", "Properties of Real Numbers"),
-    8: ("2.1", "Classifying Polynomials"),
-    9: ("2.1", "Evaluating Polynomials & Expressions"),
-    10: ("2.2", "Simplifying Expressions & Polynomials, Standard Form"),
-    11: ("2.2", "Multi-Step Simplifying Polynomials"),
-    12: ("2.2", "Writing Expressions"),
-    13: ("2.3", "Adding vs Subtracting Polynomials"),
-    14: ("2.3", "Multiplying Monomials and Polynomials"),
-    15: ("2.3", "Multiplying Binomials"),
-    16: ("2.3", "Multiplying Polynomials"),
-    17: ("3.1", "Solving Equations Review (two-step equations)"),
-    18: ("3.2", "Solving Equations with Variables on Both Sides"),
-    19: ("3.3", "Solving Inequalities Review (two-step inequalities)"),
-    20: ("3.3", "Solving Multi-Step Inequalities"),
-    21: ("3.3", "Solving Inequalities with Variables on Both Sides"),
-    22: ("3.3", "Real-world inequalities"),
-    23: ("3.2", "Literal Equations"),
-    24: ("4.1", "Understanding Functions"),
-    25: ("4.2", "Input/Output — Evaluating Functions"),
-    26: ("4.2", "Equality of Functions"),
-    27: ("4.2", "Adding, Subtracting & Multiplying Functions"),
-    28: ("4.2", "Domain & Range"),
-    29: ("4.2", "Domain & Range Real-World Application"),
-    30: ("4.2", "Interpreting Graphs"),
-    31: ("4.2", "Interpreting Graphs"),
-    32: ("4.2", "Interpreting Graphs"),
-    33: ("4.2", "Interpreting Graphs"),
-    34: ("5.3", "Intro to Graphing with Desmos"),
-    35: ("5.1", "Identifying Linear Functions — EQUATIONS"),
-    36: ("5.1", "Identifying Linear Functions — Tables & Word Problems"),
-    37: ("5.2", "Finding Slope and Intercepts from a graph"),
-    38: ("5.2", "Finding Slope and Intercepts from a table"),
-    39: ("5.3", "Slope-Intercept Form"),
-    40: ("5.2", "Rate of Change"),
-    41: ("5.3", "Graphing y = mx + b"),
-    42: ("5.3", "Writing Linear Functions"),
-    43: ("5.3", "Interpreting & Modeling Linear Functions"),
-    44: ("5.3", "Linear Regression & Correlation Coefficient"),
-    45: ("5.4", "Solving Systems of Linear Equations by Graphing"),
-    46: ("5.4", "Solving Systems of Linear Equations by Substitution"),
-    47: ("5.5", "Solving Systems of Linear Equations by Elimination"),
-    48: ("5.5", "Solving Systems of Linear Equations by Elimination"),
-    49: ("5.5", "Systems — Cumulative Review (choosing a method)"),
-    50: ("5.5", "Graphing Linear Inequalities & Systems of Inequalities"),
-    51: ("5.5", "Graphing Linear Inequalities & Systems of Inequalities"),
-    52: ("5.5", "Graphing Linear Inequalities & Systems of Inequalities"),
-    53: ("5.5", "Graphing Linear Inequalities & Systems of Inequalities"),
-    54: ("5.1", "Unit 5 Vocabulary"),
-    55: ("5.1", "Unit 5 Vocabulary"),
-    56: ("5.1", "Unit 5 Vocabulary"),
-    57: ("6.1", "Graphing Exponential Functions"),
-    58: ("6.1", "Writing Exponential Functions"),
-    59: ("6.2", "Exponential Growth vs Decay"),
-    60: ("6.2", "Exponential Growth vs Decay"),
-    61: ("6.2", "Linear vs Exponential"),
-    62: ("7.1", "Greatest Common Factor (GCF) of Monomials"),
-    63: ("7.1", "Factors Cheat Sheet"),
-    64: ("7.1", "Factoring Polynomials by using GCF"),
-    65: ("7.1", "Factoring Polynomials by using GCF"),
-    66: ("7.2", "Factoring Trinomials when a=1"),
-    67: ("7.2", "Factoring a Difference of Squares (DOTS METHOD)"),
-    68: ("7.2", "Factoring a Difference of Squares (DOTS METHOD)"),
-    69: ("7.2", "Factoring Polynomials: Mixed Practice"),
-    70: ("9.2", "Identifying Quadratic vs Exponential vs Linear Functions"),
-    71: ("8.1", "Solving ax²−c=0 using Square Roots"),
-    72: ("8.1", "RECALL: Simplifying Radicals"),
-    73: ("8.1", "Solving a(x+b)²=c using Square Roots"),
-    74: ("8.1", "Solving a(x+b)²=c using Square Roots"),
-    75: ("8.2", "Solving Quadratic Equations by Factoring (a=1)"),
-    76: ("8.2", "Solving Quadratic Equations by Factoring (a=1)"),
-    77: ("8.2", "Solving Quadratics by Completing the Square"),
-    78: ("8.2", "Solving Quadratics using the Quadratic Formula"),
-    79: ("8.2", "Solving Quadratics using the Quadratic Formula"),
-    80: ("8.2", "Solving Quadratics using Different Methods"),
-    81: ("8.3", "Graphing Quadratic Functions"),
-    82: ("8.3", "Using the Graphing Calculator"),
-    83: ("8.3", "Identifying the VERTEX (graph, table, vertex-form)"),
-    84: ("8.3", "Completing the Square to Identify the Vertex"),
-    85: ("8.3", "Minimum vs Maximum"),
-    86: ("8.3", "Axis of Symmetry"),
-    87: ("8.3", "Identifying the Zeros/X-intercepts/Roots"),
-    88: ("8.4", "Examples of Real-World Quadratics"),
-    89: ("8.4", "System of Linear & Quadratic Equations"),
-    90: ("9.1", "Transforming Functions"),
-    91: ("9.1", "Transforming Functions"),
-    92: ("9.2", "Piecewise Functions"),
-}
-
-ZOOM = 2.0          # ~144 dpi render
-JPEG_QUALITY = 78
-CROP_PAD = 18       # px of white padding kept around content after autocrop
+def docx_to_pdf(docx: Path) -> Path:
+    soffice = shutil.which("soffice") or shutil.which("libreoffice")
+    if not soffice:
+        sys.exit("converting .docx requires LibreOffice (soffice); "
+                 "or export the document as PDF and pass that instead")
+    tmp = Path(tempfile.mkdtemp(prefix="scaffolds_"))
+    # a plain-ascii copy avoids filename quirks in some soffice builds
+    src = tmp / "scaffolds.docx"
+    shutil.copyfile(docx, src)
+    subprocess.run(
+        [soffice, f"-env:UserInstallation=file://{tmp}/profile",
+         "--headless", "--convert-to", "pdf", str(src), "--outdir", str(tmp)],
+        check=True, capture_output=True,
+    )
+    pdf = tmp / "scaffolds.pdf"
+    if not pdf.exists():
+        sys.exit("LibreOffice did not produce a PDF")
+    return pdf
 
 
-def ingest_pdf(pdf_path: str) -> list[dict]:
-    import fitz  # pymupdf
+def find_anchors(doc) -> list[tuple[int, float, str, str]]:
+    """Locate each section's title in document order.
+
+    Returns [(page_index, y, lesson, title), ...] — one per section. Searches
+    only forward from the previous anchor, so repeated phrases later in the
+    document (vocabulary cards, in-body mentions) can't hijack a boundary.
+    """
+    # exact-match index of standalone text blocks (title paragraphs)
+    blocks: list[tuple[int, float, str]] = []
+    for pno in range(doc.page_count):
+        for b in doc[pno].get_text("dict")["blocks"]:
+            if b.get("type") != 0:
+                continue
+            text = " ".join(
+                s["text"] for l in b["lines"] for s in l["spans"]
+            ).strip()
+            if text and len(text) < 90:
+                blocks.append((pno, b["bbox"][1], norm(text)))
+    blocks.sort(key=lambda t: (t[0], t[1]))
+
+    anchors: list[tuple[int, float, str, str]] = []
+    pos = (0, -1.0)  # (page_index, y) of the previous anchor
+    for lesson, title, aliases in SECTIONS:
+        limit = min(doc.page_count, pos[0] + MAX_LOOKAHEAD_PAGES)
+        candidates: list[tuple[int, float]] = []
+        # 1) a whole block that IS the title (punctuation-insensitive)
+        wanted = {norm(a) for a in aliases} | {norm(title)}
+        candidates += [
+            (p, y) for (p, y, n) in blocks
+            if n in wanted and (p, y) > pos and p < limit
+        ]
+        # 2) literal text search for each alias (handles multi-line titles)
+        for alias in aliases or [title]:
+            for pno in range(pos[0], limit):
+                for r in doc[pno].search_for(alias):
+                    if (pno, r.y0) > pos:
+                        candidates.append((pno, r.y0))
+        if not candidates:
+            sys.exit(f"could not locate section {lesson} “{title}” "
+                     f"after page {pos[0] + 1} — has the document changed?")
+        page, y = min(candidates)
+        anchors.append((page, y, lesson, title))
+        pos = (page, y + 1.0)
+    return anchors
+
+
+def render_sections(pdf_path: Path) -> list[dict]:
+    import fitz
     from PIL import Image, ImageChops
-    import io
 
     doc = fitz.open(pdf_path)
-    if doc.page_count not in (92, len(PDF_PAGE_MAP)):
-        print(
-            f"warning: expected 92 pages, got {doc.page_count}. The page map "
-            f"is calibrated to the known export; results may be misaligned."
-        )
-
-    def autocrop(im: Image.Image) -> Image.Image:
-        rgb = im.convert("RGB")
-        bg = Image.new("RGB", rgb.size, (255, 255, 255))
-        diff = ImageChops.difference(rgb, bg)
-        bbox = diff.getbbox()
-        if not bbox:
-            return rgb
-        l, t, r, b = bbox
-        l = max(0, l - CROP_PAD)
-        t = max(0, t - CROP_PAD)
-        r = min(rgb.width, r + CROP_PAD)
-        b = min(rgb.height, b + CROP_PAD)
-        return rgb.crop((l, t, r, b))
-
-    # group pages by section, preserving order
-    sections: dict[tuple[str, str], list[int]] = {}
-    for page_no in range(1, doc.page_count + 1):
-        key = PDF_PAGE_MAP.get(page_no)
-        if key is None:
-            print(f"warning: page {page_no} has no mapping; skipping")
-            continue
-        sections.setdefault(key, []).append(page_no)
-
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    manifest: list[dict] = []
-    total = 0
+    anchors = find_anchors(doc)
     mat = fitz.Matrix(ZOOM, ZOOM)
 
-    for (lesson, title), pages in sections.items():
+    def autocrop(im: Image.Image) -> Image.Image | None:
+        rgb = im.convert("RGB")
+        bg = Image.new("RGB", rgb.size, (255, 255, 255))
+        bbox = ImageChops.difference(rgb, bg).getbbox()
+        if not bbox:
+            return None
+        l, t, r, b = bbox
+        if r - l < MIN_CONTENT or b - t < MIN_CONTENT:
+            return None
+        return rgb.crop((
+            max(0, l - CROP_PAD), max(0, t - CROP_PAD),
+            min(rgb.width, r + CROP_PAD), min(rgb.height, b + CROP_PAD),
+        ))
+
+    def render_clip(pno: int, y0: float, y1: float) -> Image.Image | None:
+        page = doc[pno]
+        clip = fitz.Rect(0, max(0, y0), page.rect.width,
+                         min(page.rect.height, y1))
+        if clip.height < 8:
+            return None
+        pix = page.get_pixmap(matrix=mat, clip=clip, alpha=False)
+        return autocrop(Image.open(io.BytesIO(pix.tobytes("png"))))
+
+    def stitch(pieces: list[Image.Image]) -> Image.Image:
+        w = max(p.width for p in pieces)
+        h = sum(p.height for p in pieces) + PIECE_GAP * (len(pieces) - 1)
+        out = Image.new("RGB", (w, h), (255, 255, 255))
+        y = 0
+        for p in pieces:
+            out.paste(p, ((w - p.width) // 2, y))
+            y += p.height + PIECE_GAP
+        return out
+
+    if OUT_DIR.exists():
+        for old in OUT_DIR.glob("*.*"):
+            old.unlink()
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    manifest: list[dict] = []
+    total = 0
+    for i, (page, y, lesson, title) in enumerate(anchors):
+        if i + 1 < len(anchors):
+            end_page, end_y = anchors[i + 1][0], anchors[i + 1][1]
+        else:
+            end_page, end_y = doc.page_count - 1, doc[-1].rect.height
+        # slice the document flow between this title and the next one
+        pieces: list[Image.Image] = []
+        for pno in range(page, end_page + 1):
+            y0 = y if pno == page else 0.0
+            y1 = end_y if pno == end_page else doc[pno].rect.height
+            im = render_clip(pno, y0, y1)
+            if im is not None:
+                pieces.append(im)
+        if not pieces:
+            print(f"warning: section {lesson} “{title}” rendered empty")
+            continue
+        # stitch page-pieces into one tall image; split if it gets huge
+        groups: list[list[Image.Image]] = [[]]
+        h = 0
+        for p in pieces:
+            if groups[-1] and h + p.height > MAX_IMAGE_H:
+                groups.append([])
+                h = 0
+            groups[-1].append(p)
+            h += p.height + PIECE_GAP
         slug = slugify(title)
-        urls: list[str] = []
-        for i, page_no in enumerate(pages, start=1):
-            pix = doc[page_no - 1].get_pixmap(matrix=mat, alpha=False)
-            im = Image.open(io.BytesIO(pix.tobytes("png")))
-            im = autocrop(im)
-            # blank page (nothing but whitespace) -> skip
-            if im.width < 40 or im.height < 40:
-                continue
-            name = f"{lesson.replace('.', '-')}-{slug}-{i}.jpg"
-            im.save(OUT_DIR / name, "JPEG", quality=JPEG_QUALITY, optimize=True)
+        urls = []
+        for n, group in enumerate(groups, start=1):
+            name = f"{lesson.replace('.', '-')}-{slug}-{n}.jpg"
+            stitch(group).save(OUT_DIR / name, "JPEG",
+                               quality=JPEG_QUALITY, optimize=True)
             urls.append(f"/scaffolds/{name}")
             total += 1
-        if urls:
+        # repeated titles (e.g. a section's part 2) merge into one entry
+        prev = next((e for e in manifest
+                     if e["lesson"] == lesson and e["title"] == title), None)
+        if prev:
+            prev["images"] += [u for u in urls if u not in prev["images"]]
+        else:
             manifest.append({"lesson": lesson, "title": title, "images": urls})
 
-    manifest.sort(key=lambda e: (e["lesson"], e["title"]))
-    print(f"rendered {total} page images to {OUT_DIR.relative_to(REPO)}")
-    return manifest
-
-
-# ---------------------------------------------------------------------------
-# DOCX path (fallback): extract embedded raster images by heading.
-# ---------------------------------------------------------------------------
-NS = {
-    "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
-    "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
-    "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
-    "rel": "http://schemas.openxmlformats.org/package/2006/relationships",
-    "v": "urn:schemas-microsoft-com:vml",
-}
-MIN_BYTES = 1500
-SKIP_EXT = {".emf", ".wmf"}
-DOCX_HEADINGS = {norm(t): (l, t) for (l, t) in PDF_PAGE_MAP.values()}
-
-
-def ingest_docx(docx_path: str) -> list[dict]:
-    zf = zipfile.ZipFile(docx_path)
-    rels_root = ET.fromstring(zf.read("word/_rels/document.xml.rels"))
-    rid_to_target = {
-        rel.get("Id"): rel.get("Target")
-        for rel in rels_root.findall("rel:Relationship", NS)
-        if "media/" in (rel.get("Target") or "")
-    }
-    body = ET.fromstring(zf.read("word/document.xml")).find("w:body", NS)
-
-    current = None
-    per_section: dict[tuple[str, str], list[str]] = {}
-    for p in body.iter(f"{{{NS['w']}}}p"):
-        text = "".join(p.itertext()).strip()
-        if text and len(text) < 100:
-            hit = DOCX_HEADINGS.get(norm(text))
-            if hit:
-                current = hit
-        rids = [b.get(f"{{{NS['r']}}}embed") for b in p.iter(f"{{{NS['a']}}}blip")]
-        rids += [i.get(f"{{{NS['r']}}}id") for i in p.iter(f"{{{NS['v']}}}imagedata")]
-        for rid in rids:
-            target = rid_to_target.get(rid or "")
-            if target and current:
-                per_section.setdefault(current, []).append(target)
-
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    manifest, seen, total = [], {}, 0
-    for (lesson, title), targets in per_section.items():
-        slug = slugify(title)
-        urls, idx = [], 0
-        for target in targets:
-            try:
-                data = zf.read("word/" + target.lstrip("/"))
-            except KeyError:
-                continue
-            ext = Path(target).suffix.lower()
-            if ext in SKIP_EXT or len(data) < MIN_BYTES:
-                continue
-            digest = hashlib.sha1(data).hexdigest()[:12]
-            if digest in seen:
-                if seen[digest] not in urls:
-                    urls.append(seen[digest])
-                continue
-            idx += 1
-            name = f"{lesson.replace('.', '-')}-{slug}-{idx}{ext}"
-            (OUT_DIR / name).write_bytes(data)
-            seen[digest] = f"/scaffolds/{name}"
-            urls.append(seen[digest])
-            total += 1
-        if urls:
-            manifest.append({"lesson": lesson, "title": title, "images": urls})
-    manifest.sort(key=lambda e: (e["lesson"], e["title"]))
-    print(f"extracted {total} embedded images to {OUT_DIR.relative_to(REPO)}")
+    # group by lesson but keep the document's teaching order within a lesson
+    manifest.sort(key=lambda e: e["lesson"])
+    print(f"rendered {total} images ({len(manifest)} sections) "
+          f"to {OUT_DIR.relative_to(REPO)}")
     return manifest
 
 
 def main(path: str) -> None:
-    ext = Path(path).suffix.lower()
-    if ext == ".pdf":
-        manifest = ingest_pdf(path)
-    elif ext == ".docx":
-        manifest = ingest_docx(path)
+    src = Path(path)
+    if not src.exists():
+        sys.exit(f"no such file: {src}")
+    ext = src.suffix.lower()
+    if ext == ".docx":
+        print("converting .docx to PDF with LibreOffice…")
+        pdf = docx_to_pdf(src)
+    elif ext == ".pdf":
+        pdf = src
     else:
-        sys.exit(f"unsupported input: {ext} (use .pdf or .docx)")
+        sys.exit(f"unsupported input: {ext} (use .docx or .pdf)")
+    manifest = render_sections(pdf)
     MANIFEST.write_text(json.dumps(manifest, indent=2) + "\n")
     print(f"manifest: {MANIFEST.relative_to(REPO)} ({len(manifest)} sections)")
-    print("next: npm run seed   (syncs images into lesson_scaffolds)")
+    print("next: npm run seed   (runs automatically when the server starts)")
 
 
 if __name__ == "__main__":

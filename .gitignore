@@ -6,3 +6,4 @@ dist/
 !.env.example
 .data/
 server/.data/
+__pycache__/
