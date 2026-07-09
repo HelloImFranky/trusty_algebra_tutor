@@ -1,16 +1,19 @@
 /**
  * LLM tutor service (design doc §4.2 item 4, §5, §9).
  *
- * The backend mediates every Anthropic API call. The system prompt pins the
- * tutor to the lesson's scaffold steps so its explanations match the
- * classroom method (FOIL, not an alternative), never gives the final answer
- * outright, keeps an age-appropriate tone, and answers in the student's
+ * The backend mediates every tutor LLM call, regardless of provider (Claude,
+ * a free open model on Hugging Face, or a self-hosted model). The system
+ * prompt pins the tutor to the lesson's scaffold steps so its explanations
+ * match the classroom method (FOIL, not an alternative), never gives the final
+ * answer outright, keeps an age-appropriate tone, and answers in the student's
  * locale. Deterministic answer-checking stays in the math engine — the LLM
- * never grades.
+ * never grades. If no provider is configured, the app falls back to the
+ * deterministic hint ladder (this message), which always works.
  */
-import Anthropic from '@anthropic-ai/sdk';
-import { config } from '../config.js';
 import { query } from '../db/pool.js';
+import { getTutorProvider, type ChatMessage } from './providers.js';
+
+export type { ChatMessage } from './providers.js';
 
 export interface TutorContext {
   locale: 'en' | 'es';
@@ -27,12 +30,8 @@ export interface TutorContext {
   studentStepReached?: number;
 }
 
-const client = config.anthropicApiKey
-  ? new Anthropic({ apiKey: config.anthropicApiKey })
-  : null;
-
 export function tutorAvailable(): boolean {
-  return client !== null;
+  return getTutorProvider() !== null;
 }
 
 export function buildSystemPrompt(ctx: TutorContext): string {
@@ -90,46 +89,48 @@ export function scrubPii(text: string, displayName?: string): string {
   return s;
 }
 
-export interface ChatMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
+const OFFLINE_MSG = {
+  es: 'El tutor de chat no está disponible en este momento, ¡pero las pistas paso a paso siguen funcionando! Pide una pista con el botón de pista.',
+  en: 'The chat tutor is offline right now, but the step-by-step hints still work! Try the hint button.',
+};
+const REDIRECT_MSG = {
+  es: '\n\nVolvamos al problema de matemáticas. 😊',
+  en: "\n\nLet's get back to the math problem. 😊",
+};
 
 /**
  * Stream a tutor reply. Yields text chunks; the caller forwards them as SSE.
+ * Provider-agnostic: whichever LLM is configured (Claude, a free Hugging Face
+ * model, or a self-hosted one) receives the same scaffold-constrained system
+ * prompt. If no provider is configured, or the provider errors before emitting
+ * anything, we fall back to a friendly message pointing at the hint ladder.
  */
 export async function* streamTutorReply(
   ctx: TutorContext,
   transcript: ChatMessage[],
 ): AsyncGenerator<string> {
-  if (!client) {
-    yield ctx.locale === 'es'
-      ? 'El tutor de chat no está disponible en este momento, ¡pero las pistas paso a paso siguen funcionando! Pide una pista con el botón de pista.'
-      : 'The chat tutor is offline right now, but the step-by-step hints still work! Try the hint button.';
+  const provider = getTutorProvider();
+  if (!provider) {
+    yield OFFLINE_MSG[ctx.locale];
     return;
   }
-  const stream = client.messages.stream({
-    model: config.anthropicModel,
-    max_tokens: 1024,
-    system: [
-      {
-        type: 'text',
-        text: buildSystemPrompt(ctx),
-        cache_control: { type: 'ephemeral' },
-      },
-    ],
-    messages: transcript.map((m) => ({ role: m.role, content: m.content })),
-  });
-  for await (const event of stream) {
-    if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-      yield event.delta.text;
+  const system = buildSystemPrompt(ctx);
+  let emitted = false;
+  try {
+    for await (const chunk of provider.streamChat(system, transcript)) {
+      emitted = true;
+      yield chunk;
     }
-  }
-  const final = await stream.finalMessage();
-  if (final.stop_reason === 'refusal') {
-    yield ctx.locale === 'es'
-      ? '\n\nVolvamos al problema de matemáticas. 😊'
-      : "\n\nLet's get back to the math problem. 😊";
+  } catch (err) {
+    // 'refusal' (Anthropic) or an off-topic/guardrail stop -> gentle redirect.
+    if (err instanceof Error && err.message === 'refusal') {
+      yield emitted ? REDIRECT_MSG[ctx.locale] : REDIRECT_MSG[ctx.locale].trim();
+      return;
+    }
+    console.error(`tutor provider (${provider.name}/${provider.model}) error:`, err);
+    // Only surface a fallback if nothing streamed yet, so we never truncate a
+    // partial reply with an error message.
+    if (!emitted) yield OFFLINE_MSG[ctx.locale];
   }
 }
 
