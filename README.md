@@ -45,45 +45,76 @@ Content is **data, not code**: the curriculum lives in versioned Postgres rows
 (`content_version` on lessons) seeded from `server/src/content/`, so lessons
 can be edited without deploys. The attempts log is append-only.
 
-## Getting started
+## Running the app
 
-Requirements: Node 20+, PostgreSQL 16.
+**Students and teachers don't set anything up** — they just open the app's web
+address on their phone or Chromebook and (optionally) tap "Add to Home Screen"
+to install it. Everything below is the *one-time* job of whoever hosts the app.
+There are no environment variables to configure and no database commands to
+run — the app creates a secure login key, sets up its own database, and loads
+the full curriculum automatically on first start.
+
+### Option A — Put it online (no terminal, recommended for a class/school)
+
+One click deploys the whole app plus a managed database to
+[Render](https://render.com) and gives you a web address to share:
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/HelloImFranky/trusty_algebra_tutor)
+
+Sign in with GitHub, click **Apply**, wait a few minutes, and open the URL
+Render shows you. A secure login key is generated for you and the database is
+wired up automatically (settings come from `render.yaml`). The free plan is
+fine to try it out.
+
+### Option B — Run it on one computer with one command
+
+Install [Docker Desktop](https://www.docker.com/products/docker-desktop/), then
+from this folder run:
 
 ```bash
-# database
-createuser tutor --pwprompt        # password: tutor (or edit DATABASE_URL)
-createdb algebra_tutor -O tutor
-createdb algebra_tutor_test -O tutor   # for the test suite
-
-npm install
-npm run migrate && npm run seed    # schema + 29 lessons / ~570 problems
-npm run dev                        # API on :4000, web on :5173
+docker compose up
 ```
 
-Open http://localhost:5173, sign up as a student, and start Unit 1.
+Wait for it to finish (the first run builds the app), then open
+**http://localhost:8080**. That's it — no other setup.
 
-Environment variables (server):
+No Docker? This one command sets up and starts everything (it uses Docker if
+present, otherwise Node 20+ and PostgreSQL):
+
+```bash
+./scripts/start.sh
+```
+
+### Turning on the AI tutor chat (optional)
+
+The step-by-step hints work out of the box. The conversational AI tutor is
+optional and only needs a [Claude API key](https://console.anthropic.com/):
+set `ANTHROPIC_API_KEY` in the Render dashboard (Option A), or add a line
+`ANTHROPIC_API_KEY=sk-...` to a file named `.env` next to `docker-compose.yml`
+(Option B). Without it, the app quietly falls back to the built-in hint ladder.
+
+### Configuration (all optional)
 
 | Var | Default | Purpose |
 |---|---|---|
-| `DATABASE_URL` | `postgres://tutor:tutor@localhost:5432/algebra_tutor` | Postgres |
-| `JWT_SECRET` | dev value | sign tokens — set in prod |
-| `ANTHROPIC_API_KEY` | *(unset)* | enables the LLM tutor chat; without it the app falls back gracefully to the deterministic hint ladder |
+| `DATABASE_URL` | `postgres://tutor:tutor@localhost:5432/algebra_tutor` | Postgres connection |
+| `JWT_SECRET` | auto-generated & persisted | login-token signing key; set it to share one across multiple instances |
+| `ANTHROPIC_API_KEY` | *(unset)* | enables the AI tutor chat; without it the app uses the deterministic hint ladder |
 | `ANTHROPIC_MODEL` | `claude-opus-4-8` | tutor model |
+| `PORT` | `4000` | port the app listens on |
+| `DATA_DIR` | `server/.data` | where the generated login key is stored |
 
-### Docker
-
-```bash
-JWT_SECRET=... ANTHROPIC_API_KEY=... docker compose up --build
-# web on :8080, API on :4000
-```
-
-### Tests
+### For developers
 
 ```bash
-npm test    # 95 tests: math engine, generators (self-validating), mastery model,
-            # and full API integration against algebra_tutor_test
+npm install
+npm run dev     # API on :4000, web (hot-reload) on :5173
+npm test        # 95 tests: math engine, generators, mastery model, API integration
 ```
+
+`npm run serve` builds and runs the whole app as a single service on one port
+(what the Docker/Render images run). The dev setup needs a local PostgreSQL and
+a `algebra_tutor_test` database for the tests.
 
 ## Ingesting the scaffold images/diagrams
 

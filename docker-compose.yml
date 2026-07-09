@@ -1,4 +1,11 @@
-# Local/production-ish stack (design doc §5: containerized deploy).
+# Run the whole app with one command:  docker compose up
+#
+# No configuration required. This starts a database and the app (frontend +
+# API on one URL), auto-generates a secure login secret, runs migrations, and
+# seeds the full curriculum. Then open http://localhost:8080
+#
+# Optional: to enable the AI tutor chat, put a line ANTHROPIC_API_KEY=sk-...
+# in a file named ".env" next to this file (the app works without it).
 services:
   db:
     image: postgres:16
@@ -11,31 +18,25 @@ services:
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U tutor -d algebra_tutor']
       interval: 5s
-      retries: 10
+      retries: 15
 
-  api:
+  app:
     build:
       context: .
-      dockerfile: server/Dockerfile
+      dockerfile: Dockerfile
     environment:
       DATABASE_URL: postgres://tutor:tutor@db:5432/algebra_tutor
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-prod}
+      # Optional AI tutor key; blank is fine (app falls back to built-in hints).
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      PORT: 4000
+      PORT: '4000'
+    volumes:
+      - appdata:/data # persists the auto-generated login secret
     depends_on:
       db:
         condition: service_healthy
     ports:
-      - '4000:4000'
-
-  web:
-    build:
-      context: .
-      dockerfile: web/Dockerfile
-    depends_on:
-      - api
-    ports:
-      - '8080:80'
+      - '8080:4000' # open http://localhost:8080
 
 volumes:
   pgdata:
+  appdata:

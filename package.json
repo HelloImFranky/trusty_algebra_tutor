@@ -8,6 +8,8 @@
     "web"
   ],
   "scripts": {
+    "start": "./scripts/start.sh",
+    "serve": "npm run build && npm run start --workspace server",
     "dev": "npm run dev --workspace server & npm run dev --workspace web & wait",
     "build": "npm run build --workspace server && npm run build --workspace web",
     "test": "npm test --workspace server",
