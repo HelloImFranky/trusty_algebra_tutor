@@ -15,7 +15,7 @@ classroom's scaffolds document and pacing calendar.
 | Feature | Where |
 |---|---|
 | **Scaffolded lesson player** — numbered STEP 1/2/3 explanations, worked examples (KaTeX), persistent mnemonic chip | `web/src/pages/Lesson.tsx` |
-| **Classroom scaffolds in-app** — the original scaffold sections from the class's scaffolds document, attached to the lesson each one teaches, as expandable reference notes (with the document's images/diagrams once ingested — see below) | `server/src/content/classroomScaffolds.ts`, `lesson_scaffolds` table |
+| **Classroom scaffolds in-app** — every section of the class's scaffolds document, attached to the lesson it teaches and shown exactly as the teacher made it ("Original scaffold notes from class", expandable per topic — see below) | `scripts/ingest_scaffold_images.py`, `lesson_scaffolds` table |
 | **Guided problem solving (the tutor loop)** — wrong answers walk the scaffold one checkable step at a time; hints escalate nudge → mnemonic → step-by-step → LLM tutor | `web/src/pages/Practice.tsx`, `server/src/routes/practice.ts` |
 | **Deterministic CAS grading** — 4 grading modes (`equivalent`, `canonical_form`, `exact`, `numeric_tolerance`); never string equality, never the LLM | `server/src/math/engine.ts` |
 | **Exit tickets & mastery** — 4–8 question auto-graded check per lesson; rolling-accuracy mastery with recency decay; soft gates | `server/src/mastery.ts` |
@@ -168,29 +168,28 @@ a `algebra_tutor_test` database for the tests.
 
 ## Ingesting the scaffold images/diagrams
 
-The scaffold pages are the teacher's hand-annotated worked examples, graphs,
-and anchor charts — a mix of embedded images and vector-drawn math. These are
-ingested from the scaffolds document (already committed under
-`web/public/scaffolds/`). To re-ingest after the source changes:
+The scaffolds are the teacher's hand-annotated worked examples, graphs, and
+anchor charts — a mix of embedded images, tables, and vector-drawn math. The
+source document lives at `scripts/Algebra Scaffolds__891.docx`, and its
+rendered sections are committed under `web/public/scaffolds/` (one image set
+per scaffold, shown in each lesson as the "Original scaffold notes from
+class"). To re-ingest after the document changes:
 
-1. Export the Google Doc as **PDF** (File → Download → PDF Document) — the PDF
-   preserves the vector-drawn math and graphs that a `.docx` export would drop.
-2. Run the ingest script and reseed:
+```bash
+pip install pymupdf Pillow      # LibreOffice (soffice) also required for .docx
+python3 scripts/ingest_scaffold_images.py "scripts/Algebra Scaffolds__891.docx"
+npm run seed                    # also happens automatically on server start
+```
 
-   ```bash
-   pip install pymupdf Pillow
-   python3 scripts/ingest_scaffold_images.py ~/Downloads/Algebra\ Scaffolds__891.pdf
-   npm run seed
-   ```
-
-Each of the document's 92 pages is rendered whole, whitespace-cropped, and
-mapped to its scaffold section by a fixed page→section table in the script
-(calibrated to this export). Images write to `web/public/scaffolds/` and the
-manifest to `server/src/content/scaffoldImages.json`; the seed attaches them to
-`lesson_scaffolds.images`. Sections that exist only as images in the source
-(Exponents Rules, the Factors Cheat Sheet, the Desmos how-tos, ...) are created
-automatically. A `.docx` export is also accepted as a fallback (extracts
-embedded raster images by heading; loses vector-drawn content).
+The script converts the document to PDF, locates each scaffold's title in the
+flow, and slices the document between consecutive titles — so every section is
+rendered whole (text, photos, and vector-drawn math alike), whitespace-cropped,
+and stitched into that scaffold's image(s). Nothing is re-typeset: students see
+each scaffold exactly as it was made for class. Images write to
+`web/public/scaffolds/`, the manifest to
+`server/src/content/scaffoldImages.json` (copied into `dist/` by the server
+build so Docker/Render images seed with images), and the seed syncs them into
+`lesson_scaffolds`. A PDF export of the same document is also accepted.
 
 ## Design notes
 

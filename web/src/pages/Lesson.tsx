@@ -77,13 +77,15 @@ export function Lesson() {
             <details key={s.title} className="scaffold-section">
               <summary>{s.title}</summary>
               <div className="scaffold-body">
-                {s.body && <MathText text={s.body} />}
-                {s.images.length > 0 && (
+                {s.images.length > 0 ? (
+                  // the scaffold exactly as it was made for class
                   <div className="scaffold-images">
                     {s.images.map((src) => (
                       <img key={src} src={src} alt={s.title} loading="lazy" />
                     ))}
                   </div>
+                ) : (
+                  s.body && <MathText text={s.body} />
                 )}
               </div>
             </details>
