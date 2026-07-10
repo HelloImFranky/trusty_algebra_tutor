@@ -7,6 +7,10 @@
 
 generator client {
   provider = "prisma-client-js"
+  // "native" for local dev; debian-openssl-3.0.x is what the node:22-slim
+  // (Debian bookworm) Docker/Fly image needs — pinned so a failed libssl
+  // detection can never generate the wrong engine.
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {

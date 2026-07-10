@@ -5,6 +5,11 @@
 FROM node:22-slim AS build
 WORKDIR /repo
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV CI=1
+
+# Prisma needs OpenSSL present to pick the right query-engine binary.
+RUN apt-get update -y && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 
 # Install with just the manifests first for layer caching. @tutor/db's
 # postinstall needs its prisma schema + migration embed script.
@@ -18,7 +23,7 @@ COPY packages/db/migrations packages/db/migrations
 COPY packages/db/scripts packages/db/scripts
 COPY packages/api/package.json packages/api/
 COPY packages/app/package.json packages/app/
-RUN mkdir -p packages/db/src && npm ci --omit=optional || npm install
+RUN mkdir -p packages/db/src && (npm ci || npm install)
 
 COPY . .
 RUN npm run generate --workspace @tutor/db && npx turbo build --filter=@tutor/web
@@ -30,6 +35,10 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV DATA_DIR=/data
 ENV PORT=3000
+
+# Prisma's query engine links against libssl at runtime.
+RUN apt-get update -y && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 
 # Next standalone output carries its own traced node_modules (incl. Prisma's
 # query engine); static assets and public/ ride alongside.
