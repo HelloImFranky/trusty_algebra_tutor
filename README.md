@@ -204,7 +204,7 @@ notes automatically.
 | `TUTOR_BASE_URL` | Hugging Face router | tutor endpoint (e.g. `http://localhost:11434/v1`) |
 | `TUTOR_MODEL` | `Qwen/Qwen2.5-7B-Instruct` | tutor model id |
 | `ANTHROPIC_API_KEY` | — | use Claude for the tutor (auto-detected) |
-| `PORT` | `3000` | port the web app listens on |
+| `PORT` | `8080` (image) / `3000` (dev) | port the web app listens on |
 | `DATA_DIR` | `.data` | where the login key is stored |
 | `EXPO_PUBLIC_API_URL` | — | phone app only: your web address |
 

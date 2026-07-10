@@ -61,7 +61,12 @@ if [ -f .env ]; then
 fi
 
 green "Deploying…"
-$FLY deploy
+if ! $FLY deploy; then
+  red "Deploy failed."
+  echo "See what the app printed while starting:   $FLY logs -a $APP_NAME"
+  echo "Most common cause: no database attached →  $FLY postgres attach $APP_NAME-db -a $APP_NAME"
+  exit 1
+fi
 
 green "Done! Your tutor is live at: https://$APP_NAME.fly.dev"
 echo  "Point the mobile app at it with EXPO_PUBLIC_API_URL=https://$APP_NAME.fly.dev"
