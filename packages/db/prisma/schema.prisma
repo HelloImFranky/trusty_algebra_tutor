@@ -1,0 +1,242 @@
+// Prisma models for the Algebra Tutor. The SQL source of truth stays in
+// ../migrations (idempotent, applied by src/migrate.ts on boot) so existing
+// databases — including old docker volumes — upgrade in place; this schema
+// mirrors those tables for type-safe queries. IDs are BIGINT in Postgres, so
+// they surface as BigInt here; the API layer converts to number at its DTO
+// boundary.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               BigInt    @id @default(autoincrement())
+  role             String
+  username         String    @unique
+  passwordHash     String    @map("password_hash")
+  displayName      String    @map("display_name")
+  locale           String    @default("en")
+  grade            Int?
+  email            String?
+  guardianConsent  Boolean   @default(false) @map("guardian_consent")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+
+  refreshTokens    RefreshToken[]
+  attempts         Attempt[]
+  mastery          Mastery[]
+  exitTicketResults ExitTicketResult[]
+  tutorSessions    TutorSession[]
+  guardianOf       GuardianLink[] @relation("guardian")
+  guardians        GuardianLink[] @relation("student")
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        BigInt   @id @default(autoincrement())
+  userId    BigInt   @map("user_id")
+  tokenHash String   @map("token_hash")
+  expiresAt DateTime @map("expires_at") @db.Timestamptz()
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_refresh_tokens_user")
+  @@map("refresh_tokens")
+}
+
+model GuardianLink {
+  guardianUserId BigInt @map("guardian_user_id")
+  studentUserId  BigInt @map("student_user_id")
+  status         String @default("active")
+  guardian       User   @relation("guardian", fields: [guardianUserId], references: [id], onDelete: Cascade)
+  student        User   @relation("student", fields: [studentUserId], references: [id], onDelete: Cascade)
+
+  @@id([guardianUserId, studentUserId])
+  @@map("guardian_links")
+}
+
+model Unit {
+  id       BigInt   @id @default(autoincrement())
+  number   Int      @unique
+  titleEn  String   @map("title_en")
+  titleEs  String   @map("title_es")
+  position Int
+  lessons  Lesson[]
+
+  @@map("units")
+}
+
+model Lesson {
+  id             BigInt           @id @default(autoincrement())
+  unitId         BigInt           @map("unit_id")
+  code           String           @unique
+  titleEn        String           @map("title_en")
+  titleEs        String           @map("title_es")
+  position       Int
+  contentVersion Int              @default(1) @map("content_version")
+  mnemonicEn     String?          @map("mnemonic_en")
+  mnemonicEs     String?          @map("mnemonic_es")
+  unit           Unit             @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  steps          LessonStep[]
+  scaffolds      LessonScaffold[]
+  skills         Skill[]
+  exitTicket     ExitTicket?
+
+  @@index([unitId], map: "idx_lessons_unit")
+  @@map("lessons")
+}
+
+model LessonStep {
+  id                 BigInt  @id @default(autoincrement())
+  lessonId           BigInt  @map("lesson_id")
+  position           Int
+  bodyEn             String  @map("body_en")
+  bodyEs             String  @map("body_es")
+  workedExampleLatex String? @map("worked_example_latex")
+  hintEn             String? @map("hint_en")
+  hintEs             String? @map("hint_es")
+  lesson             Lesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId], map: "idx_lesson_steps_lesson")
+  @@map("lesson_steps")
+}
+
+model LessonScaffold {
+  id       BigInt   @id @default(autoincrement())
+  lessonId BigInt   @map("lesson_id")
+  position Int
+  title    String
+  bodyMd   String   @map("body_md")
+  images   String[] @default([])
+  lesson   Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId, position], map: "idx_lesson_scaffolds_lesson")
+  @@map("lesson_scaffolds")
+}
+
+model Skill {
+  id          BigInt    @id @default(autoincrement())
+  lessonId    BigInt    @map("lesson_id")
+  slug        String    @unique
+  nameEn      String    @map("name_en")
+  nameEs      String    @map("name_es")
+  description String?
+  lesson      Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  problems    Problem[]
+  mastery     Mastery[]
+
+  @@index([lessonId], map: "idx_skills_lesson")
+  @@map("skills")
+}
+
+model Problem {
+  id          BigInt        @id @default(autoincrement())
+  skillId     BigInt        @map("skill_id")
+  tier        String
+  promptEn    String        @map("prompt_en")
+  promptEs    String        @map("prompt_es")
+  answerLatex String        @map("answer_latex")
+  gradingMode String        @map("grading_mode")
+  tolerance   Float?
+  paramsJson  Json?         @map("params_json")
+  isSprint    Boolean       @default(false) @map("is_sprint")
+  skill       Skill         @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  steps       ProblemStep[]
+  attempts    Attempt[]
+  tutorSessions TutorSession[]
+
+  @@index([skillId, tier], map: "idx_problems_skill")
+  @@map("problems")
+}
+
+model ProblemStep {
+  id            BigInt  @id @default(autoincrement())
+  problemId     BigInt  @map("problem_id")
+  position      Int
+  promptEn      String  @map("prompt_en")
+  promptEs      String  @map("prompt_es")
+  expectedLatex String  @map("expected_latex")
+  gradingMode   String  @map("grading_mode")
+  hintEn        String? @map("hint_en")
+  hintEs        String? @map("hint_es")
+  problem       Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@index([problemId], map: "idx_problem_steps_problem")
+  @@map("problem_steps")
+}
+
+model Attempt {
+  id             BigInt   @id @default(autoincrement())
+  userId         BigInt   @map("user_id")
+  problemId      BigInt   @map("problem_id")
+  submittedLatex String   @map("submitted_latex")
+  correct        Boolean
+  hintsUsed      Int      @default(0) @map("hints_used")
+  stepReached    Int      @default(0) @map("step_reached")
+  durationMs     Int?     @map("duration_ms")
+  context        String   @default("practice")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem        Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt], map: "idx_attempts_user")
+  @@index([userId, problemId], map: "idx_attempts_user_problem")
+  @@map("attempts")
+}
+
+model Mastery {
+  userId          BigInt    @map("user_id")
+  skillId         BigInt    @map("skill_id")
+  score           Float     @default(0)
+  attemptsCount   Int       @default(0) @map("attempts_count")
+  lastPracticedAt DateTime? @map("last_practiced_at") @db.Timestamptz()
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill           Skill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([userId, skillId])
+  @@map("mastery")
+}
+
+model ExitTicket {
+  id         BigInt             @id @default(autoincrement())
+  lessonId   BigInt             @unique @map("lesson_id")
+  problemIds BigInt[]           @map("problem_ids")
+  lesson     Lesson             @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  results    ExitTicketResult[]
+
+  @@map("exit_tickets")
+}
+
+model ExitTicketResult {
+  id           BigInt     @id @default(autoincrement())
+  userId       BigInt     @map("user_id")
+  exitTicketId BigInt     @map("exit_ticket_id")
+  score        Int
+  maxScore     Int        @map("max_score")
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz()
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exitTicket   ExitTicket @relation(fields: [exitTicketId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_etr_user")
+  @@map("exit_ticket_results")
+}
+
+model TutorSession {
+  id             BigInt   @id @default(autoincrement())
+  userId         BigInt   @map("user_id")
+  problemId      BigInt?  @map("problem_id")
+  lessonId       BigInt?  @map("lesson_id")
+  transcriptJson Json     @default("[]") @map("transcript_json")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem        Problem? @relation(fields: [problemId], references: [id], onDelete: SetNull)
+
+  @@index([userId], map: "idx_tutor_sessions_user")
+  @@map("tutor_sessions")
+}

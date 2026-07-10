@@ -14,36 +14,56 @@ classroom's scaffolds document and pacing calendar.
 
 | Feature | Where |
 |---|---|
-| **Scaffolded lesson player** — numbered STEP 1/2/3 explanations, worked examples (KaTeX), persistent mnemonic chip | `web/src/pages/Lesson.tsx` |
+| **Scaffolded lesson player** — numbered STEP 1/2/3 explanations, worked examples (KaTeX), persistent mnemonic chip | `packages/app/src/screens/lesson.tsx` |
 | **Classroom scaffolds in-app** — every section of the class's scaffolds document, attached to the lesson it teaches and shown exactly as the teacher made it ("Original scaffold notes from class", expandable per topic — see below) | `scripts/ingest_scaffold_images.py`, `lesson_scaffolds` table |
-| **Guided problem solving (the tutor loop)** — wrong answers walk the scaffold one checkable step at a time; hints escalate nudge → mnemonic → step-by-step → LLM tutor | `web/src/pages/Practice.tsx`, `server/src/routes/practice.ts` |
-| **Deterministic CAS grading** — 4 grading modes (`equivalent`, `canonical_form`, `exact`, `numeric_tolerance`); never string equality, never the LLM | `server/src/math/engine.ts` |
-| **Exit tickets & mastery** — 4–8 question auto-graded check per lesson; rolling-accuracy mastery with recency decay; soft gates | `server/src/mastery.ts` |
-| **Adaptive differentiation** — modified / standard / challenge tiers selected from live mastery | `server/src/routes/practice.ts` |
-| **Procedural problem generation** — 30+ templates validated through the CAS at seed time (~570 problems seeded) | `server/src/math/generators.ts` |
-| **LLM tutor (Claude)** — backend-mediated, scaffold-constrained system prompt, never gives the answer, streams over SSE, PII-scrubbed transcripts | `server/src/tutor/service.ts` |
-| **Sprints** — 90-second timed fluency drills | `web/src/pages/Sprint.tsx` |
-| **Regents review mode** — mixed-unit sessions weighted toward stale/weak skills + in-app Reference Sheet drawer (EN/ES) | `web/src/pages/Review.tsx`, `server/src/content/referenceSheet.ts` |
-| **Progress dashboard** — streaks, 9-unit mastery map, exit-ticket history, struggle flags; guardian/teacher read-only view | `web/src/pages/Progress.tsx` |
-| **Built-in graphing calculator** | `web/src/components/GraphCalculator.tsx` |
-| **EN/ES everywhere** — all UI strings, lesson content, problems, hints, and the LLM tutor | `web/src/i18n.tsx`, `*_en`/`*_es` columns |
-| **PWA + offline** — app shell + lesson content cached; offline attempts queue and sync | `web/public/sw.js`, `web/src/api.ts` |
-| **COPPA/FERPA posture** — students never store an email; under-13 signup requires a guardian email; progress scoped to the student + linked guardians; export & delete endpoints | `server/src/routes/auth.ts`, `progress.ts` |
+| **Guided problem solving (the tutor loop)** — wrong answers walk the scaffold one checkable step at a time; hints escalate nudge → mnemonic → step-by-step → LLM tutor | `packages/app/src/screens/practice.tsx`, `packages/api/src/routers/practice.ts` |
+| **Deterministic CAS grading** — 4 grading modes (`equivalent`, `canonical_form`, `exact`, `numeric_tolerance`); never string equality, never the LLM | `packages/core/src/math/engine.ts` |
+| **Exit tickets & mastery** — 4–8 question auto-graded check per lesson; rolling-accuracy mastery with recency decay; soft gates | `packages/core/src/mastery.ts` |
+| **Adaptive differentiation** — modified / standard / challenge tiers selected from live mastery | `packages/api/src/routers/practice.ts` |
+| **Procedural problem generation** — 30+ templates validated through the CAS at seed time (~570 problems seeded) | `packages/core/src/math/generators.ts` |
+| **LLM tutor** — backend-mediated, scaffold-constrained system prompt, never gives the answer, streams over tRPC, PII-scrubbed transcripts | `packages/core/src/tutor/`, `packages/api/src/routers/tutor.ts` |
+| **Sprints** — 90-second timed fluency drills | `packages/app/src/screens/sprint.tsx` |
+| **Regents review mode** — mixed-unit sessions weighted toward stale/weak skills + in-app Reference Sheet drawer (EN/ES) | `packages/app/src/screens/review.tsx`, `packages/core/src/content/referenceSheet.ts` |
+| **Progress dashboard** — streaks, 9-unit mastery map, exit-ticket history, struggle flags; guardian/teacher read-only view | `packages/app/src/screens/progress.tsx` |
+| **Built-in graphing calculator** | `packages/app/src/components/GraphCalculator*.tsx` |
+| **EN/ES everywhere** — all UI strings, lesson content, problems, hints, and the LLM tutor | `packages/app/src/lib/i18n.tsx`, `*_en`/`*_es` columns |
+| **PWA + offline** — app shell + lesson content cached; offline attempts queue and sync | `apps/web/public/sw.js`, `packages/app/src/lib/offline.ts` |
+| **Native iOS/Android app** — the same screens, shared via Tamagui + Solito, on Expo | `apps/native/` |
+| **COPPA/FERPA posture** — students never store an email; under-13 signup requires a guardian email; progress scoped to the student + linked guardians; export & delete endpoints | `packages/api/src/routers/auth.ts`, `progress.ts` |
 
 ## Architecture
 
+A Turborepo monorepo. One Next.js server hosts the student PWA, the typed
+tRPC API, and the scaffold images on a single URL; the Expo app reuses the
+exact same screens and talks to that URL.
+
 ```
-[React + TS PWA (Vite)] ──HTTPS──▶ [Express + TS API]
-       │                                │
-       │                                ├── PostgreSQL (users, content, attempts, mastery)
-       │                                ├── Math engine (mathjs in-process CAS)
-       │                                └── LLM proxy → Anthropic API (SSE tutor chat)
-       └── KaTeX rendering, function-plot graphing (client-side)
+apps/
+  web/       Next.js 15 (App Router) — student PWA + tRPC API on one port
+  native/    Expo (expo-router) — iOS/Android app sharing the same screens
+packages/
+  app/       shared UI: Tamagui components + Solito navigation, i18n,
+             tRPC client (auto token refresh), offline attempt queue
+  api/       tRPC v11 routers (Zod-validated): auth, curriculum, practice,
+             progress, tutor (streaming chat)
+  db/        Prisma schema + client, idempotent SQL migrations, curriculum seed
+  core/      pure logic: CAS math engine (mathjs), problem generators,
+             mastery model, curriculum content (EN/ES), tutor providers
+```
+
+```
+[Next.js PWA + Expo app] ──tRPC (superjson, streaming)──▶ [Next.js route handler]
+        │                                                     │
+        │                                                     ├── Prisma → PostgreSQL
+        │                                                     ├── Math engine (mathjs CAS)
+        └── KaTeX rendering, function-plot graphing           └── LLM providers (HF / self-hosted / Claude)
 ```
 
 Content is **data, not code**: the curriculum lives in versioned Postgres rows
-(`content_version` on lessons) seeded from `server/src/content/`, so lessons
-can be edited without deploys. The attempts log is append-only.
+(`content_version` on lessons) seeded from `packages/core/src/content/`, so
+lessons can be edited without deploys. The attempts log is append-only. The
+server runs migrations + seed itself at startup — there are no manual database
+steps anywhere below.
 
 ## Running the app
 
@@ -54,17 +74,19 @@ There are no environment variables to configure and no database commands to
 run — the app creates a secure login key, sets up its own database, and loads
 the full curriculum automatically on first start.
 
-### Option A — Put it online (no terminal, recommended for a class/school)
+### Option A — Put it online with Fly.io (recommended for a class/school)
 
-One click deploys the whole app plus a managed database to
-[Render](https://render.com) and gives you a web address to share:
+Install the [Fly CLI](https://fly.io/docs/flyctl/install/), sign up for a
+[Fly.io](https://fly.io) account, then run:
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/HelloImFranky/trusty_algebra_tutor)
+```bash
+./scripts/deploy-fly.sh
+```
 
-Sign in with GitHub, click **Apply**, wait a few minutes, and open the URL
-Render shows you. A secure login key is generated for you and the database is
-wired up automatically (settings come from `render.yaml`). The free plan is
-fine to try it out.
+The script creates the app, a managed Postgres database, and a small volume
+for the login key, wires them together, deploys, and prints your web address
+(`https://algebra-tutor.fly.dev`). Re-run the same script to ship updates.
+If the app name is taken, change the `app = "..."` line in `fly.toml` first.
 
 ### Option B — Run it on one computer with one command
 
@@ -84,6 +106,19 @@ present, otherwise Node 20+ and PostgreSQL):
 ```bash
 ./scripts/start.sh
 ```
+
+### The mobile app (optional)
+
+The web app already installs to a home screen as a PWA. For the native
+iOS/Android app (same screens, built with Expo):
+
+```bash
+cd apps/native
+cp .env.example .env    # point EXPO_PUBLIC_API_URL at your deployment
+npm run dev             # scan the QR code with Expo Go
+```
+
+Ship real builds with [EAS](https://docs.expo.dev/eas/): `npx eas build`.
 
 ### Turning on the AI tutor chat (optional)
 
@@ -136,8 +171,9 @@ quality and strongest guardrails; paid.
 > the tutor gives away answers, prefer a general instruct model
 > (`Qwen2.5-7B-Instruct`, `Llama-3.1-8B-Instruct`) over a pure solver.
 
-Set these in the Render dashboard (Option A hosting) or in a `.env` file next
-to `docker-compose.yml` (Option B). See `.env.example`.
+Set these with `fly secrets set KEY=value` (Option A — or just put them in
+`.env` before running the deploy script) or in a `.env` file next to
+`docker-compose.yml` (Option B). See `.env.example`.
 
 ### Configuration (all optional)
 
@@ -151,28 +187,33 @@ to `docker-compose.yml` (Option B). See `.env.example`.
 | `TUTOR_MODEL` | `Qwen/Qwen2.5-7B-Instruct` | model id for the OpenAI-compatible endpoint |
 | `ANTHROPIC_API_KEY` | *(unset)* | use Claude for the tutor (auto-detected if set) |
 | `ANTHROPIC_MODEL` | `claude-opus-4-8` | Claude model |
-| `PORT` | `4000` | port the app listens on |
-| `DATA_DIR` | `server/.data` | where the generated login key is stored |
+| `PORT` | `3000` | port the web app listens on |
+| `DATA_DIR` | `.data` | where the generated login key is stored |
+| `EXPO_PUBLIC_API_URL` | *(unset)* | native app only: where the API lives |
 
 ### For developers
 
 ```bash
 npm install
-npm run dev     # API on :4000, web (hot-reload) on :5173
-npm test        # 95 tests: math engine, generators, mastery model, API integration
+npm run dev          # Next.js web app (+ API) with hot reload on :3000
+npm run dev:native   # Expo dev server for the mobile app
+npm test             # turbo: math engine, generators, mastery, tRPC API integration
+npm run typecheck    # turbo: every workspace
+npm run build        # turbo: production build
 ```
 
-`npm run serve` builds and runs the whole app as a single service on one port
-(what the Docker/Render images run). The dev setup needs a local PostgreSQL and
-a `algebra_tutor_test` database for the tests.
+Everything is TypeScript end-to-end: Prisma generates the database types,
+tRPC + Zod carry them to the client, so a schema change that breaks a screen
+fails `typecheck` instead of failing in class. The dev setup needs a local
+PostgreSQL and an `algebra_tutor_test` database for the API tests.
 
 ## Ingesting the scaffold images/diagrams
 
 The scaffolds are the teacher's hand-annotated worked examples, graphs, and
 anchor charts — a mix of embedded images, tables, and vector-drawn math. The
 source document lives at `scripts/Algebra Scaffolds__891.docx`, and its
-rendered sections are committed under `web/public/scaffolds/` (one image set
-per scaffold, shown in each lesson as the "Original scaffold notes from
+rendered sections are committed under `apps/web/public/scaffolds/` (one image
+set per scaffold, shown in each lesson as the "Original scaffold notes from
 class"). To re-ingest after the document changes:
 
 ```bash
@@ -186,9 +227,9 @@ flow, and slices the document between consecutive titles — so every section is
 rendered whole (text, photos, and vector-drawn math alike), whitespace-cropped,
 and stitched into that scaffold's image(s). Nothing is re-typeset: students see
 each scaffold exactly as it was made for class. Images write to
-`web/public/scaffolds/`, the manifest to
-`server/src/content/scaffoldImages.json` (copied into `dist/` by the server
-build so Docker/Render images seed with images), and the seed syncs them into
+`apps/web/public/scaffolds/`, the manifest to
+`packages/db/content/scaffoldImages.json` (bundled into the server build so
+Docker/Fly images seed with images), and the seed syncs them into
 `lesson_scaffolds`. A PDF export of the same document is also accepted.
 
 ## Design notes
@@ -200,24 +241,14 @@ build so Docker/Render images seed with images), and the seed syncs them into
 - **Math input**: a structured input with a middle-school toolbar (fraction,
   exponent, radical, ≤/≥) over typed shortcuts (`x^2`, `sqrt()`, `<=`) with a
   live KaTeX preview. Swapping in MathLive is a contained upgrade inside
-  `web/src/components/MathInput.tsx`.
+  `packages/app/src/components/MathInput.tsx`.
 - **LLM cost control**: the deterministic hint ladder is free and always
   first; the tutor chat is rate-limited per user, capped at 12 turns per
   session, and its system prompt (lesson scaffold) is cache-friendly.
 - **Mastery**: rolling accuracy with recency weighting — correct answers move
   the score up (discounted by hints used), inactivity decays toward
   uncertainty, which is what re-surfaces stale skills in review mode.
-
-## Repo layout
-
-```
-server/            Express + TypeScript API
-  migrations/      SQL schema (design doc §7)
-  src/content/     curriculum seed data (EN/ES) + reference sheet
-  src/math/        CAS grading engine + problem generators
-  src/routes/      auth, curriculum, practice, progress, tutor
-web/               React + TypeScript PWA (Vite)
-  src/pages/       curriculum map, lesson player, practice, exit ticket,
-                   sprint, review, progress
-  src/components/  math input, KaTeX, tutor chat, reference sheet, calculator
-```
+- **One shared UI**: screens are written once in Tamagui primitives and run on
+  web (react-native-web under Next.js) and native (Expo). Web-only pieces
+  (KaTeX, function-plot) have `.web.tsx` variants with native fallbacks
+  (unicode math, WebView plotting).
