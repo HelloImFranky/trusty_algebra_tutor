@@ -18,8 +18,8 @@ and stitched into the section's image(s). Nothing is re-typeset: students
 see the scaffold exactly as it was made for class.
 
 Outputs:
-    web/public/scaffolds/<lesson>-<slug>-<n>.jpg    section images
-    server/src/content/scaffoldImages.json          lesson/section -> images
+    apps/web/public/scaffolds/<lesson>-<slug>-<n>.jpg   section images
+    packages/db/content/scaffoldImages.json             lesson/section -> images
 
 Then run `npm run seed` (happens automatically on server start) to sync the
 manifest into lesson_scaffolds.images.
@@ -38,8 +38,8 @@ import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-OUT_DIR = REPO / "web/public/scaffolds"
-MANIFEST = REPO / "server/src/content/scaffoldImages.json"
+OUT_DIR = REPO / "apps/web/public/scaffolds"
+MANIFEST = REPO / "packages/db/content/scaffoldImages.json"
 
 ZOOM = 2.0            # ~144 dpi render
 JPEG_QUALITY = 78
@@ -52,7 +52,7 @@ MIN_CONTENT = 40      # pieces smaller than this (px) are blank -> skipped
 # The scaffold sections, in document order. Each entry is:
 #   (lesson code, section title, [search aliases])
 # The title is the canonical name used across the app (it matches the
-# transcribed sections in server/src/content/classroomScaffolds.ts). The
+# transcribed sections in packages/core/src/content/classroomScaffolds.ts). The
 # aliases are text snippets actually present in the document's title
 # paragraph, used to locate the section's start. When no alias is given the
 # title itself is searched (punctuation-insensitively).

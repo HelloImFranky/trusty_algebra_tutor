@@ -7,3 +7,10 @@ dist/
 .data/
 server/.data/
 __pycache__/
+.next/
+.turbo/
+.expo/
+apps/web/next-env.d.ts
+apps/native/expo-env.d.ts
+packages/db/src/migrationsData.ts
+.data/

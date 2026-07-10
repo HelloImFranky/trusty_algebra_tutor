@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "Algebra Tutor",
+    "slug": "algebra-tutor",
+    "version": "0.2.0",
+    "scheme": "algebratutor",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#3b5bdb"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.algebra891.tutor"
+    },
+    "android": {
+      "package": "com.algebra891.tutor",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#3b5bdb"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": ["expo-router"]
+  }
+}

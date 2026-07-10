@@ -1,8 +1,8 @@
 # Run the whole app with one command:  docker compose up
 #
-# No configuration required. This starts a database and the app (frontend +
-# API on one URL), auto-generates a secure login secret, runs migrations, and
-# seeds the full curriculum. Then open http://localhost:8080
+# No configuration required. This starts a database and the app (student PWA
+# + API on one URL), auto-generates a secure login secret, runs migrations,
+# and seeds the full curriculum. Then open http://localhost:8080
 #
 # Optional: to enable the AI tutor chat, put a line ANTHROPIC_API_KEY=sk-...
 # in a file named ".env" next to this file (the app works without it).
@@ -26,7 +26,6 @@ services:
       dockerfile: Dockerfile
     environment:
       DATABASE_URL: postgres://tutor:tutor@db:5432/algebra_tutor
-      PORT: '4000'
       # Optional AI tutor chat. Put any of these in a ".env" file next to this
       # one (see .env.example); all blank is fine — the app falls back to the
       # built-in step-by-step hints. Pick a free open model on Hugging Face, a
@@ -43,7 +42,7 @@ services:
       db:
         condition: service_healthy
     ports:
-      - '8080:4000' # open http://localhost:8080
+      - '8080:3000' # open http://localhost:8080
 
 volumes:
   pgdata:

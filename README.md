@@ -1,102 +1,147 @@
-# Trusty Algebra Tutor
+# ∑ Trusty Algebra Tutor
 
-A self-paced middle school Algebra 1 tutor modeled on a real accelerated 8th
-grade classroom (the "Algebra 891" curriculum): scaffolded, step-by-step
-instruction with frequent low-stakes checks, differentiated practice tiers,
-and full English/Spanish localization — aligned to the NY Algebra I (NGLS)
-Regents standards.
+A free, self-paced **Algebra 1 tutor** for middle school, built to match a real
+accelerated 8th grade classroom (the "Algebra 891" curriculum). It teaches the
+same way class does: short scaffolded lessons, lots of low-stakes practice,
+step-by-step help when you're stuck, and quick exit tickets — in **English and
+Spanish**, on any phone, tablet, or Chromebook.
 
-The curriculum content (scaffold steps, mnemonics like FOIL and PEMDAS,
-lesson codes, exit-ticket structure) is derived directly from the source
-classroom's scaffolds document and pacing calendar.
+It's aligned to the NY Algebra I (NGLS) Regents standards, and every lesson
+includes the **original scaffold notes from class** — the teacher's actual
+worked examples and anchor charts, exactly as they were made.
 
-## What's inside
+---
 
-| Feature | Where |
+## 📱 For students
+
+Your teacher will give you a web address (something like
+`https://algebra-tutor.fly.dev`). Open it on your phone or Chromebook — that's
+it, there's nothing to install.
+
+1. **Sign up with just a username.** No email needed. If you're under 13,
+   you'll be asked for a parent or guardian's email.
+2. **Tip:** in your browser menu, tap **"Add to Home Screen"** and the tutor
+   becomes an app icon on your phone.
+
+What's inside:
+
+| Tab | What it does |
 |---|---|
-| **Scaffolded lesson player** — numbered STEP 1/2/3 explanations, worked examples (KaTeX), persistent mnemonic chip | `web/src/pages/Lesson.tsx` |
-| **Classroom scaffolds in-app** — every section of the class's scaffolds document, attached to the lesson it teaches and shown exactly as the teacher made it ("Original scaffold notes from class", expandable per topic — see below) | `scripts/ingest_scaffold_images.py`, `lesson_scaffolds` table |
-| **Guided problem solving (the tutor loop)** — wrong answers walk the scaffold one checkable step at a time; hints escalate nudge → mnemonic → step-by-step → LLM tutor | `web/src/pages/Practice.tsx`, `server/src/routes/practice.ts` |
-| **Deterministic CAS grading** — 4 grading modes (`equivalent`, `canonical_form`, `exact`, `numeric_tolerance`); never string equality, never the LLM | `server/src/math/engine.ts` |
-| **Exit tickets & mastery** — 4–8 question auto-graded check per lesson; rolling-accuracy mastery with recency decay; soft gates | `server/src/mastery.ts` |
-| **Adaptive differentiation** — modified / standard / challenge tiers selected from live mastery | `server/src/routes/practice.ts` |
-| **Procedural problem generation** — 30+ templates validated through the CAS at seed time (~570 problems seeded) | `server/src/math/generators.ts` |
-| **LLM tutor (Claude)** — backend-mediated, scaffold-constrained system prompt, never gives the answer, streams over SSE, PII-scrubbed transcripts | `server/src/tutor/service.ts` |
-| **Sprints** — 90-second timed fluency drills | `web/src/pages/Sprint.tsx` |
-| **Regents review mode** — mixed-unit sessions weighted toward stale/weak skills + in-app Reference Sheet drawer (EN/ES) | `web/src/pages/Review.tsx`, `server/src/content/referenceSheet.ts` |
-| **Progress dashboard** — streaks, 9-unit mastery map, exit-ticket history, struggle flags; guardian/teacher read-only view | `web/src/pages/Progress.tsx` |
-| **Built-in graphing calculator** | `web/src/components/GraphCalculator.tsx` |
-| **EN/ES everywhere** — all UI strings, lesson content, problems, hints, and the LLM tutor | `web/src/i18n.tsx`, `*_en`/`*_es` columns |
-| **PWA + offline** — app shell + lesson content cached; offline attempts queue and sync | `web/public/sw.js`, `web/src/api.ts` |
-| **COPPA/FERPA posture** — students never store an email; under-13 signup requires a guardian email; progress scoped to the student + linked guardians; export & delete endpoints | `server/src/routes/auth.ts`, `progress.ts` |
+| 📘 **My Course** | All 9 units. Every lesson shows your level: Not started → Practicing → Proficient → Mastered |
+| 📄 **Lessons** | Step-by-step explanations, worked examples, and the **original scaffold notes from class** — tap a topic to open the real notes |
+| ✏️ **Practice** | Problems matched to your level. Wrong answer? The app walks you through it **one step at a time** — it never just says "incorrect" |
+| 💡 **Hints** | A hint button, a "Walk me through it" button, and an AI tutor you can ask "I don't get it" (it helps you think — it won't give away answers) |
+| 🎟️ **Exit Tickets** | A quick 4–8 question check at the end of each lesson, graded instantly |
+| ⚡ **Sprint** | 90-second speed rounds — how many can you get? |
+| 📚 **Regents Review** | Mixed practice that automatically focuses on what you're rusty on |
+| 📈 **Progress** | Your streak 🔥, minutes practiced, and a mastery map of the whole course |
+| 🧮 **Calculator** | A built-in graphing calculator |
+| 📖 **Reference Sheet** | The Regents reference sheet, one tap away on every screen |
+| 🇪🇸 **Español** | Tap the flag in the top corner — everything switches, lessons included |
 
-## Architecture
+Lost Wi-Fi mid-practice? Keep going — your answers save on your device and
+sync when you're back online.
 
-```
-[React + TS PWA (Vite)] ──HTTPS──▶ [Express + TS API]
-       │                                │
-       │                                ├── PostgreSQL (users, content, attempts, mastery)
-       │                                ├── Math engine (mathjs in-process CAS)
-       │                                └── LLM proxy → Anthropic API (SSE tutor chat)
-       └── KaTeX rendering, function-plot graphing (client-side)
-```
+---
 
-Content is **data, not code**: the curriculum lives in versioned Postgres rows
-(`content_version` on lessons) seeded from `server/src/content/`, so lessons
-can be edited without deploys. The attempts log is append-only.
+## 🍎 For teachers
 
-## Running the app
+**What it is.** A practice companion for your class, not a replacement for it.
+Lessons follow your scaffolds document section by section, use your mnemonics
+(FOIL, PEMDAS, "standard form"), and show students the *original* scaffold
+pages inside every lesson. Grading is done by a math engine that accepts any
+equivalent form you'd accept — and, where it matters, insists on the taught
+final form ("your value is right, but it's not in standard form yet").
 
-**Students and teachers don't set anything up** — they just open the app's web
-address on their phone or Chromebook and (optionally) tap "Add to Home Screen"
-to install it. Everything below is the *one-time* job of whoever hosts the app.
-There are no environment variables to configure and no database commands to
-run — the app creates a secure login key, sets up its own database, and loads
-the full curriculum automatically on first start.
+**What you can see.** Each student's Progress page shows their streak,
+practice minutes, exit-ticket history, and a 🚩 "needs help" flag on any skill
+they're struggling with. Parents/guardians who sign up with the email a
+student listed get the same read-only view of just their child.
 
-### Option A — Put it online (no terminal, recommended for a class/school)
+**Student privacy.** Students never enter an email. Under-13 signups require
+a guardian email (COPPA). Anything typed to the AI tutor is scrubbed of names,
+emails, and phone numbers before it leaves the server, and students can export
+or delete their own data (FERPA).
 
-One click deploys the whole app plus a managed database to
-[Render](https://render.com) and gives you a web address to share:
+**Differentiation is automatic.** Problems come in modified / standard /
+challenge tiers, picked from each student's live mastery — strugglers get
+scaffolded-down problems, high-flyers get stretch work.
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/HelloImFranky/trusty_algebra_tutor)
+**If your scaffolds document changes**, the app can re-import it — see
+[Updating the scaffold notes](#updating-the-scaffold-notes) below (it's one
+command; ask whoever hosts your app to run it).
 
-Sign in with GitHub, click **Apply**, wait a few minutes, and open the URL
-Render shows you. A secure login key is generated for you and the database is
-wired up automatically (settings come from `render.yaml`). The free plan is
-fine to try it out.
+---
 
-### Option B — Run it on one computer with one command
+## 🚀 Getting it online (one-time setup)
 
-Install [Docker Desktop](https://www.docker.com/products/docker-desktop/), then
-from this folder run:
+Someone — a teacher, a school IT person, a helpful parent — hosts the app
+once, then shares the web address. **There is nothing else to configure**: on
+first start the app creates its own login key, sets up its database, and loads
+the full 9-unit curriculum by itself.
+
+### Option A — Put it on the internet (recommended for a class)
+
+Uses [Fly.io](https://fly.io) (their smallest setup is enough for a class and
+costs little to nothing).
+
+1. Make a free account at [fly.io](https://fly.io) and install the
+   [Fly CLI](https://fly.io/docs/flyctl/install/).
+2. In this folder, run:
+
+   ```bash
+   ./scripts/deploy-fly.sh
+   ```
+
+That single script creates the app, its database, and its storage, deploys
+everything, and prints your class's web address
+(`https://algebra-tutor.fly.dev`). Run the same script again any time to ship
+an update. If the name "algebra-tutor" is taken, change the `app = "..."` line
+in `fly.toml` and re-run.
+
+### Option B — Run it on one computer (a classroom laptop works)
+
+1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+2. In this folder, run:
+
+   ```bash
+   docker compose up
+   ```
+
+3. When it settles, open **http://localhost:8080**. Students on the same
+   network can use your computer's address (e.g. `http://192.168.1.20:8080`).
+
+No Docker? `./scripts/start.sh` sets everything up with Node + PostgreSQL
+instead, automatically.
+
+### The phone app (optional)
+
+The website already installs to a home screen like an app. If you also want
+the **native iOS/Android app** (same screens, built with Expo):
 
 ```bash
-docker compose up
+cd apps/native
+cp .env.example .env      # set EXPO_PUBLIC_API_URL to your web address
+npm run dev               # scan the QR code with the Expo Go app
 ```
 
-Wait for it to finish (the first run builds the app), then open
-**http://localhost:8080**. That's it — no other setup.
+App-store builds: `npx eas build` ([EAS docs](https://docs.expo.dev/eas/)).
 
-No Docker? This one command sets up and starts everything (it uses Docker if
-present, otherwise Node 20+ and PostgreSQL):
+---
 
-```bash
-./scripts/start.sh
-```
+## 🤖 Turning on the AI tutor chat (optional)
 
-### Turning on the AI tutor chat (optional)
+The step-by-step hints work out of the box with **no AI setup at all**. The
+conversational "I don't get it" tutor is an optional extra layer. Whichever
+provider you pick, it gets the same rules — teach the classroom method, never
+give the final answer, age-appropriate tone, EN/ES — and it **never grades**
+(the math engine does).
 
-The step-by-step hints work out of the box with **no** LLM. The conversational
-"I don't get it" tutor is optional and **provider-agnostic** — point it at a
-free open model, a self-hosted model, or Claude. Whichever you choose, it gets
-the same scaffold-constrained system prompt (teach the classroom method, never
-give the final answer, age-appropriate, EN/ES) and grading always stays in the
-deterministic math engine. If nothing is configured, the app quietly falls back
-to the built-in hint ladder.
+Pick ONE, put it in a `.env` file next to `docker-compose.yml` (or run
+`fly secrets set KEY=value` for Fly hosting):
 
-**Option 1 — Free open math model on Hugging Face.** Get a free token at
-[huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) and set:
+**Free — open model on Hugging Face.** Get a token at
+[huggingface.co/settings/tokens](https://huggingface.co/settings/tokens):
 
 ```
 TUTOR_PROVIDER=openai
@@ -104,120 +149,129 @@ HF_TOKEN=hf_xxx
 TUTOR_MODEL=Qwen/Qwen2.5-7B-Instruct
 ```
 
-[Qwen2.5-7B-Instruct](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct) is
-Apache-2.0, strong at math, follows instructions well, and speaks Spanish — a
-good fit for the tutoring role. For a math-specialized model use
-[`Qwen/Qwen2.5-Math-7B-Instruct`](https://huggingface.co/Qwen/Qwen2.5-Math-7B-Instruct)
-(see the note below). Hugging Face's free tier is rate-limited — great for a
-pilot; for a full class, self-host (Option 2) or use a paid provider.
-
-**Option 2 — Self-hosted model (free and private).** Run any model with
-[Ollama](https://ollama.com) (`ollama pull qwen2.5` then `ollama serve`) or
-vLLM/TGI/LM Studio, and point the app at it — no key, and **student chat never
-leaves your machine** (a real COPPA/FERPA win, since prompts are also
-PII-scrubbed before sending):
+**Free & private — a model on your own computer.** With
+[Ollama](https://ollama.com) (`ollama pull qwen2.5`), student chat never
+leaves your machine:
 
 ```
 TUTOR_PROVIDER=openai
-TUTOR_BASE_URL=http://localhost:11434/v1   # Ollama
+TUTOR_BASE_URL=http://localhost:11434/v1
 TUTOR_MODEL=qwen2.5
 ```
 
-**Option 3 — Claude.** Set `ANTHROPIC_API_KEY=sk-...` (auto-detected). Highest
-quality and strongest guardrails; paid.
+**Paid — Claude.** Strongest quality and guardrails:
 
-> **Tutor vs. solver — worth knowing.** Math-*solver* models (Qwen2.5-Math,
-> Mathstral, DeepSeek-Math) are tuned to *produce answers and full solutions*,
-> which is the opposite of what a Socratic tutor should do — they can be more
-> likely to blurt the answer or drift off the scaffold than a good general
-> instruct model. Because our grading is deterministic (the CAS math engine)
-> and the free step-by-step hint ladder is the primary help path, the LLM is
-> only the "explain it to me differently" layer, so either kind works — but if
-> the tutor gives away answers, prefer a general instruct model
-> (`Qwen2.5-7B-Instruct`, `Llama-3.1-8B-Instruct`) over a pure solver.
-
-Set these in the Render dashboard (Option A hosting) or in a `.env` file next
-to `docker-compose.yml` (Option B). See `.env.example`.
-
-### Configuration (all optional)
-
-| Var | Default | Purpose |
-|---|---|---|
-| `DATABASE_URL` | `postgres://tutor:tutor@localhost:5432/algebra_tutor` | Postgres connection |
-| `JWT_SECRET` | auto-generated & persisted | login-token signing key; set it to share one across multiple instances |
-| `TUTOR_PROVIDER` | auto-detect | `openai` (Hugging Face / self-hosted / OpenAI-compatible), `anthropic`, or `none` |
-| `HF_TOKEN` / `TUTOR_API_KEY` | *(unset)* | bearer token for the OpenAI-compatible endpoint |
-| `TUTOR_BASE_URL` | `https://router.huggingface.co/v1` | OpenAI-compatible endpoint (e.g. `http://localhost:11434/v1` for Ollama) |
-| `TUTOR_MODEL` | `Qwen/Qwen2.5-7B-Instruct` | model id for the OpenAI-compatible endpoint |
-| `ANTHROPIC_API_KEY` | *(unset)* | use Claude for the tutor (auto-detected if set) |
-| `ANTHROPIC_MODEL` | `claude-opus-4-8` | Claude model |
-| `PORT` | `4000` | port the app listens on |
-| `DATA_DIR` | `server/.data` | where the generated login key is stored |
-
-### For developers
-
-```bash
-npm install
-npm run dev     # API on :4000, web (hot-reload) on :5173
-npm test        # 95 tests: math engine, generators, mastery model, API integration
+```
+ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-`npm run serve` builds and runs the whole app as a single service on one port
-(what the Docker/Render images run). The dev setup needs a local PostgreSQL and
-a `algebra_tutor_test` database for the tests.
+If nothing is set, the tutor button quietly falls back to the built-in hints.
 
-## Ingesting the scaffold images/diagrams
+> **Tip:** prefer general instruct models (`Qwen2.5-7B-Instruct`,
+> `Llama-3.1-8B-Instruct`) over math-*solver* models (Qwen2.5-Math,
+> DeepSeek-Math). Solvers are trained to blurt full solutions — the opposite
+> of a good tutor.
 
-The scaffolds are the teacher's hand-annotated worked examples, graphs, and
-anchor charts — a mix of embedded images, tables, and vector-drawn math. The
-source document lives at `scripts/Algebra Scaffolds__891.docx`, and its
-rendered sections are committed under `web/public/scaffolds/` (one image set
-per scaffold, shown in each lesson as the "Original scaffold notes from
-class"). To re-ingest after the document changes:
+---
+
+## 📄 Updating the scaffold notes
+
+The scaffold notes students see are rendered straight from the class's
+document (`scripts/Algebra Scaffolds__891.docx`) — nothing is re-typed, so
+students see each page exactly as the teacher made it. When the document
+changes, replace the file and run:
 
 ```bash
-pip install pymupdf Pillow      # LibreOffice (soffice) also required for .docx
+pip install pymupdf Pillow        # first time only; LibreOffice also required
 python3 scripts/ingest_scaffold_images.py "scripts/Algebra Scaffolds__891.docx"
-npm run seed                    # also happens automatically on server start
 ```
 
-The script converts the document to PDF, locates each scaffold's title in the
-flow, and slices the document between consecutive titles — so every section is
-rendered whole (text, photos, and vector-drawn math alike), whitespace-cropped,
-and stitched into that scaffold's image(s). Nothing is re-typeset: students see
-each scaffold exactly as it was made for class. Images write to
-`web/public/scaffolds/`, the manifest to
-`server/src/content/scaffoldImages.json` (copied into `dist/` by the server
-build so Docker/Render images seed with images), and the seed syncs them into
-`lesson_scaffolds`. A PDF export of the same document is also accepted.
+The script finds each scaffold's title in the document, slices out that
+section (photos, tables, and hand-drawn math included), and saves it as the
+image students see. Redeploy (or restart) and the lessons pick up the new
+notes automatically.
 
-## Design notes
+---
 
-- **Grading**: `canonical_form` enforces the *taught* final shape — standard
-  form ordering for polynomials, fully simplified radicals, factored form for
-  factoring skills — and tells students "your value is right, but it's not in
-  final form yet," exactly like the classroom.
-- **Math input**: a structured input with a middle-school toolbar (fraction,
-  exponent, radical, ≤/≥) over typed shortcuts (`x^2`, `sqrt()`, `<=`) with a
-  live KaTeX preview. Swapping in MathLive is a contained upgrade inside
-  `web/src/components/MathInput.tsx`.
-- **LLM cost control**: the deterministic hint ladder is free and always
-  first; the tutor chat is rate-limited per user, capped at 12 turns per
-  session, and its system prompt (lesson scaffold) is cache-friendly.
-- **Mastery**: rolling accuracy with recency weighting — correct answers move
-  the score up (discounted by hints used), inactivity decays toward
-  uncertainty, which is what re-surfaces stale skills in review mode.
+## ⚙️ Settings reference (all optional)
 
-## Repo layout
+| Setting | Default | What it does |
+|---|---|---|
+| `DATABASE_URL` | local `algebra_tutor` db | PostgreSQL connection |
+| `JWT_SECRET` | auto-generated & saved | login-token key; set it only if you run several copies |
+| `TUTOR_PROVIDER` | auto-detect | `openai` (HF / self-hosted), `anthropic`, or `none` |
+| `HF_TOKEN` / `TUTOR_API_KEY` | — | token for the OpenAI-compatible tutor endpoint |
+| `TUTOR_BASE_URL` | Hugging Face router | tutor endpoint (e.g. `http://localhost:11434/v1`) |
+| `TUTOR_MODEL` | `Qwen/Qwen2.5-7B-Instruct` | tutor model id |
+| `ANTHROPIC_API_KEY` | — | use Claude for the tutor (auto-detected) |
+| `PORT` | `3000` | port the web app listens on |
+| `DATA_DIR` | `.data` | where the login key is stored |
+| `EXPO_PUBLIC_API_URL` | — | phone app only: your web address |
+
+---
+
+## 🧑‍💻 For developers
+
+A **Turborepo** monorepo, TypeScript end-to-end. One Next.js server hosts the
+student PWA, the typed tRPC API, and the scaffold images on a single URL; the
+Expo app reuses the exact same screens against that URL.
 
 ```
-server/            Express + TypeScript API
-  migrations/      SQL schema (design doc §7)
-  src/content/     curriculum seed data (EN/ES) + reference sheet
-  src/math/        CAS grading engine + problem generators
-  src/routes/      auth, curriculum, practice, progress, tutor
-web/               React + TypeScript PWA (Vite)
-  src/pages/       curriculum map, lesson player, practice, exit ticket,
-                   sprint, review, progress
-  src/components/  math input, KaTeX, tutor chat, reference sheet, calculator
+apps/
+  web/       Next.js 15 (App Router) — student PWA + tRPC API on one port
+  native/    Expo (expo-router) — iOS/Android app sharing the same screens
+packages/
+  app/       shared UI: Tamagui components + Solito navigation, i18n,
+             tRPC client (auto token refresh), offline attempt queue
+  api/       tRPC v11 routers (Zod-validated): auth, curriculum, practice,
+             progress, tutor (streaming chat)
+  db/        Prisma schema + client, idempotent SQL migrations, curriculum seed
+  core/      pure logic: CAS math engine (mathjs), problem generators,
+             mastery model, curriculum content (EN/ES), tutor providers
 ```
+
+```
+[Next.js PWA + Expo app] ──tRPC (superjson, streaming)──▶ [Next.js route handler]
+        │                                                     │
+        │                                                     ├── Prisma → PostgreSQL
+        │                                                     ├── Math engine (mathjs CAS)
+        └── KaTeX rendering, function-plot graphing           └── LLM providers (HF / self-hosted / Claude)
+```
+
+```bash
+npm install          # also generates the Prisma client
+npm run dev          # Next.js web app (+ API) with hot reload on :3000
+npm run dev:native   # Expo dev server for the mobile app
+npm test             # math engine, generators, mastery, tRPC API integration
+npm run typecheck    # every workspace
+npm run build        # production build (turbo)
+```
+
+Dev needs a local PostgreSQL plus an `algebra_tutor_test` database for the
+API tests. Migrations and seeding run automatically when the server starts
+(`apps/web/instrumentation.ts`) — no manual db steps, ever.
+
+Design notes worth knowing:
+
+- **Content is data, not code** — the curriculum lives in versioned Postgres
+  rows seeded from `packages/core/src/content/`; lessons are editable without
+  deploys. The attempts log is append-only.
+- **Grading** (`packages/core/src/math/engine.ts`) has 4 modes: `equivalent`,
+  `canonical_form` (enforces the *taught* final shape), `exact`, and
+  `numeric_tolerance`. Never string equality, never the LLM.
+- **One shared UI** — screens are written once in Tamagui primitives and run
+  on web (react-native-web under Next.js) and native (Expo). Web-only pieces
+  (KaTeX, function-plot) have `.web.tsx` variants with native fallbacks
+  (unicode math, WebView plotting).
+- **Type-safety chain** — Prisma generates db types, tRPC + Zod carry them to
+  the client; a schema change that breaks a screen fails `npm run typecheck`
+  instead of failing in class.
+- **LLM cost control** — the deterministic hint ladder is free and always
+  first; tutor chat is rate-limited per user and capped at 12 turns/session,
+  and its system prompt (the lesson scaffold) is cache-friendly.
+- **Mastery model** — rolling accuracy with recency decay (hints discount
+  credit; inactivity decays toward uncertainty), which is what re-surfaces
+  stale skills in Regents review.
+- **react/react-dom are pinned** via root `overrides` to the Expo SDK pairing
+  so web and native share one React copy — keep them aligned when upgrading
+  Next or Expo.

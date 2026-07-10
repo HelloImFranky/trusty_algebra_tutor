@@ -21,8 +21,8 @@ echo
 # ---- Path 1: Docker (recommended, one command) ----------------------------
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1 \
    && docker info >/dev/null 2>&1; then
-  green "Docker detected — starting the app (first run builds; give it a minute)."
-  echo   "When it says the app is listening, open:  http://localhost:8080"
+  green "Docker detected — starting the app (first run builds; give it a few minutes)."
+  echo   "When it says the app is ready, open:  http://localhost:8080"
   echo
   exec docker compose up --build
 fi
@@ -69,9 +69,9 @@ if ! db_ready; then
 fi
 
 echo "Building the app…"
-npm run build --silent
+npx turbo build --filter=@tutor/web
 
-green "Starting the app. It will set up the curriculum on first run."
-echo  "When it says it's listening, open:  http://localhost:${PORT:-4000}"
+green "Starting the app. It sets up the curriculum on first run."
+echo  "When it says it's ready, open:  http://localhost:${PORT:-3000}"
 echo
-exec npm run start --workspace server
+cd apps/web && exec npx next start -p "${PORT:-3000}"

@@ -1,22 +1,33 @@
 {
   "name": "trusty-algebra-tutor",
   "private": true,
-  "version": "0.1.0",
-  "description": "Middle school Algebra 1 tutor app modeled on the Algebra 891 classroom (scaffolded lessons, exit tickets, adaptive practice, EN/ES).",
+  "version": "0.2.0",
+  "description": "Middle school Algebra 1 tutor modeled on the Algebra 891 classroom (scaffolded lessons, exit tickets, adaptive practice, EN/ES). Turborepo: Next.js web + Expo native + tRPC + Prisma.",
   "workspaces": [
-    "server",
-    "web"
+    "apps/*",
+    "packages/*"
   ],
   "scripts": {
     "start": "./scripts/start.sh",
-    "serve": "npm run build && npm run start --workspace server",
-    "dev": "npm run dev --workspace server & npm run dev --workspace web & wait",
-    "build": "npm run build --workspace server && npm run build --workspace web",
-    "test": "npm test --workspace server",
-    "migrate": "npm run migrate --workspace server",
-    "seed": "npm run seed --workspace server"
+    "dev": "turbo dev --filter=@tutor/web",
+    "dev:native": "turbo dev --filter=@tutor/native",
+    "build": "turbo build",
+    "test": "turbo test",
+    "typecheck": "turbo typecheck",
+    "seed": "npm run seed --workspace @tutor/db",
+    "migrate": "npm run migrate --workspace @tutor/db",
+    "deploy": "./scripts/deploy-fly.sh"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0"
   },
   "engines": {
     "node": ">=20"
+  },
+  "packageManager": "npm@10.9.7",
+  "overrides": {
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "@types/react": "~19.1.0"
   }
 }

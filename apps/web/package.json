@@ -1,0 +1,30 @@
+{
+  "name": "@tutor/web",
+  "private": true,
+  "version": "0.2.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@tamagui/next-theme": "^1.121.0",
+    "@tutor/api": "*",
+    "@tutor/app": "*",
+    "@tutor/core": "*",
+    "@tutor/db": "*",
+    "next": "^15.2.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-native-web": "^0.20.0",
+    "tamagui": "^1.121.0"
+  },
+  "devDependencies": {
+    "@tamagui/next-plugin": "^1.121.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.7.0"
+  }
+}
