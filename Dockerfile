@@ -1,7 +1,12 @@
+# syntax=docker/dockerfile:1
 # Single-image build of the whole app: the Next.js server hosts the student
 # PWA, the tRPC API, and the scaffold images on ONE port, and runs the
 # database migrations + curriculum seed itself on startup. This is what makes
 # `docker compose up` and `fly deploy` one-step for teachers.
+#
+# The --mount=type=cache mounts persist npm's download cache and Next's
+# incremental compiler cache across builds (Docker BuildKit and Fly's Depot
+# builders both keep them), so rebuilds after a code change are fast.
 FROM node:22-slim AS build
 WORKDIR /repo
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -23,10 +28,12 @@ COPY packages/db/migrations packages/db/migrations
 COPY packages/db/scripts packages/db/scripts
 COPY packages/api/package.json packages/api/
 COPY packages/app/package.json packages/app/
-RUN mkdir -p packages/db/src && (npm ci || npm install)
+RUN --mount=type=cache,id=npm,target=/root/.npm \
+  mkdir -p packages/db/src && (npm ci || npm install)
 
 COPY . .
-RUN npm run generate --workspace @tutor/db && npx turbo build --filter=@tutor/web
+RUN --mount=type=cache,id=nextcache,target=/repo/apps/web/.next/cache \
+  npm run generate --workspace @tutor/db && npx turbo build --filter=@tutor/web
 
 # ---- runtime ---------------------------------------------------------------
 FROM node:22-slim
@@ -34,7 +41,9 @@ WORKDIR /repo
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV DATA_DIR=/data
-ENV PORT=3000
+# 8080 matches Fly's conventional internal port (and fly.toml / compose).
+ENV PORT=8080
+ENV HOSTNAME=0.0.0.0
 
 # Prisma's query engine links against libssl at runtime.
 RUN apt-get update -y && apt-get install -y --no-install-recommends openssl ca-certificates \
@@ -49,5 +58,5 @@ COPY --from=build /repo/apps/web/public apps/web/public
 # Persist the auto-generated JWT secret across restarts.
 RUN mkdir -p /data
 VOLUME ["/data"]
-EXPOSE 3000
+EXPOSE 8080
 CMD ["node", "apps/web/server.js"]

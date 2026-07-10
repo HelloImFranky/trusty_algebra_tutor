@@ -42,7 +42,7 @@ services:
       db:
         condition: service_healthy
     ports:
-      - '8080:3000' # open http://localhost:8080
+      - '8080:8080' # open http://localhost:8080
 
 volumes:
   pgdata:

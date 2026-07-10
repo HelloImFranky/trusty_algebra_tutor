@@ -12,7 +12,7 @@ primary_region = "ewr"
   NODE_ENV = "production"
 
 [http_service]
-  internal_port = 3000
+  internal_port = 8080
   force_https = true
   auto_stop_machines = "stop"
   auto_start_machines = true
@@ -29,8 +29,8 @@ primary_region = "ewr"
 [checks]
   [checks.health]
     type = "http"
-    port = 3000
+    port = 8080
     path = "/"
     interval = "30s"
     timeout = "5s"
-    grace_period = "30s"
+    grace_period = "5m"
