@@ -6,9 +6,9 @@
 #
 # Needs a free Vercel account (https://vercel.com/signup) — the CLI itself is
 # fetched with npx, so there's nothing to install. Vercel builds and hosts the
-# Next.js app natively (no Docker involved); the database is the one thing
-# created in the dashboard (Storage → Create Database → Postgres/Neon, free
-# tier), because the Vercel CLI can't provision Marketplace databases yet.
+# Next.js app natively; the database is the one thing created in the
+# dashboard (Storage → Create Database → Postgres/Neon, free tier), because
+# the Vercel CLI can't provision Marketplace databases yet.
 # Everything else — project linking, the JWT secret, tutor keys — is set up
 # for you.
 set -euo pipefail

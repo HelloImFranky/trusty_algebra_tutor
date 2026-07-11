@@ -10,11 +10,9 @@ const here = path.dirname(url.fileURLToPath(import.meta.url));
  */
 /** @type {import('next').NextConfig} */
 const config = {
-  // Single slim runtime image for docker compose (Vercel ignores this and
-  // uses its own serverless output).
-  output: 'standalone',
   outputFileTracingRoot: path.join(here, '../..'),
-  // make sure Prisma's native query engine ships in the standalone output
+  // make sure Prisma's native query engine ships in the traced server output
+  // (Vercel packs serverless functions from this same file trace)
   outputFileTracingIncludes: {
     '*': ['../../node_modules/.prisma/client/**'],
   },

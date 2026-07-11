@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# One-command launcher for the Algebra Tutor.
+# One-command local launcher for the Algebra Tutor.
 #
 #   ./scripts/start.sh
 #
-# Prefers Docker (truly one command, nothing else to install). If Docker isn't
-# available it falls back to running directly with Node + PostgreSQL. Either
-# way it sets everything up for you — no environment variables, no database
-# commands. When it's ready it prints the URL to open.
+# Runs the app directly with Node + PostgreSQL and sets everything up for
+# you — no environment variables, no database commands. When it's ready it
+# prints the URL to open. (For internet hosting use ./scripts/deploy-vercel.sh
+# instead.)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -18,21 +18,8 @@ echo
 green "  ∑  Algebra Tutor — starting up"
 echo
 
-# ---- Path 1: Docker (recommended, one command) ----------------------------
-if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1 \
-   && docker info >/dev/null 2>&1; then
-  green "Docker detected — starting the app (first run builds; give it a few minutes)."
-  echo   "When it says the app is ready, open:  http://localhost:8080"
-  echo
-  exec docker compose up --build
-fi
-
-yellow "Docker isn't available — running directly with Node + PostgreSQL instead."
-echo
-
-# ---- Path 2: local Node + PostgreSQL --------------------------------------
 if ! command -v node >/dev/null 2>&1; then
-  red "Node.js isn't installed. Install Docker Desktop (easiest) or Node 20+, then re-run."
+  red "Node.js isn't installed. Install Node 20+ (https://nodejs.org), then re-run."
   exit 1
 fi
 
@@ -63,8 +50,8 @@ if ! db_ready; then
   red   "Couldn't reach a PostgreSQL database at:"
   echo  "    $DB_URL"
   echo
-  yellow "Easiest fix: install Docker Desktop and run ./scripts/start.sh again —"
-  yellow "it needs nothing else. Or start PostgreSQL and/or set DATABASE_URL, then re-run."
+  yellow "Install and start PostgreSQL (https://www.postgresql.org/download/),"
+  yellow "or set DATABASE_URL to an existing database, then re-run."
   exit 1
 fi
 

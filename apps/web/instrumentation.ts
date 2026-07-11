@@ -1,7 +1,7 @@
 /**
  * Runs once when the Next.js server starts (dev and production): apply the
  * SQL migrations and seed/sync the curriculum. This is what makes
- * `docker compose up` and the dev server zero-step — no separate
+ * `./scripts/start.sh` and the dev server zero-step — no separate
  * migrate/seed commands for teachers to remember.
  *
  * On Vercel there is no long-lived server to do this from — functions cold
@@ -9,9 +9,8 @@
  * (the buildCommand in apps/web/vercel.json) and this hook stays out of the
  * way.
  *
- * The database may come up after the app (fresh docker compose, a Postgres
- * container that's still booting), so connection failures retry for a while
- * with a clear log line before giving up.
+ * A local Postgres may still be starting up when the app boots, so
+ * connection failures retry briefly with a clear log line before giving up.
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return;
@@ -19,8 +18,8 @@ export async function register() {
 
   const { migrate, seed, prisma } = await import('@tutor/db');
 
-  const attempts = 12;
-  const delayMs = 5_000;
+  const attempts = 5;
+  const delayMs = 2_000;
   try {
     for (let i = 1; ; i++) {
       try {
@@ -34,7 +33,7 @@ export async function register() {
               `DATABASE_URL is ${process.env.DATABASE_URL ? 'set' : 'NOT SET'}.\n` +
               'On Vercel: create a Postgres database (project → Storage → Create Database)\n' +
               'so DATABASE_URL is set (./scripts/deploy-vercel.sh checks this for you). ' +
-              'Locally: docker compose up starts the database for you.\n',
+              'Locally: ./scripts/start.sh sets up the database for you.\n',
           );
           throw err;
         }

@@ -1,17 +1,16 @@
 // Prisma models for the Algebra Tutor. The SQL source of truth stays in
 // ../migrations (idempotent, applied by src/migrate.ts on boot) so existing
-// databases — including old docker volumes — upgrade in place; this schema
+// databases — however old — upgrade in place; this schema
 // mirrors those tables for type-safe queries. IDs are BIGINT in Postgres, so
 // they surface as BigInt here; the API layer converts to number at its DTO
 // boundary.
 
 generator client {
   provider = "prisma-client-js"
-  // "native" for local dev; debian-openssl-3.0.x is what the node:22-slim
-  // (Debian bookworm) Docker image needs; rhel-openssl-3.0.x is what Vercel's
-  // serverless runtime (Amazon Linux) needs — pinned so a failed libssl
-  // detection can never generate the wrong engine.
-  binaryTargets = ["native", "debian-openssl-3.0.x", "rhel-openssl-3.0.x"]
+  // "native" for local dev; rhel-openssl-3.0.x is what Vercel's serverless
+  // runtime (Amazon Linux) needs — pinned so a failed libssl detection can
+  // never generate the wrong engine.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
