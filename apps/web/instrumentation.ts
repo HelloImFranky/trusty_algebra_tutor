@@ -1,15 +1,22 @@
 /**
  * Runs once when the Next.js server starts (dev and production): apply the
  * SQL migrations and seed/sync the curriculum. This is what makes
- * `docker compose up` and `fly deploy` zero-step — no separate migrate/seed
- * commands for teachers to remember.
+ * `docker compose up` and the dev server zero-step — no separate
+ * migrate/seed commands for teachers to remember.
  *
- * The database may come up after the app (fresh docker compose, a Fly
- * Postgres that's still booting), so connection failures retry for a while
+ * On Vercel there is no long-lived server to do this from — functions cold
+ * start concurrently — so migrate + seed run once at build time instead
+ * (the buildCommand in apps/web/vercel.json) and this hook stays out of the
+ * way.
+ *
+ * The database may come up after the app (fresh docker compose, a Postgres
+ * container that's still booting), so connection failures retry for a while
  * with a clear log line before giving up.
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return;
+  if (process.env.VERCEL) return; // migrated + seeded at build time
+
   const { migrate, seed, prisma } = await import('@tutor/db');
 
   const attempts = 12;
@@ -25,9 +32,8 @@ export async function register() {
           console.error(
             `\ndatabase unreachable after ${attempts} attempts (${msg}).\n` +
               `DATABASE_URL is ${process.env.DATABASE_URL ? 'set' : 'NOT SET'}.\n` +
-              'On Fly.io: create/attach Postgres with\n' +
-              '  fly postgres create --name <app>-db && fly postgres attach <app>-db -a <app>\n' +
-              '(./scripts/deploy-fly.sh does this automatically). ' +
+              'On Vercel: create a Postgres database (project → Storage → Create Database)\n' +
+              'so DATABASE_URL is set (./scripts/deploy-vercel.sh checks this for you). ' +
               'Locally: docker compose up starts the database for you.\n',
           );
           throw err;

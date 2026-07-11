@@ -2,6 +2,10 @@
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { appRouter, createContext } from '@tutor/api';
 
+// On Vercel, give streaming tutor-chat responses room beyond the default
+// function timeout (60s is within every plan's allowance).
+export const maxDuration = 60;
+
 const handler = (req: Request) =>
   fetchRequestHandler({
     endpoint: '/api/trpc',
