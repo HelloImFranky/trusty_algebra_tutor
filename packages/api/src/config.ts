@@ -31,7 +31,10 @@ function resolveJwtSecret(): string {
   } catch (err) {
     console.warn(
       'could not persist a JWT secret (data dir not writable); using an ephemeral one. ' +
-        'Set JWT_SECRET to keep logins valid across restarts.',
+        'Set JWT_SECRET to keep logins valid across restarts' +
+        (process.env.VERCEL
+          ? ' (on Vercel: Settings → Environment Variables — ./scripts/deploy-vercel.sh sets it for you).'
+          : '.'),
       err instanceof Error ? err.message : err,
     );
     return crypto.randomBytes(48).toString('hex');

@@ -1,12 +1,15 @@
 # syntax=docker/dockerfile:1
-# Single-image build of the whole app: the Next.js server hosts the student
-# PWA, the tRPC API, and the scaffold images on ONE port, and runs the
-# database migrations + curriculum seed itself on startup. This is what makes
-# `docker compose up` and `fly deploy` one-step for teachers.
+# Single-image build of the whole app for self-hosting (docker compose /
+# classroom laptop): the Next.js server hosts the student PWA, the tRPC API,
+# and the scaffold images on ONE port, and runs the database migrations +
+# curriculum seed itself on startup. This is what makes `docker compose up`
+# one-step for teachers. (Internet hosting uses Vercel instead — see
+# ./scripts/deploy-vercel.sh — which builds the Next.js app natively and
+# never touches this image.)
 #
 # The --mount=type=cache mounts persist npm's download cache and Next's
-# incremental compiler cache across builds (Docker BuildKit and Fly's Depot
-# builders both keep them), so rebuilds after a code change are fast.
+# incremental compiler cache across builds (Docker BuildKit keeps them), so
+# rebuilds after a code change are fast.
 FROM node:22-slim AS build
 WORKDIR /repo
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -41,7 +44,7 @@ WORKDIR /repo
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV DATA_DIR=/data
-# 8080 matches Fly's conventional internal port (and fly.toml / compose).
+# 8080 matches docker-compose.yml (and avoids clashing with dev's :3000).
 ENV PORT=8080
 ENV HOSTNAME=0.0.0.0
 

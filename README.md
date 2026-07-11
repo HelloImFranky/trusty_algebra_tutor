@@ -15,7 +15,7 @@ worked examples and anchor charts, exactly as they were made.
 ## 📱 For students
 
 Your teacher will give you a web address (something like
-`https://algebra-tutor.fly.dev`). Open it on your phone or Chromebook — that's
+`https://algebra-tutor.vercel.app`). Open it on your phone or Chromebook — that's
 it, there's nothing to install.
 
 1. **Sign up with just a username.** No email needed. If you're under 13,
@@ -82,22 +82,27 @@ the full 9-unit curriculum by itself.
 
 ### Option A — Put it on the internet (recommended for a class)
 
-Uses [Fly.io](https://fly.io) (their smallest setup is enough for a class and
-costs little to nothing).
+Uses [Vercel](https://vercel.com) — the company behind Next.js, which this app
+is built on, so it deploys natively with no Docker or servers to manage (the
+free Hobby tier is enough for a class).
 
-1. Make a free account at [fly.io](https://fly.io) and install the
-   [Fly CLI](https://fly.io/docs/flyctl/install/).
+1. Make a free account at [vercel.com](https://vercel.com/signup) (nothing to
+   install — the script fetches the Vercel CLI itself).
 2. In this folder, run:
 
    ```bash
-   ./scripts/deploy-fly.sh
+   ./scripts/deploy-vercel.sh
    ```
 
-That single script creates the app, its database, and its storage, deploys
-everything, and prints your class's web address
-(`https://algebra-tutor.fly.dev`). Run the same script again any time to ship
-an update. If the name "algebra-tutor" is taken, change the `app = "..."` line
-in `fly.toml` and re-run.
+That single script links the app to your account, sets up its login secret,
+deploys everything, and prints your class's web address
+(`https://algebra-tutor.vercel.app`). Run the same script again any time to
+ship an update.
+
+The one thing the script can't create for you is the database: the first run
+will ask you to open your project on vercel.com → **Storage → Create
+Database** → **Postgres (Neon, free tier)**, connect it, and re-run the
+script. That's a one-time click — every deploy after that is just the script.
 
 ### Option B — Run it on one computer (a classroom laptop works)
 
@@ -137,8 +142,10 @@ provider you pick, it gets the same rules — teach the classroom method, never
 give the final answer, age-appropriate tone, EN/ES — and it **never grades**
 (the math engine does).
 
-Pick ONE, put it in a `.env` file next to `docker-compose.yml` (or run
-`fly secrets set KEY=value` for Fly hosting):
+Pick ONE, put it in a `.env` file next to `docker-compose.yml` (for Vercel
+hosting, re-run `./scripts/deploy-vercel.sh` — it copies these keys from
+`.env` — or add them under your project's **Settings → Environment
+Variables** on vercel.com):
 
 **Free — open model on Hugging Face.** Get a token at
 [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens):
@@ -198,7 +205,7 @@ notes automatically.
 | Setting | Default | What it does |
 |---|---|---|
 | `DATABASE_URL` | local `algebra_tutor` db | PostgreSQL connection |
-| `JWT_SECRET` | auto-generated & saved | login-token key; set it only if you run several copies |
+| `JWT_SECRET` | auto-generated & saved | login-token key; required on Vercel (no disk to save to — the deploy script sets it) |
 | `TUTOR_PROVIDER` | auto-detect | `openai` (HF / self-hosted), `anthropic`, or `none` |
 | `HF_TOKEN` / `TUTOR_API_KEY` | — | token for the OpenAI-compatible tutor endpoint |
 | `TUTOR_BASE_URL` | Hugging Face router | tutor endpoint (e.g. `http://localhost:11434/v1`) |
@@ -249,7 +256,9 @@ npm run build        # production build (turbo)
 
 Dev needs a local PostgreSQL plus an `algebra_tutor_test` database for the
 API tests. Migrations and seeding run automatically when the server starts
-(`apps/web/instrumentation.ts`) — no manual db steps, ever.
+(`apps/web/instrumentation.ts`) — no manual db steps, ever. On Vercel, where
+functions cold-start concurrently instead of booting one server, the same
+migrate + seed run once at build time instead (`apps/web/vercel.json`).
 
 Design notes worth knowing:
 
