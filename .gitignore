@@ -16,3 +16,5 @@ packages/db/src/migrationsData.ts
 .data/
 .vercel/
 *.tsbuildinfo
+.vercel
+.env*
