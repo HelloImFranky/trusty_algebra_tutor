@@ -16,7 +16,7 @@
     "typecheck": "turbo typecheck",
     "seed": "npm run seed --workspace @tutor/db",
     "migrate": "npm run migrate --workspace @tutor/db",
-    "deploy": "./scripts/deploy-vercel.sh"
+    "deploy": "node scripts/deploy-vercel.mjs"
   },
   "devDependencies": {
     "turbo": "^2.5.0"

@@ -32,7 +32,7 @@ export async function register() {
             `\ndatabase unreachable after ${attempts} attempts (${msg}).\n` +
               `DATABASE_URL is ${process.env.DATABASE_URL ? 'set' : 'NOT SET'}.\n` +
               'On Vercel: create a Postgres database (project → Storage → Create Database)\n' +
-              'so DATABASE_URL is set (./scripts/deploy-vercel.sh checks this for you). ' +
+              'so DATABASE_URL is set (npm run deploy checks this for you). ' +
               'Locally: ./scripts/start.sh sets up the database for you.\n',
           );
           throw err;

@@ -33,7 +33,7 @@ function resolveJwtSecret(): string {
       'could not persist a JWT secret (data dir not writable); using an ephemeral one. ' +
         'Set JWT_SECRET to keep logins valid across restarts' +
         (process.env.VERCEL
-          ? ' (on Vercel: Settings → Environment Variables — ./scripts/deploy-vercel.sh sets it for you).'
+          ? ' (on Vercel: Settings → Environment Variables — npm run deploy sets it for you).'
           : '.'),
       err instanceof Error ? err.message : err,
     );

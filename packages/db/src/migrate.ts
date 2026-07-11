@@ -9,6 +9,17 @@ import pg from 'pg';
 import { migrations } from './migrationsData.js';
 
 export async function migrate(databaseUrl?: string): Promise<void> {
+  // On Vercel the localhost fallback can never work, and this runs during the
+  // build — fail with the fix instead of a cryptic ECONNREFUSED.
+  if (!databaseUrl && !process.env.DATABASE_URL && process.env.VERCEL) {
+    throw new Error(
+      'DATABASE_URL is not set, so the build cannot run the database migrations.\n' +
+        'Connect a Postgres database to this Vercel project:\n' +
+        '  1. On vercel.com open the project → Storage → Create Database\n' +
+        '  2. Pick Postgres (Neon, free tier) and connect it (sets DATABASE_URL automatically)\n' +
+        '  3. Redeploy (npm run deploy)',
+    );
+  }
   const client = new pg.Client({
     connectionString:
       databaseUrl ?? process.env.DATABASE_URL ?? 'postgres://tutor:tutor@localhost:5432/algebra_tutor',

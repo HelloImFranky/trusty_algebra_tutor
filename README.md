@@ -86,13 +86,15 @@ Uses [Vercel](https://vercel.com) — the company behind Next.js, which this app
 is built on, so it deploys natively with no servers to manage (the free Hobby
 tier is enough for a class).
 
-1. Make a free account at [vercel.com](https://vercel.com/signup) (nothing to
-   install — the script fetches the Vercel CLI itself).
-2. In this folder, run:
+1. Make a free account at [vercel.com](https://vercel.com/signup) and install
+   [Node.js 20+](https://nodejs.org) (the script fetches the Vercel CLI itself).
+2. In this folder (the repository root, not `scripts/`), run:
 
    ```bash
-   ./scripts/deploy-vercel.sh      # (or: npm run deploy)
+   npm run deploy
    ```
+
+   (works the same in Windows PowerShell, macOS Terminal, and Linux)
 
 That single script links the app to your account, sets up its login secret,
 deploys everything, and prints your class's web address
@@ -103,6 +105,8 @@ The one thing the script can't create for you is the database: the first run
 will ask you to open your project on vercel.com → **Storage → Create
 Database** → **Postgres (Neon, free tier)**, connect it, and re-run the
 script. That's a one-time click — every deploy after that is just the script.
+(Until the database is connected, deploys stop with a "DATABASE_URL is not
+set" message — that's expected, not broken.)
 
 ### Option B — Run it on one computer (a classroom laptop works)
 
@@ -144,9 +148,8 @@ give the final answer, age-appropriate tone, EN/ES — and it **never grades**
 (the math engine does).
 
 Pick ONE, put it in a `.env` file in this folder (for Vercel hosting, re-run
-`./scripts/deploy-vercel.sh` — it copies these keys from `.env` — or add
-them under your project's **Settings → Environment Variables** on
-vercel.com):
+`npm run deploy` — it copies these keys from `.env` — or add them under
+your project's **Settings → Environment Variables** on vercel.com):
 
 **Free — open model on Hugging Face.** Get a token at
 [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens):
