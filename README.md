@@ -76,9 +76,9 @@ command; ask whoever hosts your app to run it).
 ## 🚀 Getting it online (one-time setup)
 
 Someone — a teacher, a school IT person, a helpful parent — hosts the app
-once, then shares the web address. **There is nothing else to configure**: on
-first start the app creates its own login key, sets up its database, and loads
-the full 9-unit curriculum by itself.
+once, then shares the web address. **There is nothing else to configure**:
+every deploy sets up the login key, brings the database schema up to date,
+and loads the full 9-unit curriculum by itself.
 
 ### Option A — Put it on the internet (recommended for a class)
 
@@ -91,7 +91,7 @@ free Hobby tier is enough for a class).
 2. In this folder, run:
 
    ```bash
-   ./scripts/deploy-vercel.sh
+   ./scripts/deploy-vercel.sh      # (or: npm run deploy)
    ```
 
 That single script links the app to your account, sets up its login secret,
@@ -212,7 +212,7 @@ notes automatically.
 | `TUTOR_MODEL` | `Qwen/Qwen2.5-7B-Instruct` | tutor model id |
 | `ANTHROPIC_API_KEY` | — | use Claude for the tutor (auto-detected) |
 | `PORT` | `8080` (image) / `3000` (dev) | port the web app listens on |
-| `DATA_DIR` | `.data` | where the login key is stored |
+| `DATA_DIR` | `.data` | where the login key is stored (local/Docker hosting only — Vercel uses `JWT_SECRET`) |
 | `EXPO_PUBLIC_API_URL` | — | phone app only: your web address |
 
 ---
