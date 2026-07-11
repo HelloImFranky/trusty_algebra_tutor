@@ -5,8 +5,7 @@
 #
 # Runs the app directly with Node + PostgreSQL and sets everything up for
 # you — no environment variables, no database commands. When it's ready it
-# prints the URL to open. (For internet hosting use ./scripts/deploy-vercel.sh
-# instead.)
+# prints the URL to open. (For internet hosting use `npm run deploy` instead.)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
