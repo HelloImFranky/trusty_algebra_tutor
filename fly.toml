@@ -1,9 +1,9 @@
-# fly.toml app configuration file generated for trusty-algebra-tutor on 2026-07-10T03:31:12Z
+# fly.toml app configuration file generated for trusty-algebra-tutor-nyc on 2026-07-10T21:07:27-04:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'trusty-algebra-tutor'
+app = 'trusty-algebra-tutor-nyc'
 primary_region = 'ewr'
 
 [build]
@@ -36,3 +36,5 @@ primary_region = 'ewr'
 [[vm]]
   size = 'shared-cpu-1x'
   memory = '512mb'
+  cpus = 1
+  memory_mb = 512
