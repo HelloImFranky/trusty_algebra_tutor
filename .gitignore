@@ -15,3 +15,4 @@ apps/native/expo-env.d.ts
 packages/db/src/migrationsData.ts
 .data/
 .vercel/
+*.tsbuildinfo

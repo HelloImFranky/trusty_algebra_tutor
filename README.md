@@ -83,8 +83,8 @@ and loads the full 9-unit curriculum by itself.
 ### Option A — Put it on the internet (recommended for a class)
 
 Uses [Vercel](https://vercel.com) — the company behind Next.js, which this app
-is built on, so it deploys natively with no Docker or servers to manage (the
-free Hobby tier is enough for a class).
+is built on, so it deploys natively with no servers to manage (the free Hobby
+tier is enough for a class).
 
 1. Make a free account at [vercel.com](https://vercel.com/signup) (nothing to
    install — the script fetches the Vercel CLI itself).
@@ -106,18 +106,19 @@ script. That's a one-time click — every deploy after that is just the script.
 
 ### Option B — Run it on one computer (a classroom laptop works)
 
-1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+1. Install [Node.js 20+](https://nodejs.org) and
+   [PostgreSQL](https://www.postgresql.org/download/).
 2. In this folder, run:
 
    ```bash
-   docker compose up
+   ./scripts/start.sh
    ```
 
-3. When it settles, open **http://localhost:8080**. Students on the same
-   network can use your computer's address (e.g. `http://192.168.1.20:8080`).
+3. When it settles, open **http://localhost:3000**. Students on the same
+   network can use your computer's address (e.g. `http://192.168.1.20:3000`).
 
-No Docker? `./scripts/start.sh` sets everything up with Node + PostgreSQL
-instead, automatically.
+The script installs dependencies, creates the database, loads the curriculum,
+and starts the app — there's nothing to configure.
 
 ### The phone app (optional)
 
@@ -142,10 +143,10 @@ provider you pick, it gets the same rules — teach the classroom method, never
 give the final answer, age-appropriate tone, EN/ES — and it **never grades**
 (the math engine does).
 
-Pick ONE, put it in a `.env` file next to `docker-compose.yml` (for Vercel
-hosting, re-run `./scripts/deploy-vercel.sh` — it copies these keys from
-`.env` — or add them under your project's **Settings → Environment
-Variables** on vercel.com):
+Pick ONE, put it in a `.env` file in this folder (for Vercel hosting, re-run
+`./scripts/deploy-vercel.sh` — it copies these keys from `.env` — or add
+them under your project's **Settings → Environment Variables** on
+vercel.com):
 
 **Free — open model on Hugging Face.** Get a token at
 [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens):
@@ -211,8 +212,8 @@ notes automatically.
 | `TUTOR_BASE_URL` | Hugging Face router | tutor endpoint (e.g. `http://localhost:11434/v1`) |
 | `TUTOR_MODEL` | `Qwen/Qwen2.5-7B-Instruct` | tutor model id |
 | `ANTHROPIC_API_KEY` | — | use Claude for the tutor (auto-detected) |
-| `PORT` | `8080` (image) / `3000` (dev) | port the web app listens on |
-| `DATA_DIR` | `.data` | where the login key is stored (local/Docker hosting only — Vercel uses `JWT_SECRET`) |
+| `PORT` | `3000` | port the web app listens on |
+| `DATA_DIR` | `.data` | where the login key is stored (local hosting only — Vercel uses `JWT_SECRET`) |
 | `EXPO_PUBLIC_API_URL` | — | phone app only: your web address |
 
 ---
