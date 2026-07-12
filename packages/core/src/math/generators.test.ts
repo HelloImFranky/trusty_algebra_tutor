@@ -22,6 +22,13 @@ describe('problem generators', () => {
           `${template}: step key "${s.expectedLatex}" failed self-grade`,
         ).toBe(true);
       }
+      // Predicted wrong answers must actually be wrong.
+      for (const m of p.misconceptions ?? []) {
+        expect(
+          grade(m.answerLatex, p.answerLatex, p.gradingMode, p.tolerance).correct,
+          `${template}: misconception "${m.id}" (${m.answerLatex}) grades correct against key "${p.answerLatex}"`,
+        ).toBe(false);
+      }
     }
   });
 

@@ -1,8 +1,8 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { prisma } from '@tutor/db';
-import { decayedScore, tierForScore, grade } from '@tutor/core';
-import type { GradingMode } from '@tutor/core';
+import { decayedScore, tierForScore, grade, diagnoseMisconception } from '@tutor/core';
+import type { GradingMode, Misconception } from '@tutor/core';
 import { loc, protectedProcedure, router } from '../trpc.js';
 import { applyMastery } from './curriculum.js';
 
@@ -104,6 +104,15 @@ export const practiceRouter = router({
       prob.gradingMode as GradingMode,
       prob.tolerance,
     );
+    // Wrong answers get a diagnosis: does the submission match a wrong answer
+    // this problem's error patterns predict (added instead of subtracted,
+    // forgot the inequality flip, ...)?
+    const misconception = result.correct
+      ? null
+      : diagnoseMisconception(
+          input.submittedLatex,
+          prob.misconceptionsJson as unknown as Misconception[] | null,
+        );
 
     await prisma.attempt.create({
       data: {
@@ -111,6 +120,7 @@ export const practiceRouter = router({
         problemId: prob.id,
         submittedLatex: input.submittedLatex,
         correct: result.correct,
+        misconceptionId: misconception?.id ?? null,
         hintsUsed: input.hintsUsed,
         stepReached: input.stepReached,
         durationMs: input.durationMs ?? null,
@@ -135,13 +145,18 @@ export const practiceRouter = router({
     return {
       correct: result.correct,
       equivalentButNotCanonical: result.equivalentButNotCanonical ?? false,
+      misconceptionId: misconception?.id ?? null,
       message: result.correct
         ? null
         : result.equivalentButNotCanonical
           ? locale === 'es'
             ? 'Tu valor es correcto, ¡pero aún no está en su forma final! Revisa la forma estándar o simplifica por completo.'
             : "Your value is right, but it's not in final form yet! Check standard form or simplify completely."
-          : null,
+          : misconception
+            ? locale === 'es'
+              ? misconception.feedbackEs
+              : misconception.feedbackEn
+            : null,
       steps,
     };
   }),

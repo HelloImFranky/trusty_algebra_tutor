@@ -507,6 +507,24 @@ export function numericWithin(student: string, key: string, tolerance: number): 
 /* Entry point                                                          */
 /* ------------------------------------------------------------------ */
 
+/**
+ * The narrow surface the rest of the app is allowed to depend on. Everything
+ * mathjs-specific stays inside this module; swapping the CAS (SymPy service,
+ * custom solver) means providing another implementation of this interface,
+ * not touching callers.
+ */
+export interface MathEngine {
+  normalize(raw: string): string;
+  equivalent(a: string, b: string): boolean;
+  isCanonicalForm(expr: string): boolean;
+  grade(
+    submitted: string,
+    answerKey: string,
+    mode: GradingMode,
+    tolerance?: number | null,
+  ): GradeResult;
+}
+
 export function grade(
   submitted: string,
   answerKey: string,
@@ -555,3 +573,11 @@ export function grade(
     return { correct: false, error: String(err) };
   }
 }
+
+/** Default engine, backed by mathjs. */
+export const mathEngine: MathEngine = {
+  normalize: normalizeInput,
+  equivalent: areEquivalent,
+  isCanonicalForm,
+  grade,
+};

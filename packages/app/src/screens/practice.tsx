@@ -107,7 +107,8 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
       setMessage(res.message ?? '');
     } else {
       setFeedback('bad');
-      setMessage('');
+      // targeted misconception feedback when the server recognized the error
+      setMessage(res.message ?? '');
     }
   };
 
@@ -182,7 +183,11 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
           <>
             <MathInput value={answer} onChange={setAnswer} onSubmit={submit} disabled={phase === 'done'} />
             {feedback === 'good' && <Feedback kind="good">{t('correct')}</Feedback>}
-            {feedback === 'bad' && <Feedback kind="bad">{t('incorrect')}</Feedback>}
+            {feedback === 'bad' && (
+              <Feedback kind="bad">
+                {message ? <MathText text={message} size={14} /> : t('incorrect')}
+              </Feedback>
+            )}
             {feedback === 'warn' && <Feedback kind="warn">{message || t('almostCanonical')}</Feedback>}
             {feedback === 'queued' && <Feedback kind="warn">{t('offlineQueued')}</Feedback>}
             {hintText ? (
