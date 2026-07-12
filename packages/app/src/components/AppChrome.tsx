@@ -35,7 +35,10 @@ export function AppChrome({ children }: { children: ReactNode }) {
   const topNav = Platform.OS === 'web' && width >= 768;
 
   return (
-    <YStack flex={1} backgroundColor="#f6f7fb">
+    // On web #app-shell is pinned to the viewport height (see the web
+    // layout's global style), so the bars stay put and only the middle
+    // area scrolls. Native gets the same via flex 1 on a full-screen root.
+    <YStack id="app-shell" flex={1} backgroundColor="#f6f7fb">
       <XStack
         backgroundColor={BRAND}
         paddingHorizontal={14}
@@ -96,7 +99,9 @@ export function AppChrome({ children }: { children: ReactNode }) {
         </XStack>
       </XStack>
 
-      <YStack flex={1}>{children}</YStack>
+      <YStack flex={1} minHeight={0}>
+        {children}
+      </YStack>
 
       {auth && <ReferenceSheetButton />}
 

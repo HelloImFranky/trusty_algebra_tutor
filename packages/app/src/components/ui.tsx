@@ -18,7 +18,7 @@ export const COLORS = {
 /** Scrollable page container, phone-first max width. */
 export function Screen({ children, maxWidth = 760 }: { children: ReactNode; maxWidth?: number }) {
   return (
-    <ScrollView contentContainerStyle={{ flexGrow: 1, alignItems: 'center' }}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, alignItems: 'center' }}>
       <YStack width="100%" maxWidth={maxWidth} padding={14} paddingBottom={90} gap={12}>
         {children}
       </YStack>
