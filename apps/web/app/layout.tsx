@@ -28,6 +28,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <body style={{ margin: 0, background: '#f6f7fb' }}>
+        {/* Pin the app chrome to the viewport so the top bar and bottom
+            tabs stay fixed and only the content between them scrolls.
+            dvh tracks mobile browser toolbars; vh is the fallback. */}
+        <style>{`#app-shell{height:100vh;height:100dvh}`}</style>
         <Providers>{children}</Providers>
         <script
           dangerouslySetInnerHTML={{
