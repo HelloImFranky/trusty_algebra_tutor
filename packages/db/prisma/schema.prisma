@@ -35,6 +35,7 @@ model User {
   mastery          Mastery[]
   exitTicketResults ExitTicketResult[]
   tutorSessions    TutorSession[]
+  calculatorSession CalculatorSession?
   guardianOf       GuardianLink[] @relation("guardian")
   guardians        GuardianLink[] @relation("student")
 
@@ -245,4 +246,13 @@ model TutorSession {
 
   @@index([userId], map: "idx_tutor_sessions_user")
   @@map("tutor_sessions")
+}
+
+model CalculatorSession {
+  userId    BigInt   @id @map("user_id")
+  state     Json
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz()
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("calculator_sessions")
 }

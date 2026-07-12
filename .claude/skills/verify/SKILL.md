@@ -45,7 +45,9 @@ Playwright chromium is at `/opt/pw-browsers/chromium` (use
    (`SELECT answer_latex FROM problems WHERE id=...`). Wrong answer → "Not
    quite"; Hint escalates; "Walk me through it" enters per-step mode.
 5. Tutor chat streams a graceful fallback when no LLM key is configured.
-6. `/progress`, `/sprint`, `/review`, `/calculator` (function-plot svg),
+6. `/progress`, `/sprint`, `/review`, `/calculator` (Calculate/Graph/Table tabs;
+   engine-rendered svg, drag-pan + wheel-zoom; autosaves to
+   `calculator_sessions`),
    language toggle (button `aria-label="language"`), reference-sheet button.
 
 ## Gotchas
