@@ -35,11 +35,13 @@ export function AppChrome({ children }: { children: ReactNode }) {
   const topNav = Platform.OS === 'web' && width >= 768;
 
   return (
-    // On web #app-shell is pinned to the viewport height (see the web
-    // layout's global style), so the bars stay put and only the middle
-    // area scrolls. Native gets the same via flex 1 on a full-screen root.
-    <YStack id="app-shell" flex={1} backgroundColor="#f6f7fb">
+    // The web page scrolls as one normal document; the bars hold their
+    // place with plain CSS — #top-bar is sticky and #bottom-tabs is fixed
+    // (see the web layout's global style) — so they behave from the first
+    // paint, before hydration. Native pins them via the flex column.
+    <YStack flex={1} backgroundColor="#f6f7fb">
       <XStack
+        id="top-bar"
         backgroundColor={BRAND}
         paddingHorizontal={14}
         paddingVertical={10}
@@ -99,14 +101,13 @@ export function AppChrome({ children }: { children: ReactNode }) {
         </XStack>
       </XStack>
 
-      <YStack flex={1} minHeight={0}>
-        {children}
-      </YStack>
+      <YStack flex={1}>{children}</YStack>
 
       {auth && <ReferenceSheetButton />}
 
       {auth && !topNav && (
         <XStack
+          id="bottom-tabs"
           backgroundColor="#ffffff"
           borderTopWidth={1}
           borderTopColor={COLORS.border}

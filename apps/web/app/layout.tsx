@@ -28,10 +28,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <body style={{ margin: 0, background: '#f6f7fb' }}>
-        {/* Pin the app chrome to the viewport so the top bar and bottom
-            tabs stay fixed and only the content between them scrolls.
-            dvh tracks mobile browser toolbars; vh is the fallback. */}
-        <style>{`#app-shell{height:100vh;height:100dvh}`}</style>
+        {/* The document scrolls normally; the chrome holds its place with
+            plain CSS so it works from the first paint, before hydration:
+            sticky top bar, fixed bottom tabs (phone widths only — the JS
+            hides them >=768px after hydration; the media query covers the
+            server-rendered frame), fixed reference-sheet button. */}
+        <style>{`
+          #top-bar{position:sticky;top:0;z-index:40}
+          #bottom-tabs{position:fixed;bottom:0;left:0;right:0;z-index:40}
+          #ref-sheet-btn{position:fixed !important}
+          @media (min-width:768px){#bottom-tabs{display:none}}
+        `}</style>
         <Providers>{children}</Providers>
         <script
           dangerouslySetInnerHTML={{
