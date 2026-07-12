@@ -1,9 +1,12 @@
 /**
- * Shared chrome: brand top bar (language toggle, logout) and an app-style
- * bottom tab bar (design: students on phones first). Wraps every signed-in
+ * Shared chrome: brand top bar (language toggle, logout) and navigation.
+ * Desktop-width web gets the nav links in the top bar like a traditional
+ * website; phones (native app and narrow web) keep the app-style bottom
+ * tab bar (design: students on phones first). Wraps every signed-in
  * screen on web and native.
  */
 import { useEffect, type ReactNode } from 'react';
+import { Platform, useWindowDimensions } from 'react-native';
 import { Link } from 'solito/link';
 import { useRouter } from 'solito/navigation';
 import { usePathname } from 'solito/navigation';
@@ -28,6 +31,9 @@ export function AppChrome({ children }: { children: ReactNode }) {
     { href: '/calculator', icon: '🧮', label: t('calculator') },
   ];
 
+  const { width } = useWindowDimensions();
+  const topNav = Platform.OS === 'web' && width >= 768;
+
   return (
     <YStack flex={1} backgroundColor="#f6f7fb">
       <XStack
@@ -37,9 +43,31 @@ export function AppChrome({ children }: { children: ReactNode }) {
         alignItems="center"
         justifyContent="space-between"
       >
-        <Text color="white" fontWeight="900" fontSize={17}>
-          ∑ {t('appName')}
-        </Text>
+        <XStack gap={26} alignItems="center" flexShrink={1}>
+          <Text color="white" fontWeight="900" fontSize={17}>
+            ∑ {t('appName')}
+          </Text>
+          {topNav &&
+            auth &&
+            tabs.map((tab) => {
+              const active = pathname === tab.href;
+              return (
+                <Link key={tab.href} href={tab.href}>
+                  <XStack gap={5} alignItems="center" opacity={active ? 1 : 0.75}>
+                    <Text fontSize={15}>{tab.icon}</Text>
+                    <Text
+                      color="white"
+                      fontSize={14}
+                      fontWeight={active ? '800' : '600'}
+                      textDecorationLine={active ? 'underline' : 'none'}
+                    >
+                      {tab.label}
+                    </Text>
+                  </XStack>
+                </Link>
+              );
+            })}
+        </XStack>
         <XStack gap={8} alignItems="center">
           <Button
             size="$2"
@@ -72,7 +100,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
 
       {auth && <ReferenceSheetButton />}
 
-      {auth && (
+      {auth && !topNav && (
         <XStack
           backgroundColor="#ffffff"
           borderTopWidth={1}
