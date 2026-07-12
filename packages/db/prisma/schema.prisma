@@ -149,6 +149,7 @@ model Problem {
   gradingMode String        @map("grading_mode")
   tolerance   Float?
   paramsJson  Json?         @map("params_json")
+  misconceptionsJson Json?  @map("misconceptions_json")
   isSprint    Boolean       @default(false) @map("is_sprint")
   skill       Skill         @relation(fields: [skillId], references: [id], onDelete: Cascade)
   steps       ProblemStep[]
@@ -181,6 +182,7 @@ model Attempt {
   problemId      BigInt   @map("problem_id")
   submittedLatex String   @map("submitted_latex")
   correct        Boolean
+  misconceptionId String? @map("misconception_id")
   hintsUsed      Int      @default(0) @map("hints_used")
   stepReached    Int      @default(0) @map("step_reached")
   durationMs     Int?     @map("duration_ms")

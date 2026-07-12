@@ -9,7 +9,7 @@ import { prisma } from './client.js';
 import { migrate } from './migrate.js';
 import { curriculum, classroomScaffolds } from '@tutor/core';
 import { generateProblem, makeRng } from '@tutor/core';
-import type { FixedProblemSeed, StepSeed } from '@tutor/core';
+import type { FixedProblemSeed, Misconception, StepSeed } from '@tutor/core';
 import scaffoldImages from '../content/scaffoldImages.json';
 
 interface ScaffoldImageEntry {
@@ -72,11 +72,47 @@ export async function seedScaffolds(): Promise<void> {
   console.log(`scaffolds synced: ${n} sections (${withImages} with images)`);
 }
 
+/**
+ * Backfill misconception data onto an already-seeded curriculum. Generation
+ * is deterministic (same per-lesson seeds), so replaying it reproduces the
+ * exact problems that were originally inserted; rows are matched by
+ * prompt + answer and updated in place. Content edited since the original
+ * seed simply matches nothing — a safe no-op.
+ */
+export async function syncMisconceptions(): Promise<void> {
+  let updated = 0;
+  for (const unit of curriculum) {
+    for (const [li, lesson] of unit.lessons.entries()) {
+      let genSeed = unit.number * 1000 + li * 100;
+      for (const spec of lesson.generated ?? []) {
+        const rng = makeRng(genSeed++ * 7919 + 17);
+        const seen = new Set<string>();
+        let made = 0;
+        for (let i = 0; made < spec.count && i < spec.count * 6; i++) {
+          const gp = generateProblem(spec.template, rng);
+          const key = gp.promptEn + gp.answerLatex;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          made++;
+          if (!gp.misconceptions?.length) continue;
+          const res = await prisma.problem.updateMany({
+            where: { promptEn: gp.promptEn, answerLatex: gp.answerLatex },
+            data: { misconceptionsJson: JSON.parse(JSON.stringify(gp.misconceptions)) },
+          });
+          updated += res.count;
+        }
+      }
+    }
+  }
+  console.log(`misconceptions synced onto ${updated} problems`);
+}
+
 export async function seed(): Promise<void> {
   await migrate();
   const existing = await prisma.unit.count();
   if (existing > 0) {
     await seedScaffolds(); // scaffolds sync even when the curriculum exists
+    await syncMisconceptions();
     console.log('curriculum already seeded; skipping (truncate units to reseed)');
     return;
   }
@@ -123,7 +159,11 @@ export async function seed(): Promise<void> {
       });
 
       const insertProblem = async (
-        p: FixedProblemSeed & { paramsJson?: unknown; sprint?: boolean },
+        p: FixedProblemSeed & {
+          paramsJson?: unknown;
+          sprint?: boolean;
+          misconceptions?: Misconception[];
+        },
       ): Promise<bigint> => {
         const row = await prisma.problem.create({
           data: {
@@ -135,6 +175,9 @@ export async function seed(): Promise<void> {
             gradingMode: p.gradingMode,
             tolerance: p.tolerance ?? null,
             paramsJson: p.paramsJson ? JSON.parse(JSON.stringify(p.paramsJson)) : undefined,
+            misconceptionsJson: p.misconceptions?.length
+              ? JSON.parse(JSON.stringify(p.misconceptions))
+              : undefined,
             isSprint: p.sprint ?? false,
           },
         });
@@ -190,6 +233,7 @@ export async function seed(): Promise<void> {
               hintEs: s.hintEs,
             })),
             paramsJson: gp.params,
+            misconceptions: gp.misconceptions,
             sprint: spec.sprint,
           });
           if (spec.tier === 'standard' && !spec.sprint) standardProblemIds.push(id);

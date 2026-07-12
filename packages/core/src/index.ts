@@ -1,4 +1,5 @@
 export * from './math/engine.js';
+export * from './math/misconceptions.js';
 export * from './math/generators.js';
 export * from './mastery.js';
 export * from './content/index.js';

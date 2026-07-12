@@ -10,7 +10,7 @@ import type { AuthUser } from './auth.js';
 
 process.env.DATABASE_URL ??= 'postgres://tutor:tutor@localhost:5432/algebra_tutor_test';
 
-const { prisma, migrate, seed } = await import('@tutor/db');
+const { prisma, migrate, seed, Prisma } = await import('@tutor/db');
 
 const anon = appRouter.createCaller({ user: null });
 const as = (user: AuthUser) => appRouter.createCaller({ user });
@@ -178,6 +178,26 @@ describe('practice loop', () => {
       submittedLatex: 'obviously wrong 123456',
     });
     expect(bad.correct).toBe(false);
+  });
+
+  it('diagnoses a predicted misconception and returns targeted feedback', async () => {
+    const prob = await prisma.problem.findFirst({
+      where: { NOT: { misconceptionsJson: { equals: Prisma.DbNull } } },
+    });
+    expect(prob).toBeTruthy();
+    const predicted = (prob!.misconceptionsJson as { id: string; answerLatex: string }[])[0];
+    const res = await as(student).practice.attempt({
+      problemId: Number(prob!.id),
+      submittedLatex: predicted.answerLatex,
+    });
+    expect(res.correct).toBe(false);
+    expect(res.misconceptionId).toBe(predicted.id);
+    expect(res.message).toBeTruthy();
+    const attempt = await prisma.attempt.findFirst({
+      where: { problemId: prob!.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(attempt?.misconceptionId).toBe(predicted.id);
   });
 
   it('moves struggling students to the modified tier', async () => {

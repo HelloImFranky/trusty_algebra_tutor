@@ -4,6 +4,7 @@
  * problem is validated through the math engine before it's persisted.
  */
 import { grade, type GradingMode } from './engine.js';
+import type { Misconception } from './misconceptions.js';
 
 export interface GeneratedStep {
   promptEn: string;
@@ -21,6 +22,8 @@ export interface GeneratedProblem {
   gradingMode: GradingMode;
   tolerance?: number;
   steps?: GeneratedStep[];
+  /** predicted wrong answers with targeted feedback (misconceptions.ts) */
+  misconceptions?: Misconception[];
   params: Record<string, unknown>;
 }
 
@@ -43,6 +46,14 @@ const nz = (rng: Rng, lo: number, hi: number) => {
 const sgn = (n: number) => (n < 0 ? `- ${Math.abs(n)}` : `+ ${n}`);
 const coeff = (n: number, v: string) =>
   n === 1 ? v : n === -1 ? `-${v}` : `${n}${v}`;
+/** "Ax^2 + Bx + C" with zero terms dropped ("0" when all are zero). */
+const polyLatex = (A: number, B: number, C: number) => {
+  const parts: string[] = [];
+  if (A !== 0) parts.push(coeff(A, 'x^2'));
+  if (B !== 0) parts.push(coeff(B, 'x'));
+  if (C !== 0) parts.push(String(C));
+  return parts.length ? parts.join(' + ').replace(/\+ -/g, '- ') : '0';
+};
 
 type Generator = (rng: Rng) => GeneratedProblem;
 
@@ -239,6 +250,17 @@ export const generators: Record<string, Generator> = {
           hintEs: 'PEMDAS: Paréntesis, Exponentes, Multiplicación/División, Suma/Resta.',
         },
       ],
+      misconceptions:
+        v < 0
+          ? [
+              {
+                id: 'negative_square_error',
+                answerLatex: String(-a * v * v + b * v + c),
+                feedbackEn: `Careful squaring a negative: $(${v})^2 = (${v})(${v}) = ${v * v}$, a POSITIVE number. Keep the parentheses when you substitute.`,
+                feedbackEs: `Cuidado al elevar un negativo al cuadrado: $(${v})^2 = (${v})(${v}) = ${v * v}$, un número POSITIVO. Mantén los paréntesis al sustituir.`,
+              },
+            ]
+          : undefined,
       params: { a, b, c, v },
     };
   },
@@ -366,6 +388,16 @@ export const generators: Record<string, Generator> = {
           gradingMode: 'canonical_form',
         },
       ],
+      misconceptions: sub
+        ? [
+            {
+              id: 'minus_not_distributed',
+              answerLatex: polyLatex(a1 + a2, b1 + b2, c1 + c2),
+              feedbackEn: 'Subtracting a polynomial flips the sign of EVERY term in it, not just the first one. Distribute the minus sign through the whole second polynomial.',
+              feedbackEs: 'Restar un polinomio cambia el signo de TODOS sus términos, no solo del primero. Distribuye el signo menos por todo el segundo polinomio.',
+            },
+          ]
+        : undefined,
       params: { a1, b1, c1, a2, b2, c2, sub },
     };
   },
@@ -398,6 +430,14 @@ export const generators: Record<string, Generator> = {
           promptEs: 'PASO 2: Combina los términos semejantes.',
           expectedLatex: answer,
           gradingMode: 'canonical_form',
+        },
+      ],
+      misconceptions: [
+        {
+          id: 'foil_missed_middle_terms',
+          answerLatex: `x^2 ${sgn(C)}`,
+          feedbackEn: `You multiplied First and Last, but FOIL has FOUR products. The Outer (${sgn(q).trim()}x) and Inner (${sgn(p).trim()}x) terms combine into the middle term.`,
+          feedbackEs: `Multiplicaste los Primeros y los Últimos, pero FOIL tiene CUATRO productos. Los Externos (${sgn(q).trim()}x) y los Internos (${sgn(p).trim()}x) se combinan en el término del medio.`,
         },
       ],
       params: { p, q },
@@ -457,6 +497,20 @@ export const generators: Record<string, Generator> = {
           gradingMode: 'exact',
         },
       ],
+      misconceptions: [
+        {
+          id: 'inverse_operation_error',
+          answerLatex: `(${c + b})/(${a})`,
+          feedbackEn: `It looks like you ${b > 0 ? 'added' : 'subtracted'} ${Math.abs(b)} — but ${b > 0 ? 'adding' : 'subtracting'} needs the INVERSE operation. ${b > 0 ? 'Subtract' : 'Add'} ${Math.abs(b)} on both sides first, then divide by ${a}.`,
+          feedbackEs: `Parece que ${b > 0 ? 'sumaste' : 'restaste'} ${Math.abs(b)} — pero ${b > 0 ? 'sumar' : 'restar'} necesita la operación INVERSA. ${b > 0 ? 'Resta' : 'Suma'} ${Math.abs(b)} en ambos lados primero y luego divide entre ${a}.`,
+        },
+        {
+          id: 'skipped_division',
+          answerLatex: String(c - b),
+          feedbackEn: `${c - b} is what you get after undoing the ${sgn(b).startsWith('+') ? 'addition' : 'subtraction'} — one more step! Divide both sides by ${a} to get x alone.`,
+          feedbackEs: `${c - b} es lo que queda después de deshacer la ${sgn(b).startsWith('+') ? 'suma' : 'resta'} — ¡falta un paso! Divide ambos lados entre ${a} para dejar x sola.`,
+        },
+      ],
       params: { a, b, x },
     };
   },
@@ -494,6 +548,14 @@ export const generators: Record<string, Generator> = {
           promptEs: 'PASO 3: Usa operaciones inversas para resolver. ¿Cuánto vale x?',
           expectedLatex: String(x),
           gradingMode: 'exact',
+        },
+      ],
+      misconceptions: [
+        {
+          id: 'partial_distribution',
+          answerLatex: `(${d - b})/(${k * a + c})`,
+          feedbackEn: `Did you distribute ${k} to BOTH terms inside the parentheses? ${k} times ${b} is ${k * b} — the second term gets multiplied too.`,
+          feedbackEs: `¿Distribuiste ${k} a AMBOS términos dentro del paréntesis? ${k} por ${b} es ${k * b} — el segundo término también se multiplica.`,
         },
       ],
       params: { k, a, b, c, x },
@@ -562,6 +624,21 @@ export const generators: Record<string, Generator> = {
           hintEs: 'Dividir o multiplicar por un número negativo voltea el símbolo de desigualdad.',
         },
       ],
+      misconceptions: [
+        a < 0
+          ? {
+              id: 'missed_inequality_flip',
+              answerLatex: `x ${baseOp} ${x}`,
+              feedbackEn: `You divided by ${a}, a NEGATIVE number — that flips the inequality symbol. ${baseOp} becomes ${finalOp}.`,
+              feedbackEs: `Dividiste entre ${a}, un número NEGATIVO — eso voltea el símbolo de desigualdad. ${baseOp} se convierte en ${finalOp}.`,
+            }
+          : {
+              id: 'unnecessary_inequality_flip',
+              answerLatex: `x ${baseOp === '>' ? '<' : '>'} ${x}`,
+              feedbackEn: `The symbol only flips when you multiply or divide by a NEGATIVE number. You divided by ${a}, which is positive — keep the symbol as ${baseOp}.`,
+              feedbackEs: `El símbolo solo se voltea cuando multiplicas o divides entre un número NEGATIVO. Dividiste entre ${a}, que es positivo — mantén el símbolo ${baseOp}.`,
+            },
+      ],
       params: { a, b, x, baseOp },
     };
   },
@@ -594,6 +671,17 @@ export const generators: Record<string, Generator> = {
           gradingMode: 'exact',
         },
       ],
+      misconceptions:
+        v < 0
+          ? [
+              {
+                id: 'negative_square_error',
+                answerLatex: String(-a * v * v + b),
+                feedbackEn: `$(${v})^2$ is $(${v})(${v}) = ${v * v}$ — a negative times a negative is POSITIVE.`,
+                feedbackEs: `$(${v})^2$ es $(${v})(${v}) = ${v * v}$ — negativo por negativo es POSITIVO.`,
+              },
+            ]
+          : undefined,
       params: { a, b, v },
     };
   },
@@ -677,6 +765,24 @@ export const generators: Record<string, Generator> = {
           gradingMode: 'equivalent',
         },
       ],
+      misconceptions: [
+        ...(num !== 0
+          ? [
+              {
+                id: 'slope_rise_run_inverted',
+                answerLatex: `(${den})/(${num})`,
+                feedbackEn: 'That is run over rise — upside down! Slope = RISE over RUN: the difference in y-values goes on TOP.',
+                feedbackEs: '¡Eso es avance sobre elevación — al revés! Pendiente = ELEVACIÓN sobre AVANCE: la diferencia de los valores de y va ARRIBA.',
+              },
+            ]
+          : []),
+        {
+          id: 'slope_mixed_point_order',
+          answerLatex: `(${-num})/(${den})`,
+          feedbackEn: 'Check your subtraction order: it must be the SAME in both the numerator and denominator — $(y_2 - y_1)$ over $(x_2 - x_1)$. Mixing the order flips the sign.',
+          feedbackEs: 'Revisa el orden de la resta: debe ser el MISMO en el numerador y el denominador — $(y_2 - y_1)$ sobre $(x_2 - x_1)$. Mezclar el orden cambia el signo.',
+        },
+      ],
       params: { x1, y1, x2, y2 },
     };
   },
@@ -750,6 +856,17 @@ export const generators: Record<string, Generator> = {
           hintEs: 'La solución es el punto de intersección de las dos rectas.',
         },
       ],
+      misconceptions:
+        x !== y
+          ? [
+              {
+                id: 'coordinates_swapped',
+                answerLatex: `(${y}, ${x})`,
+                feedbackEn: `Your values are right but in the wrong order — a point is written (x, y). Here x = ${x} and y = ${y}.`,
+                feedbackEs: `Tus valores son correctos pero en el orden equivocado — un punto se escribe (x, y). Aquí x = ${x} y y = ${y}.`,
+              },
+            ]
+          : undefined,
       params: { x, y, a, c },
     };
   },
@@ -784,6 +901,17 @@ export const generators: Record<string, Generator> = {
           gradingMode: 'exact',
         },
       ],
+      misconceptions:
+        x !== y
+          ? [
+              {
+                id: 'coordinates_swapped',
+                answerLatex: `(${y}, ${x})`,
+                feedbackEn: `Your values are right but in the wrong order — a point is written (x, y). Here x = ${x} and y = ${y}.`,
+                feedbackEs: `Tus valores son correctos pero en el orden equivocado — un punto se escribe (x, y). Aquí x = ${x} y y = ${y}.`,
+              },
+            ]
+          : undefined,
       params: { x, y, a, b, c },
     };
   },
@@ -912,6 +1040,14 @@ export const generators: Record<string, Generator> = {
           hintEs: 'Usa el exponente MENOR para la variable compartida.',
         },
       ],
+      misconceptions: [
+        {
+          id: 'gcf_larger_exponent',
+          answerLatex: `${gcfCoeff}x^{${e2}}`,
+          feedbackEn: `The GCF uses the SMALLER exponent: $x^{${e1}}$ divides both monomials, but $x^{${e2}}$ doesn't divide $x^{${e1}}$.`,
+          feedbackEs: `El MCD usa el exponente MENOR: $x^{${e1}}$ divide a ambos monomios, pero $x^{${e2}}$ no divide a $x^{${e1}}$.`,
+        },
+      ],
       params: { m1, m2, e1, e2 },
     };
   },
@@ -975,6 +1111,14 @@ export const generators: Record<string, Generator> = {
           hintEs: 'OPCIONAL: ¡Usa FOIL para comprobar tu respuesta!',
         },
       ],
+      misconceptions: [
+        {
+          id: 'factor_signs_swapped',
+          answerLatex: `(x ${sgn(-p)})(x ${sgn(-q)})`,
+          feedbackEn: `So close — check the signs! Your two numbers must multiply to ${C} AND add to ${B}, signs included. FOIL your factors to verify.`,
+          feedbackEs: `¡Casi — revisa los signos! Tus dos números deben multiplicarse para dar ${C} Y sumarse para dar ${B}, con signos incluidos. Usa FOIL para verificar tus factores.`,
+        },
+      ],
       params: { p, q },
     };
   },
@@ -1033,6 +1177,14 @@ export const generators: Record<string, Generator> = {
           gradingMode: 'exact',
           hintEn: 'A positive number has a positive AND a negative square root.',
           hintEs: 'Un número positivo tiene una raíz cuadrada positiva Y una negativa.',
+        },
+      ],
+      misconceptions: [
+        {
+          id: 'missed_negative_root',
+          answerLatex: String(x),
+          feedbackEn: `${x} is only half the answer! $x^2 = ${x * x}$ has TWO solutions: ${x} and -${x}, because $(-${x})^2 = ${x * x}$ too.`,
+          feedbackEs: `¡${x} es solo la mitad de la respuesta! $x^2 = ${x * x}$ tiene DOS soluciones: ${x} y -${x}, porque $(-${x})^2 = ${x * x}$ también.`,
         },
       ],
       params: { a, x },
@@ -1277,7 +1429,18 @@ export function generateProblem(template: string, rng: Rng): GeneratedProblem {
       (p.steps ?? []).every(
         (s) => grade(s.expectedLatex, s.expectedLatex, s.gradingMode, p.tolerance).correct,
       );
-    if (ok) return { ...p, params: { ...p.params, template } };
+    if (ok) {
+      // A predicted wrong answer that happens to equal the key for these
+      // parameters would mislabel a correct student — drop it.
+      const misconceptions = p.misconceptions?.filter(
+        (m) => !grade(m.answerLatex, p.answerLatex, p.gradingMode, p.tolerance).correct,
+      );
+      return {
+        ...p,
+        misconceptions: misconceptions?.length ? misconceptions : undefined,
+        params: { ...p.params, template },
+      };
+    }
   }
   throw new Error(`template ${template} failed self-validation`);
 }
