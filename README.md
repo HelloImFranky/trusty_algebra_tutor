@@ -246,7 +246,7 @@ packages/
         │                                                     │
         │                                                     ├── Prisma → PostgreSQL
         │                                                     ├── Math engine (mathjs CAS)
-        └── KaTeX rendering, function-plot graphing           └── LLM providers (HF / self-hosted / Claude)
+        └── KaTeX rendering, engine-driven graphing           └── LLM providers (HF / self-hosted / Claude)
 ```
 
 ```bash
@@ -274,8 +274,8 @@ Design notes worth knowing:
   `numeric_tolerance`. Never string equality, never the LLM.
 - **One shared UI** — screens are written once in Tamagui primitives and run
   on web (react-native-web under Next.js) and native (Expo). Web-only pieces
-  (KaTeX, function-plot) have `.web.tsx` variants with native fallbacks
-  (unicode math, WebView plotting).
+  (KaTeX, the graph viewport's pointer pan/zoom) have `.web.tsx` variants
+  with native fallbacks (unicode math, WebView rendering the same SVG).
 - **Type-safety chain** — Prisma generates db types, tRPC + Zod carry them to
   the client; a schema change that breaks a screen fails `npm run typecheck`
   instead of failing in class.

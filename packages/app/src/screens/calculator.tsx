@@ -1,6 +1,6 @@
 import { useI18n } from '../lib/i18n';
 import { useRequireAuth } from '../components/AppChrome';
-import { GraphCalculator } from '../components/GraphCalculator';
+import { Calculator } from '../components/calculator/Calculator';
 import { Screen, Title } from '../components/ui';
 
 export function CalculatorScreen() {
@@ -9,7 +9,7 @@ export function CalculatorScreen() {
   return (
     <Screen maxWidth={720}>
       <Title>🧮 {t('calculator')}</Title>
-      <GraphCalculator />
+      <Calculator />
     </Screen>
   );
 }
