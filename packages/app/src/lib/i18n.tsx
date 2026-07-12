@@ -65,6 +65,7 @@ const dict = {
     offlineQueued: 'Saved offline — will sync when you reconnect.',
     classroomScaffold: 'Original scaffold notes from class',
     scaffoldNote: 'Your class scaffolds, exactly as they were made — tap a topic to open it.',
+    downloadScaffold: 'Download',
   },
   es: {
     appName: 'Tutor de Álgebra',
@@ -126,6 +127,7 @@ const dict = {
     offlineQueued: 'Guardado sin conexión — se sincronizará al reconectar.',
     classroomScaffold: 'Notas de andamiaje originales de la clase',
     scaffoldNote: 'Los andamiajes de tu clase, tal como se hicieron (en inglés) — toca un tema para abrirlo.',
+    downloadScaffold: 'Descargar',
   },
 } as const;
 

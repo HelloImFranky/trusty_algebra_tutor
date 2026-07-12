@@ -4,8 +4,8 @@
  * and the original scaffold notes from class (images from the teacher's
  * document) per topic.
  */
-import { useState } from 'react';
-import { Image, useWindowDimensions } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Image, Linking, Platform } from 'react-native';
 import { Link } from 'solito/link';
 import { Text, XStack, YStack } from 'tamagui';
 import { trpc, getBaseUrl } from '../lib/trpc';
@@ -19,21 +19,56 @@ import {
   SubTitle, Title, BRAND, COLORS,
 } from '../components/ui';
 
+/** Save the scaffold to the device: a real download on web, the system
+ * browser (with its save options) on native. */
+function downloadImage(uri: string) {
+  if (Platform.OS === 'web' && typeof document !== 'undefined') {
+    const a = document.createElement('a');
+    a.href = uri;
+    a.download = uri.split('/').pop() ?? 'scaffold.jpg';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } else {
+    Linking.openURL(uri).catch(() => {});
+  }
+}
+
 function ScaffoldImage({ src, title }: { src: string; title: string }) {
-  const { width } = useWindowDimensions();
+  const uri = `${getBaseUrl()}${src}`;
   const [ratio, setRatio] = useState(0.75);
-  const w = Math.min(width - 60, 900);
+  const { t } = useI18n();
+  useEffect(() => {
+    let alive = true;
+    Image.getSize(uri, (iw, ih) => {
+      if (alive && iw && ih) setRatio(iw / ih);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [uri]);
   return (
-    <Image
-      source={{ uri: `${getBaseUrl()}${src}` }}
-      style={{ width: w, height: w / ratio, borderRadius: 10, backgroundColor: '#fff' }}
-      resizeMode="contain"
-      accessibilityLabel={title}
-      onLoad={(e) => {
-        const { width: iw, height: ih } = e.nativeEvent.source ?? {};
-        if (iw && ih) setRatio(iw / ih);
-      }}
-    />
+    <YStack width="100%" gap={4}>
+      <Image
+        source={{ uri }}
+        style={{ width: '100%', aspectRatio: ratio, borderRadius: 10, backgroundColor: '#fff' }}
+        resizeMode="contain"
+        accessibilityLabel={title}
+      />
+      <XStack justifyContent="flex-end">
+        <Text
+          color={COLORS.muted}
+          fontSize={13}
+          fontWeight="700"
+          cursor="pointer"
+          pressStyle={{ opacity: 0.6 }}
+          onPress={() => downloadImage(uri)}
+          accessibilityRole="button"
+        >
+          ⬇ {t('downloadScaffold')}
+        </Text>
+      </XStack>
+    </YStack>
   );
 }
 
