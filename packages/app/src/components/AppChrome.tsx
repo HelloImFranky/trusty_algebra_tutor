@@ -74,6 +74,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
             })}
         </XStack>
         <XStack gap={8} alignItems="center">
+          {auth && <ReferenceSheetButton compact={!topNav} />}
           <Button
             size="$2"
             backgroundColor="rgba(255,255,255,0.18)"
@@ -102,8 +103,6 @@ export function AppChrome({ children }: { children: ReactNode }) {
       </XStack>
 
       <YStack flex={1}>{children}</YStack>
-
-      {auth && <ReferenceSheetButton />}
 
       {auth && !topNav && (
         <XStack

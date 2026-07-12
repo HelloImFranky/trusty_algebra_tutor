@@ -5,6 +5,7 @@
  * native WebView.
  */
 import {
+  formatNumber,
   niceTicks,
   sampleGraph,
   type GraphFunction,
@@ -27,8 +28,10 @@ export function renderGraphSvg(opts: {
   width: number;
   height: number;
   markers?: { point: Point; color: string }[];
+  /** Marker the user tapped: highlighted with its (x, y) ordered pair. */
+  selected?: { point: Point; color: string };
 }): string {
-  const { fns, window: win, width, height, markers = [] } = opts;
+  const { fns, window: win, width, height, markers = [], selected } = opts;
   const toX = (x: number) => ((x - win.xmin) / (win.xmax - win.xmin)) * width;
   const toY = (y: number) => height - ((y - win.ymin) / (win.ymax - win.ymin)) * height;
   const fmt = (n: number) => Number(n.toFixed(2));
@@ -76,6 +79,24 @@ export function renderGraphSvg(opts: {
     );
   }
 
+  if (selected) {
+    const px = toX(selected.point.x);
+    const py = toY(selected.point.y);
+    parts.push(
+      `<circle cx="${fmt(px)}" cy="${fmt(py)}" r="5.5" fill="${selected.color}" stroke="#fff" stroke-width="2"/>`,
+    );
+    const label = `(${coordLabel(selected.point.x)}, ${coordLabel(selected.point.y)})`;
+    // Keep the label inside the viewport: flip below the point near the top
+    // edge and pull it left near the right edge (~7px per character).
+    const lx = clamp(px + 9, 4, width - (label.length * 7 + 6));
+    const ly = py < 26 ? py + 22 : py - 10;
+    parts.push(
+      `<text x="${fmt(lx)}" y="${fmt(ly)}" font-size="12.5" font-weight="700" ` +
+        `font-family="system-ui,sans-serif" fill="${selected.color}" stroke="#fff" ` +
+        `stroke-width="3.5" paint-order="stroke" style="font-variant-numeric:tabular-nums">${label}</text>`,
+    );
+  }
+
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" ` +
     `viewBox="0 0 ${width} ${height}" style="display:block;background:#fff">` +
@@ -96,6 +117,10 @@ function line(x1: number, y1: number, x2: number, y2: number, stroke: string, w:
 function text(x: number, y: number, s: string, fill: string): string {
   const f = (n: number) => Number(n.toFixed(2));
   return `<text x="${f(x)}" y="${f(y)}" font-size="10" font-family="system-ui,sans-serif" fill="${fill}">${s}</text>`;
+}
+
+function coordLabel(v: number): string {
+  return formatNumber(Number(v.toPrecision(4)));
 }
 
 function tickLabel(t: number): string {
