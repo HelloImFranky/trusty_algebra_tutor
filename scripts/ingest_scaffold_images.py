@@ -234,6 +234,43 @@ def find_anchors(doc) -> list[tuple[int, float, str, str]]:
     return anchors
 
 
+def find_covering_images(page) -> list[tuple]:
+    """Floating pictures that LibreOffice painted on top of table text.
+
+    Walks the page's drawing operations in order; an image that is drawn
+    after text and covers several of those text spans is hiding content
+    (e.g. the "STEPS TO SIMPLIFY RADICALS" box over the 1.1 cube-root
+    table). Returns [(rect, xref), ...] for each such image so the caller
+    can lift it out of the page and place it after the text instead.
+    """
+    import fitz
+
+    text_rects: list = []
+    covering: list = []
+    for op, bbox in page.get_bboxlog():
+        r = fitz.Rect(bbox)
+        if op in ("fill-text", "stroke-text"):
+            text_rects.append(r)
+        elif op == "fill-image":
+            hidden = [
+                t for t in text_rects
+                if not (r & t).is_empty
+                and (r & t).get_area() > 0.8 * t.get_area()
+                and t.get_area() > 50
+            ]
+            if len(hidden) >= 2:
+                covering.append(r)
+    if not covering:
+        return []
+    found = []
+    for info in page.get_image_info(xrefs=True):
+        ib = fitz.Rect(info["bbox"])
+        if any(max(abs(ib.x0 - r.x0), abs(ib.y0 - r.y0),
+                   abs(ib.x1 - r.x1), abs(ib.y1 - r.y1)) < 2 for r in covering):
+            found.append((ib, info["xref"]))
+    return found
+
+
 def render_sections(pdf_path: Path) -> list[dict]:
     import fitz
     from PIL import Image, ImageChops
@@ -256,14 +293,52 @@ def render_sections(pdf_path: Path) -> list[dict]:
             min(rgb.width, r + CROP_PAD), min(rgb.height, b + CROP_PAD),
         ))
 
-    def render_clip(pno: int, y0: float, y1: float) -> Image.Image | None:
+    def render_rect(pno: int, clip) -> Image.Image | None:
+        if clip.height < 8:
+            return None
+        pix = doc[pno].get_pixmap(matrix=mat, clip=clip, alpha=False)
+        return autocrop(Image.open(io.BytesIO(pix.tobytes("png"))))
+
+    def lift_picture(xref: int, rect) -> Image.Image | None:
+        """The embedded picture itself, flattened on white and scaled to
+        the size the page displays it at."""
+        raw = doc.extract_image(xref)
+        im = Image.open(io.BytesIO(raw["image"])).convert("RGB")
+        if raw.get("smask"):
+            mask = Image.open(
+                io.BytesIO(doc.extract_image(raw["smask"])["image"])
+            ).convert("L")
+            if mask.size != im.size:
+                mask = mask.resize(im.size)
+            flat = Image.new("RGB", im.size, (255, 255, 255))
+            flat.paste(im, mask=mask)
+            im = flat
+        w = max(1, round(rect.width * ZOOM))
+        h = max(1, round(rect.height * ZOOM))
+        return autocrop(im.resize((w, h), Image.LANCZOS))
+
+    def render_clip(pno: int, y0: float, y1: float) -> list[Image.Image]:
+        """Render one vertical slice of a page, as a list of pieces.
+
+        A floating picture that the layout painted over text becomes its
+        own piece: the slice is rendered with the picture removed so the
+        text underneath shows, and the picture follows the text instead
+        of sitting on top of it.
+        """
         page = doc[pno]
         clip = fitz.Rect(0, max(0, y0), page.rect.width,
                          min(page.rect.height, y1))
-        if clip.height < 8:
-            return None
-        pix = page.get_pixmap(matrix=mat, clip=clip, alpha=False)
-        return autocrop(Image.open(io.BytesIO(pix.tobytes("png"))))
+        lifted: list[Image.Image] = []
+        for rect, xref in find_covering_images(page):
+            mid = (rect.y0 + rect.y1) / 2
+            if not (clip.y0 <= mid < clip.y1):
+                continue
+            im = lift_picture(xref, rect)
+            if im is not None:
+                lifted.append(im)
+            page.delete_image(xref)
+        base = render_rect(pno, clip)
+        return ([base] if base is not None else []) + lifted
 
     def stitch(pieces: list[Image.Image]) -> Image.Image:
         w = max(p.width for p in pieces)
@@ -292,9 +367,7 @@ def render_sections(pdf_path: Path) -> list[dict]:
         for pno in range(page, end_page + 1):
             y0 = y if pno == page else 0.0
             y1 = end_y if pno == end_page else doc[pno].rect.height
-            im = render_clip(pno, y0, y1)
-            if im is not None:
-                pieces.append(im)
+            pieces += render_clip(pno, y0, y1)
         if not pieces:
             print(f"warning: section {lesson} “{title}” rendered empty")
             continue
