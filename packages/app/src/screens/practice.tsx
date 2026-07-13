@@ -59,6 +59,7 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
   const [stepFeedback, setStepFeedback] = useState('');
   const [showTutor, setShowTutor] = useState(false);
   const [showAnim, setShowAnim] = useState(false);
+  const [animStart, setAnimStart] = useState(0);
   const [solved, setSolved] = useState(0);
   const [startedAt, setStartedAt] = useState(Date.now());
 
@@ -67,6 +68,12 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
     () => (problem ? buildScriptForProblem(problem.skillSlug, problem.params) : null),
     [problem],
   );
+
+  const openAnim = (atStep = 0) => {
+    setAnimStart(atStep);
+    setShowAnim(true);
+    setHintsUsed((h) => h + 1); // watching the solve counts as a hint
+  };
 
   const loadNext = useCallback(async () => {
     setAnswer('');
@@ -80,6 +87,7 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
     setStepFeedback('');
     setShowTutor(false);
     setShowAnim(false);
+    setAnimStart(0);
     setStartedAt(Date.now());
     try {
       const r = await client.practice.next.query({ skillId, locale });
@@ -121,6 +129,14 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
       setFeedback('bad');
       // targeted misconception feedback when the server recognized the error
       setMessage(res.message ?? '');
+      // flip mistakes get the animation opened right on the flip step —
+      // the moment the error happened
+      if (animScript && res.misconceptionId?.includes('flip')) {
+        const flipStep = animScript.steps.findIndex((s) =>
+          s.tokens.some((tk) => tk.emph === 'flip'),
+        );
+        openAnim(Math.max(0, flipStep));
+      }
     }
   };
 
@@ -212,6 +228,9 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
                 <>
                   <PrimaryButton onPress={submit}>{t('check')}</PrimaryButton>
                   <SecondaryButton onPress={nudge}>💡 {t('hint')}</SecondaryButton>
+                  {feedback === 'bad' && animScript && !showAnim && (
+                    <GhostButton onPress={() => openAnim(0)}>🎬 {t('animatedExample')}</GhostButton>
+                  )}
                   {problem.steps.length > 0 && (
                     <GhostButton
                       onPress={() => {
@@ -229,7 +248,13 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
                 <>
                   <PrimaryButton onPress={loadNext}>{t('next')} →</PrimaryButton>
                   {animScript && (
-                    <GhostButton onPress={() => setShowAnim((s) => !s)}>
+                    <GhostButton
+                      onPress={() => {
+                        // reinforcement after a correct answer — not a hint
+                        setAnimStart(0);
+                        setShowAnim((s) => !s);
+                      }}
+                    >
                       🎬 {t('animatedExample')}
                     </GhostButton>
                   )}
@@ -255,12 +280,7 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
             <XStack gap={8} marginTop={4} flexWrap="wrap">
               <PrimaryButton onPress={checkStep}>{t('check')}</PrimaryButton>
               {animScript && (
-                <GhostButton
-                  onPress={() => {
-                    setShowAnim((s) => !s);
-                    if (!showAnim) setHintsUsed((h) => h + 1); // watching = a hint
-                  }}
-                >
+                <GhostButton onPress={() => (showAnim ? setShowAnim(false) : openAnim(0))}>
                   🎬 {t('animatedExample')}
                 </GhostButton>
               )}
@@ -270,7 +290,13 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
         )}
       </AppCard>
 
-      {showAnim && animScript && <AnimatedEquation key={problem.id} script={animScript} />}
+      {showAnim && animScript && (
+        <AnimatedEquation
+          key={`${problem.id}-${animStart}`}
+          script={animScript}
+          startAtStep={animStart}
+        />
+      )}
 
       {showTutor && (
         <TutorChat problemId={problem.id} stepReached={phase === 'steps' ? stepIndex : undefined} />

@@ -4,11 +4,12 @@
  * with a picker when a lesson has more than one script.
  */
 import { useState } from 'react';
-import { Text, XStack, YStack } from 'tamagui';
+import { Text, YStack } from 'tamagui';
 import { useI18n } from '../../lib/i18n';
-import { BRAND, SecondaryButton, SubTitle } from '../ui';
+import { SubTitle } from '../ui';
 import { AnimatedEquation } from './AnimatedEquation';
 import { scriptsByLessonCode } from './model';
+import { ScriptPicker } from './ScriptPicker';
 
 export function LessonAnimations({ code }: { code: string }) {
   const { t, locale } = useI18n();
@@ -20,20 +21,7 @@ export function LessonAnimations({ code }: { code: string }) {
   return (
     <YStack gap={8}>
       <SubTitle>🎬 {t('animatedExample')}</SubTitle>
-      {scripts.length > 1 && (
-        <XStack gap={8} flexWrap="wrap">
-          {scripts.map((s) => (
-            <SecondaryButton
-              key={s.id}
-              size="$3"
-              onPress={() => setScriptId(s.id)}
-              {...(s.id === script.id ? { backgroundColor: BRAND, color: 'white' } : {})}
-            >
-              {locale === 'es' ? s.titleEs : s.titleEn}
-            </SecondaryButton>
-          ))}
-        </XStack>
-      )}
+      <ScriptPicker scripts={scripts} selectedId={script.id} onSelect={setScriptId} size="$3" />
       {scripts.length === 1 && (
         <Text fontSize={14} color="#6b7280">
           {locale === 'es' ? script.titleEs : script.titleEn}

@@ -14,6 +14,23 @@ export function CurriculumScreen() {
   return (
     <Screen maxWidth={980}>
       <Title>{t('curriculum')}</Title>
+      <Link href="/examples">
+        <XStack
+          backgroundColor="#eef1fd"
+          borderRadius={12}
+          paddingVertical={10}
+          paddingHorizontal={14}
+          alignItems="center"
+          gap={8}
+          pressStyle={{ backgroundColor: '#dde3fb' }}
+          hoverStyle={{ backgroundColor: '#e4e9fc' }}
+        >
+          <Text fontSize={16}>🎬</Text>
+          <Text color={BRAND} fontWeight="700" fontSize={14.5}>
+            {t('animatedExamples')} →
+          </Text>
+        </XStack>
+      </Link>
       {cur.error && <Feedback kind="bad">{cur.error.message}</Feedback>}
       {cur.isLoading && <Loading />}
       <YStack gap={12}>

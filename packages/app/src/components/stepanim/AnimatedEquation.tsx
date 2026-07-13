@@ -9,7 +9,7 @@
  * swapping to Reanimated later is contained to this file.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Animated, Easing, Platform, Text as RNText, View } from 'react-native';
+import { AccessibilityInfo, Animated, Easing, Platform, Text as RNText, View } from 'react-native';
 import { Text, XStack } from 'tamagui';
 import { useI18n } from '../../lib/i18n';
 import { AppCard, BRAND, COLORS, GhostButton, PrimaryButton, SecondaryButton } from '../ui';
@@ -94,10 +94,35 @@ function FadeIn({ children }: { children: ReactNode }) {
   return <Animated.View style={{ opacity: o }}>{children}</Animated.View>;
 }
 
-export function AnimatedEquation({ script }: { script: EqScript }) {
+export function AnimatedEquation({
+  script,
+  startAtStep = 0,
+}: {
+  script: EqScript;
+  /** Open on a specific step (e.g. the flip step after a flip mistake). */
+  startAtStep?: number;
+}) {
   const { t, locale } = useI18n();
-  const [index, setIndex] = useState(0);
+  const [index, setIndex] = useState(() =>
+    Math.min(Math.max(0, startAtStep), script.steps.length - 1),
+  );
   const [playing, setPlaying] = useState(false);
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  // Respect the OS reduced-motion setting: steps swap instead of morphing.
+  useEffect(() => {
+    let alive = true;
+    AccessibilityInfo.isReduceMotionEnabled?.()
+      .then((v) => alive && setReduceMotion(!!v))
+      .catch(() => {});
+    const sub = AccessibilityInfo.addEventListener?.('reduceMotionChanged', (v: boolean) =>
+      setReduceMotion(!!v),
+    );
+    return () => {
+      alive = false;
+      sub?.remove?.();
+    };
+  }, []);
   const [containerW, setContainerW] = useState(0);
   const [ready, setReady] = useState(false);
   const [exiting, setExiting] = useState<EqToken[]>([]);
@@ -138,6 +163,8 @@ export function AnimatedEquation({ script }: { script: EqScript }) {
   // Morph the line whenever the step (or available width) changes.
   useEffect(() => {
     if (!ready || containerW === 0) return;
+    // reduced motion: zero-duration timings — steps swap instead of animating
+    const dur = (ms: number) => (reduceMotion ? 0 : ms);
     const tokens = script.steps[index].tokens;
     const { pos, total } = layoutStep(tokens, widths.current, containerW);
     const prev = prevTokens.current;
@@ -149,7 +176,7 @@ export function AnimatedEquation({ script }: { script: EqScript }) {
     parts.push(
       Animated.timing(lineScale, {
         toValue: Math.min(1, containerW / (total + 8)),
-        duration: 420,
+        duration: dur(420),
         easing: Easing.out(Easing.cubic),
         useNativeDriver: NATIVE,
       }),
@@ -161,8 +188,8 @@ export function AnimatedEquation({ script }: { script: EqScript }) {
       if (!a) continue;
       parts.push(
         Animated.parallel([
-          Animated.timing(a.o, { toValue: 0, duration: 260, useNativeDriver: NATIVE }),
-          Animated.timing(a.y, { toValue: 14, duration: 260, useNativeDriver: NATIVE }),
+          Animated.timing(a.o, { toValue: 0, duration: dur(260), useNativeDriver: NATIVE }),
+          Animated.timing(a.y, { toValue: 14, duration: dur(260), useNativeDriver: NATIVE }),
         ]),
       );
     }
@@ -175,12 +202,12 @@ export function AnimatedEquation({ script }: { script: EqScript }) {
         parts.push(
           Animated.timing(a.x, {
             toValue: target,
-            duration: 420,
+            duration: dur(420),
             easing: Easing.out(Easing.cubic),
             useNativeDriver: NATIVE,
           }),
-          Animated.timing(a.o, { toValue: 1, duration: 200, useNativeDriver: NATIVE }),
-          Animated.timing(a.y, { toValue: 0, duration: 200, useNativeDriver: NATIVE }),
+          Animated.timing(a.o, { toValue: 1, duration: dur(200), useNativeDriver: NATIVE }),
+          Animated.timing(a.y, { toValue: 0, duration: dur(200), useNativeDriver: NATIVE }),
         );
       } else {
         a.x.setValue(target);
@@ -190,14 +217,14 @@ export function AnimatedEquation({ script }: { script: EqScript }) {
           Animated.parallel([
             Animated.timing(a.o, {
               toValue: 1,
-              duration: 300,
-              delay: enterDelay,
+              duration: dur(300),
+              delay: dur(enterDelay),
               useNativeDriver: NATIVE,
             }),
             Animated.timing(a.y, {
               toValue: 0,
-              duration: 320,
-              delay: enterDelay,
+              duration: dur(320),
+              delay: dur(enterDelay),
               easing: Easing.out(Easing.back(1.6)),
               useNativeDriver: NATIVE,
             }),
@@ -216,7 +243,7 @@ export function AnimatedEquation({ script }: { script: EqScript }) {
       for (const tok of exits) anims.current.delete(tok.id);
     });
     return () => handle.stop();
-  }, [index, ready, containerW, script]);
+  }, [index, ready, containerW, script, reduceMotion]);
 
   const next = () => {
     if (atEnd) return;
@@ -240,14 +267,14 @@ export function AnimatedEquation({ script }: { script: EqScript }) {
     setPlaying(true);
   };
 
-  // Auto-play: advance every 2.2s until the last step.
+  // Auto-play: advance after each step's dwell time (big moments hold longer).
   useEffect(() => {
     if (!playing) return;
     if (index >= script.steps.length - 1) {
       setPlaying(false);
       return;
     }
-    const id = setTimeout(next, 2200);
+    const id = setTimeout(next, script.steps[index].holdMs ?? 2200);
     return () => clearTimeout(id);
   }, [playing, index]);
 
@@ -344,9 +371,15 @@ export function AnimatedEquation({ script }: { script: EqScript }) {
         </Animated.View>
       </View>
 
-      {/* Explanation for the current step */}
+      {/* Explanation for the current step (announced to screen readers) */}
       <FadeIn key={`explain-${index}`}>
-        <Text fontSize={15} color="#374151" textAlign="center" minHeight={40}>
+        <Text
+          fontSize={15}
+          color="#374151"
+          textAlign="center"
+          minHeight={40}
+          accessibilityLiveRegion="polite"
+        >
           {explain}
         </Text>
       </FadeIn>
