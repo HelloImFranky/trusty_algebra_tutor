@@ -32,11 +32,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             plain CSS so it works from the first paint, before hydration:
             sticky top bar, fixed bottom tabs (phone widths only — the JS
             hides them >=768px after hydration; the media query covers the
-            server-rendered frame), fixed reference-sheet button. */}
+            server-rendered frame). */}
         <style>{`
           #top-bar{position:sticky;top:0;z-index:40}
           #bottom-tabs{position:fixed;bottom:0;left:0;right:0;z-index:40}
-          #ref-sheet-btn{position:fixed !important}
           @media (min-width:768px){#bottom-tabs{display:none}}
         `}</style>
         <Providers>{children}</Providers>

@@ -22,7 +22,9 @@ export function GraphPlot({ fns, window: win, onWindowChange, markers, height = 
   const [trace, setTrace] = useState<{ x: number; values: { color: string; y: number }[] } | null>(
     null,
   );
+  const [selected, setSelected] = useState<{ point: Point; color: string } | null>(null);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const downAt = useRef<{ x: number; y: number } | null>(null);
   const winRef = useRef(win);
   winRef.current = win;
 
@@ -55,10 +57,37 @@ export function GraphPlot({ fns, window: win, onWindowChange, markers, height = 
     return () => el.removeEventListener('wheel', onWheel);
   }, [onWindowChange]);
 
+  // Drop the selection if its marker disappears (expression edited/removed).
+  const activeSelection = useMemo(() => {
+    if (!selected || !markers) return undefined;
+    return markers.some(
+      (m) => m.point.x === selected.point.x && m.point.y === selected.point.y,
+    )
+      ? selected
+      : undefined;
+  }, [selected, markers]);
+
   const svg = useMemo(
-    () => renderGraphSvg({ fns, window: win, width, height, markers }),
-    [fns, win, width, height, markers],
+    () => renderGraphSvg({ fns, window: win, width, height, markers, selected: activeSelection }),
+    [fns, win, width, height, markers, activeSelection],
   );
+
+  /** Marker within 16px of the click, nearest first. */
+  const markerAt = (clientX: number, clientY: number) => {
+    const el = host.current;
+    if (!el || !markers?.length) return null;
+    const rect = el.getBoundingClientRect();
+    const px = clientX - rect.left;
+    const py = clientY - rect.top;
+    let best: { marker: { point: Point; color: string }; d: number } | null = null;
+    for (const m of markers) {
+      const mx = ((m.point.x - win.xmin) / (win.xmax - win.xmin)) * rect.width;
+      const my = rect.height - ((m.point.y - win.ymin) / (win.ymax - win.ymin)) * rect.height;
+      const d = Math.hypot(mx - px, my - py);
+      if (d <= 16 && (!best || d < best.d)) best = { marker: m, d };
+    }
+    return best?.marker ?? null;
+  };
 
   const updateTrace = (clientX: number) => {
     const el = host.current;
@@ -75,6 +104,7 @@ export function GraphPlot({ fns, window: win, onWindowChange, markers, height = 
   const onPointerDown = (e: React.PointerEvent) => {
     (e.target as Element).setPointerCapture?.(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    downAt.current = { x: e.clientX, y: e.clientY };
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
@@ -119,6 +149,16 @@ export function GraphPlot({ fns, window: win, onWindowChange, markers, height = 
 
   const onPointerUp = (e: React.PointerEvent) => {
     pointers.current.delete(e.pointerId);
+    // A press that never wandered more than a few px is a tap: select the
+    // marker under it (showing its ordered pair) or clear the selection.
+    const down = downAt.current;
+    downAt.current = null;
+    if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 5) {
+      const hit = markerAt(e.clientX, e.clientY);
+      setSelected((prev) =>
+        hit && prev && hit.point.x === prev.point.x && hit.point.y === prev.point.y ? null : hit,
+      );
+    }
   };
 
   return (
