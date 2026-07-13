@@ -299,6 +299,10 @@ export function CalcView() {
           autoCorrect={false}
           spellCheck={false}
           enterKeyHint="done"
+          // The pad below is the keyboard: keep the OS soft keyboard away
+          // (inputMode covers web/Android; showSoftInputOnFocus, Android).
+          inputMode="none"
+          showSoftInputOnFocus={false}
           fontSize={34}
           textAlign="right"
           borderWidth={0}

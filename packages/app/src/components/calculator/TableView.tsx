@@ -2,7 +2,7 @@
  * Table tab: TI-style table of values for the graph-tab functions. Rows come
  * from the engine's tableValues; the start/step controls page through x.
  */
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Input, Text, XStack, YStack } from 'tamagui';
 import { tableValues } from '@tutor/core';
 import { useI18n } from '../../lib/i18n';
@@ -30,33 +30,70 @@ export function TableView() {
     return v.trim() !== '' && Number.isFinite(n) ? n : fallback;
   };
 
+  // The text fields are locally owned so half-typed values ("-", "1.")
+  // survive; non-keystroke changes to the start (paging, session hydration)
+  // are written back into the field explicitly.
+  const hydrated = useCalculatorStore((s) => s.hydrated);
+  const [startText, setStartText] = useState(String(start));
+  const [stepText, setStepText] = useState(String(step));
+  useEffect(() => {
+    const s = useCalculatorStore.getState();
+    setStartText(String(s.tableStart));
+    setStepText(String(s.tableStep));
+  }, [hydrated]);
+
+  const page = (dir: 1 | -1) => {
+    const next = start + dir * ROWS * step;
+    setStartText(String(next));
+    setTable(next, step);
+  };
+
   return (
     <YStack gap={10}>
-      <XStack gap={10} alignItems="center" flexWrap="wrap">
-        <Text fontWeight="700">{t('startAt')}</Text>
-        <Input
-          width={90}
-          defaultValue={String(start)}
-          onChangeText={(v) => setTable(num(v, start), step)}
-          inputMode="numeric"
-          backgroundColor="#fff"
-          aria-label={t('startAt')}
-        />
-        <Text fontWeight="700">Δx =</Text>
-        <Input
-          width={90}
-          defaultValue={String(step)}
-          onChangeText={(v) => setTable(start, num(v, step) || 1)}
-          inputMode="numeric"
-          backgroundColor="#fff"
-          aria-label="Δx"
-        />
-        <SecondaryButton size="$2" onPress={() => setTable(start - ROWS * step, step)} aria-label="previous rows">
-          ▲
-        </SecondaryButton>
-        <SecondaryButton size="$2" onPress={() => setTable(start + ROWS * step, step)} aria-label="next rows">
-          ▼
-        </SecondaryButton>
+      {/* Inputs stacked on the left so the page arrows always fit beside them. */}
+      <XStack gap={12} alignItems="center">
+        <YStack gap={8} flexShrink={1}>
+          <XStack gap={10} alignItems="center">
+            <Text fontWeight="700" width={106} numberOfLines={1}>
+              {t('startAt')}
+            </Text>
+            <Input
+              width={110}
+              value={startText}
+              onChangeText={(v) => {
+                setStartText(v);
+                setTable(num(v, start), step);
+              }}
+              inputMode="numeric"
+              backgroundColor="#fff"
+              aria-label={t('startAt')}
+            />
+          </XStack>
+          <XStack gap={10} alignItems="center">
+            <Text fontWeight="700" width={106} numberOfLines={1}>
+              Δx =
+            </Text>
+            <Input
+              width={110}
+              value={stepText}
+              onChangeText={(v) => {
+                setStepText(v);
+                setTable(start, num(v, step) || 1);
+              }}
+              inputMode="numeric"
+              backgroundColor="#fff"
+              aria-label="Δx"
+            />
+          </XStack>
+        </YStack>
+        <YStack gap={8}>
+          <SecondaryButton size="$2" onPress={() => page(-1)} aria-label="previous rows">
+            ▲
+          </SecondaryButton>
+          <SecondaryButton size="$2" onPress={() => page(1)} aria-label="next rows">
+            ▼
+          </SecondaryButton>
+        </YStack>
       </XStack>
 
       {plotted.length === 0 ? (
