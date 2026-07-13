@@ -161,6 +161,22 @@ describe('practice loop', () => {
     expect(res.correct).toBe(true);
   });
 
+  it('records animation views on the attempt row', async () => {
+    const key = await prisma.problem.findUnique({ where: { id: BigInt(problem.id) } });
+    await as(student).practice.attempt({
+      problemId: problem.id,
+      submittedLatex: key!.answerLatex,
+      hintsUsed: 2,
+      animViews: 2,
+    });
+    const attempt = await prisma.attempt.findFirst({
+      where: { problemId: BigInt(problem.id) },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(attempt?.animViews).toBe(2);
+    expect(attempt?.hintsUsed).toBe(2);
+  });
+
   it('checks an individual step', async () => {
     const step = await prisma.problemStep.findFirst({
       where: { problem: { skillId: BigInt(skillId) } },

@@ -184,6 +184,7 @@ model Attempt {
   correct        Boolean
   misconceptionId String? @map("misconception_id")
   hintsUsed      Int      @default(0) @map("hints_used")
+  animViews      Int      @default(0) @map("anim_views")
   stepReached    Int      @default(0) @map("step_reached")
   durationMs     Int?     @map("duration_ms")
   context        String   @default("practice")

@@ -52,6 +52,9 @@ const attemptInput = z.object({
   problemId: z.number().int(),
   submittedLatex: z.string().max(2000),
   hintsUsed: z.number().int().min(0).max(20).default(0),
+  // animated-walkthrough opens for this problem (subset of hintsUsed during
+  // guided practice; tracked separately to measure impact on mastery)
+  animViews: z.number().int().min(0).max(20).default(0),
   stepReached: z.number().int().min(0).default(0),
   durationMs: z.number().int().nonnegative().optional(),
   context: z.enum(['practice', 'sprint', 'review']).default('practice'),
@@ -132,6 +135,7 @@ export const practiceRouter = router({
         correct: result.correct,
         misconceptionId: misconception?.id ?? null,
         hintsUsed: input.hintsUsed,
+        animViews: input.animViews,
         stepReached: input.stepReached,
         durationMs: input.durationMs ?? null,
         context: input.context,
