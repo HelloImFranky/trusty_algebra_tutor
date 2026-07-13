@@ -9,7 +9,6 @@ export { AuthScreen } from './screens/auth';
 export { CurriculumScreen } from './screens/curriculum';
 export { LessonScreen } from './screens/lesson';
 export { PracticeScreen } from './screens/practice';
-export { ExitTicketScreen } from './screens/exit-ticket';
 export { SprintScreen } from './screens/sprint';
 export { ReviewScreen } from './screens/review';
 export { ProgressScreen } from './screens/progress';

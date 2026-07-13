@@ -35,7 +35,6 @@ export const unit4: UnitSeed = {
         { template: 'is_function', tier: 'standard', count: 8 },
         { template: 'is_function', tier: 'challenge', count: 4 },
       ],
-      exitTicketSize: 4,
     },
     {
       code: '4.2',
@@ -70,7 +69,6 @@ export const unit4: UnitSeed = {
         { template: 'domain_from_points', tier: 'modified', count: 3 },
         { template: 'evaluate_function', tier: 'challenge', count: 5 },
       ],
-      exitTicketSize: 5,
     },
   ],
 };
@@ -181,7 +179,6 @@ export const unit5: UnitSeed = {
           gradingMode: 'exact',
         },
       ],
-      exitTicketSize: 4,
     },
     {
       code: '5.2',
@@ -213,7 +210,6 @@ export const unit5: UnitSeed = {
         { template: 'slope_two_points', tier: 'standard', count: 8 },
         { template: 'slope_two_points', tier: 'challenge', count: 5 },
       ],
-      exitTicketSize: 5,
     },
     {
       code: '5.3',
@@ -246,7 +242,6 @@ export const unit5: UnitSeed = {
         { template: 'slope_intercept_rewrite', tier: 'standard', count: 8 },
         { template: 'slope_intercept_rewrite', tier: 'challenge', count: 5 },
       ],
-      exitTicketSize: 5,
     },
     {
       code: '5.4',
@@ -278,7 +273,6 @@ export const unit5: UnitSeed = {
         { template: 'system_substitution', tier: 'standard', count: 8 },
         { template: 'system_substitution', tier: 'challenge', count: 4 },
       ],
-      exitTicketSize: 4,
     },
     {
       code: '5.5',
@@ -310,7 +304,6 @@ export const unit5: UnitSeed = {
         { template: 'system_elimination', tier: 'standard', count: 8 },
         { template: 'system_elimination', tier: 'challenge', count: 4 },
       ],
-      exitTicketSize: 4,
     },
   ],
 };
@@ -346,7 +339,6 @@ export const unit6: UnitSeed = {
         { template: 'exponential_write', tier: 'standard', count: 8 },
         { template: 'exponential_write', tier: 'challenge', count: 4 },
       ],
-      exitTicketSize: 4,
     },
     {
       code: '6.2',
@@ -373,7 +365,6 @@ export const unit6: UnitSeed = {
         { template: 'exponential_growth_decay', tier: 'standard', count: 8 },
         { template: 'exponential_growth_decay', tier: 'challenge', count: 5 },
       ],
-      exitTicketSize: 5,
     },
   ],
 };

@@ -46,7 +46,6 @@ export interface LessonSeed {
   skill: { slug: string; nameEn: string; nameEs: string };
   fixedProblems?: FixedProblemSeed[];
   generated?: GeneratedSpec[];
-  exitTicketSize: number;
 }
 
 export interface UnitSeed {

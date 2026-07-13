@@ -4,7 +4,7 @@ import { Providers } from './providers';
 export const metadata: Metadata = {
   title: 'Algebra Tutor',
   description:
-    'Self-paced Algebra 1 tutor with scaffolded lessons, exit tickets, and adaptive practice (EN/ES).',
+    'Self-paced Algebra 1 tutor with scaffolded lessons, Regents review, and adaptive practice (EN/ES).',
   manifest: '/manifest.webmanifest',
   icons: {
     icon: '/icon.svg',

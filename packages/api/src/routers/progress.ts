@@ -1,7 +1,13 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { prisma } from '@tutor/db';
-import { computeAchievements, decayedScore, masteryLabel, regentsTopics } from '@tutor/core';
+import {
+  REGENTS_ROUND_SIZE,
+  computeAchievements,
+  decayedScore,
+  masteryLabel,
+  regentsTopics,
+} from '@tutor/core';
 import { protectedProcedure, router } from '../trpc.js';
 
 async function buildProgress(userId: number) {
@@ -13,13 +19,6 @@ async function buildProgress(userId: number) {
     a.skill.lesson.unit.number - b.skill.lesson.unit.number ||
     a.skill.lesson.code.localeCompare(b.skill.lesson.code),
   );
-
-  const etResults = await prisma.exitTicketResult.findMany({
-    where: { userId: BigInt(userId) },
-    orderBy: { createdAt: 'desc' },
-    take: 20,
-    include: { exitTicket: { include: { lesson: { select: { code: true } } } } },
-  });
 
   const activity = await prisma.$queryRaw<
     { day: string; attempts: number; correct: number; minutes: number }[]
@@ -51,7 +50,7 @@ async function buildProgress(userId: number) {
   // renewed "practice again" rounds only add to the raw answer totals.
   const regentsAnswers = await prisma.regentsAnswer.findMany({
     where: { userId: BigInt(userId) },
-    select: { topicSlug: true, correct: true, round: true },
+    select: { topicSlug: true, correct: true, round: true, createdAt: true },
   });
   const regentsByTopic = new Map<string, { answered: number; correct: number }>();
   for (const a of regentsAnswers) {
@@ -68,7 +67,7 @@ async function buildProgress(userId: number) {
       icon: t.icon,
       titleEn: t.titleEn,
       titleEs: t.titleEs,
-      total: t.questions.length,
+      total: REGENTS_ROUND_SIZE,
       answered: p.answered,
       correct: p.correct,
     };
@@ -98,19 +97,34 @@ async function buildProgress(userId: number) {
     };
   });
 
-  // Lifetime tallies for the badge case (etResults above is capped at 20).
+  // Lifetime tallies for the badge case.
   const correctAnswers = await prisma.attempt.count({
     where: { userId: BigInt(userId), correct: true },
   });
-  const perfectExitTickets = await prisma.$queryRaw<{ n: number }[]>`
-    SELECT count(*)::int AS n FROM exit_ticket_results
-    WHERE user_id = ${BigInt(userId)} AND score = max_score`;
+
+  // Longest run of consecutive correct answers, across practice attempts and
+  // Regents Review answers in the order they happened.
+  const attemptResults = await prisma.attempt.findMany({
+    where: { userId: BigInt(userId) },
+    orderBy: { createdAt: 'asc' },
+    select: { correct: true, createdAt: true },
+  });
+  const timeline = [
+    ...attemptResults,
+    ...regentsAnswers.map((a) => ({ correct: a.correct, createdAt: a.createdAt })),
+  ].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  let correctStreakBest = 0;
+  let run = 0;
+  for (const entry of timeline) {
+    run = entry.correct ? run + 1 : 0;
+    correctStreakBest = Math.max(correctStreakBest, run);
+  }
 
   const achievements = computeAchievements({
     correctAnswers: correctAnswers + regents.questionsCorrect,
+    correctStreakBest,
     streakDays: streak,
     skillsStrong: skills.filter((s) => s.label === 'mastered' || s.label === 'proficient').length,
-    perfectExitTickets: perfectExitTickets[0]?.n ?? 0,
     regentsCorrect: regents.questionsCorrect,
     regentsTopicsCompleted: regents.topicsCompleted,
     regentsPerfectTopics: regents.perfectTopics,
@@ -120,12 +134,6 @@ async function buildProgress(userId: number) {
     streakDays: streak,
     skills,
     struggleFlags: skills.filter((s) => s.label === 'struggling'),
-    exitTickets: etResults.map((r) => ({
-      lessonCode: r.exitTicket.lesson.code,
-      score: r.score,
-      maxScore: r.maxScore,
-      at: r.createdAt,
-    })),
     activity,
     regents,
     achievements,

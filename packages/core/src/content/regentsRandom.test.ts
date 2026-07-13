@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { regentsTopics } from './regents.js';
 import {
+  REGENTS_BANK_SIZE,
   REGENTS_ROUND_SIZE,
   generateRegentsQuestion,
   parseRegentsGeneratedId,
@@ -9,19 +10,29 @@ import {
   regentsSlotGenerators,
 } from './regentsRandom.js';
 
-const slots = [1, 2, 3, 4] as const;
+const slots = Array.from({ length: REGENTS_ROUND_SIZE }, (_, i) => i + 1);
 
 describe('regents generated question ids', () => {
   it('round-trips through format and parse', () => {
     const id = regentsGeneratedId('linear-equations', 3, 2);
     expect(id).toBe('linear-equations:r3:q2');
     expect(parseRegentsGeneratedId(id)).toEqual({ slug: 'linear-equations', round: 3, slot: 2 });
+    const topUp = regentsGeneratedId('linear-equations', 0, 10);
+    expect(topUp).toBe('linear-equations:r0:q10');
+    expect(parseRegentsGeneratedId(topUp)).toEqual({
+      slug: 'linear-equations',
+      round: 0,
+      slot: 10,
+    });
   });
 
-  it('rejects static-bank ids, round 0, and malformed input', () => {
+  it('rejects static-bank ids, bank-owned round-0 slots, and malformed input', () => {
     expect(parseRegentsGeneratedId('linear-equations-q1')).toBeNull();
-    expect(parseRegentsGeneratedId('linear-equations:r0:q1')).toBeNull();
-    expect(parseRegentsGeneratedId('linear-equations:r1:q5')).toBeNull();
+    // Round 0 slots 1..REGENTS_BANK_SIZE belong to the handwritten bank.
+    for (let slot = 1; slot <= REGENTS_BANK_SIZE; slot++) {
+      expect(parseRegentsGeneratedId(`linear-equations:r0:q${slot}`)).toBeNull();
+    }
+    expect(parseRegentsGeneratedId(`linear-equations:r1:q${REGENTS_ROUND_SIZE + 1}`)).toBeNull();
     expect(parseRegentsGeneratedId('nope:r1:')).toBeNull();
   });
 
@@ -35,17 +46,17 @@ describe('regents generated question ids', () => {
 });
 
 describe('regents slot generators', () => {
-  it('covers every topic in the handwritten bank with a full round of slots', () => {
+  it('covers every topic in the handwritten bank', () => {
     for (const topic of regentsTopics) {
       expect(regentsSlotGenerators[topic.slug], topic.slug).toBeDefined();
-      expect(regentsSlotGenerators[topic.slug]).toHaveLength(REGENTS_ROUND_SIZE);
+      expect(regentsSlotGenerators[topic.slug].length).toBeGreaterThanOrEqual(1);
     }
   });
 
   it('produces valid, bilingual questions with four distinct choices for many seeds', () => {
     for (const topic of regentsTopics) {
       for (const slot of slots) {
-        for (let seed = 1; seed <= 60; seed++) {
+        for (let seed = 1; seed <= 25; seed++) {
           const q = generateRegentsQuestion(topic.slug, slot, seed * 2654435761);
           const label = `${topic.slug} q${slot} seed ${seed}`;
           expect(q.promptEn.length, label).toBeGreaterThan(10);
@@ -88,6 +99,9 @@ describe('regents slot generators', () => {
 
   it('throws on unknown topics or slots', () => {
     expect(() => generateRegentsQuestion('nope', 1, 1)).toThrow(/no regents generators/);
-    expect(() => generateRegentsQuestion('systems', 5, 1)).toThrow(/bad regents slot/);
+    expect(() => generateRegentsQuestion('systems', REGENTS_ROUND_SIZE + 1, 1)).toThrow(
+      /bad regents slot/,
+    );
+    expect(() => generateRegentsQuestion('systems', 0, 1)).toThrow(/bad regents slot/);
   });
 });

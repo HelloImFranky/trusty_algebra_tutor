@@ -36,7 +36,6 @@ export const unit7: UnitSeed = {
         { template: 'factor_gcf', tier: 'standard', count: 7 },
         { template: 'factor_gcf', tier: 'challenge', count: 5 },
       ],
-      exitTicketSize: 5,
     },
     {
       code: '7.2',
@@ -71,7 +70,6 @@ export const unit7: UnitSeed = {
         { template: 'dots', tier: 'standard', count: 4 },
         { template: 'dots', tier: 'challenge', count: 5 },
       ],
-      exitTicketSize: 5,
     },
   ],
 };
@@ -107,7 +105,6 @@ export const unit8: UnitSeed = {
         { template: 'solve_sqrt_method', tier: 'standard', count: 8 },
         { template: 'solve_sqrt_method', tier: 'challenge', count: 4 },
       ],
-      exitTicketSize: 4,
     },
     {
       code: '8.2',
@@ -135,7 +132,6 @@ export const unit8: UnitSeed = {
         { template: 'solve_quadratic_factoring', tier: 'standard', count: 8 },
         { template: 'solve_quadratic_factoring', tier: 'challenge', count: 5 },
       ],
-      exitTicketSize: 5,
     },
     {
       code: '8.3',
@@ -169,7 +165,6 @@ export const unit8: UnitSeed = {
         { template: 'axis_of_symmetry', tier: 'standard', count: 5 },
         { template: 'axis_of_symmetry', tier: 'challenge', count: 5 },
       ],
-      exitTicketSize: 5,
     },
     {
       code: '8.4',
@@ -196,7 +191,6 @@ export const unit8: UnitSeed = {
         { template: 'projectile_ground', tier: 'standard', count: 6 },
         { template: 'projectile_ground', tier: 'challenge', count: 4 },
       ],
-      exitTicketSize: 4,
     },
   ],
 };
@@ -232,7 +226,6 @@ export const unit9: UnitSeed = {
         { template: 'transformation_identify', tier: 'standard', count: 8 },
         { template: 'transformation_identify', tier: 'challenge', count: 4 },
       ],
-      exitTicketSize: 4,
     },
     {
       code: '9.2',
@@ -260,7 +253,6 @@ export const unit9: UnitSeed = {
         { template: 'classify_function_type', tier: 'standard', count: 8 },
         { template: 'classify_function_type', tier: 'challenge', count: 4 },
       ],
-      exitTicketSize: 4,
     },
   ],
 };

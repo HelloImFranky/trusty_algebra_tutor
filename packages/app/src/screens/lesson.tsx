@@ -15,7 +15,7 @@ import { MathText } from '../components/MathText';
 import { Katex } from '../components/Katex';
 import { TutorChat } from '../components/TutorChat';
 import {
-  AppCard, GhostButton, Loading, Muted, PrimaryButton, Screen, SecondaryButton,
+  AppCard, GhostButton, Loading, Muted, PrimaryButton, Screen,
   SubTitle, Title, BRAND, COLORS,
 } from '../components/ui';
 
@@ -169,14 +169,9 @@ export function LessonScreen({ id }: { id: number }) {
           </PrimaryButton>
         )}
         {allShown && l.skill && (
-          <>
-            <Link href={`/practice/${l.skill.id}?lesson=${l.id}`}>
-              <PrimaryButton>✏️ {t('practice')}</PrimaryButton>
-            </Link>
-            <Link href={`/exit-ticket/${l.id}`}>
-              <SecondaryButton>🎟️ {t('exitTicket')}</SecondaryButton>
-            </Link>
-          </>
+          <Link href={`/practice/${l.skill.id}?lesson=${l.id}`}>
+            <PrimaryButton>✏️ {t('practice')}</PrimaryButton>
+          </Link>
         )}
         <GhostButton onPress={() => setShowTutor((s) => !s)}>🤖 {t('askTutor')}</GhostButton>
       </XStack>

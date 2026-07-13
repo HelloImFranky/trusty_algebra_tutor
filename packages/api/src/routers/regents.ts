@@ -1,8 +1,9 @@
 /**
  * Regents Review: topic catalog of Regents-style multiple-choice questions.
- * Round 0 serves the handwritten bank in @tutor/core (regentsTopics); once a
- * round is finished the student can renew the topic, and rounds >= 1 serve
- * procedurally generated question sets instead. Generated questions are
+ * Every round serves REGENTS_ROUND_SIZE questions. Round 0 serves the
+ * handwritten bank in @tutor/core (regentsTopics) topped up with generated
+ * questions; once a round is finished the student can renew the topic, and
+ * rounds >= 1 serve fully generated sets. Generated questions are
  * reconstructed deterministically from (user, topic, round, slot) — nothing
  * but the student's answers is ever stored, and grading happens server-side
  * so the correct choice never reaches the client before the student's one
@@ -58,17 +59,25 @@ function resolveQuestion(
   };
 }
 
-/** Questions served for one round: the bank for round 0, generated after. */
+/**
+ * Questions served for one round. Round 0 starts with the handwritten bank
+ * and is topped up to REGENTS_ROUND_SIZE with generated questions (slots
+ * after the bank); later rounds are fully generated.
+ */
 function questionsForRound(userId: number, topic: RegentsTopic, round: number) {
-  if (round === 0) return topic.questions.map((q) => ({ id: q.id, question: q }));
-  return Array.from({ length: REGENTS_ROUND_SIZE }, (_, i) => {
-    const slot = i + 1;
+  const generated = (slot: number) => {
     const seed = regentsQuestionSeed(userId, topic.slug, round, slot);
     return {
       id: regentsGeneratedId(topic.slug, round, slot),
       question: generateRegentsQuestion(topic.slug, slot, seed),
     };
-  });
+  };
+  const fromBank = round === 0 ? topic.questions.map((q) => ({ id: q.id, question: q })) : [];
+  const generatedSlots = Array.from(
+    { length: REGENTS_ROUND_SIZE - fromBank.length },
+    (_, i) => generated(fromBank.length + i + 1),
+  );
+  return [...fromBank, ...generatedSlots];
 }
 
 export const regentsRouter = router({
@@ -100,7 +109,7 @@ export const regentsRouter = router({
           icon: t.icon,
           title: locale === 'es' ? t.titleEs : t.titleEn,
           blurb: locale === 'es' ? t.blurbEs : t.blurbEn,
-          total: t.questions.length,
+          total: REGENTS_ROUND_SIZE,
           answered: p.answered,
           correct: p.correct,
           extraRounds: p.maxRound,

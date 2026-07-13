@@ -33,7 +33,6 @@ model User {
   refreshTokens    RefreshToken[]
   attempts         Attempt[]
   mastery          Mastery[]
-  exitTicketResults ExitTicketResult[]
   tutorSessions    TutorSession[]
   calculatorSession CalculatorSession?
   regentsAnswers   RegentsAnswer[]
@@ -92,7 +91,6 @@ model Lesson {
   steps          LessonStep[]
   scaffolds      LessonScaffold[]
   skills         Skill[]
-  exitTicket     ExitTicket?
 
   @@index([unitId], map: "idx_lessons_unit")
   @@map("lessons")
@@ -209,30 +207,6 @@ model Mastery {
 
   @@id([userId, skillId])
   @@map("mastery")
-}
-
-model ExitTicket {
-  id         BigInt             @id @default(autoincrement())
-  lessonId   BigInt             @unique @map("lesson_id")
-  problemIds BigInt[]           @map("problem_ids")
-  lesson     Lesson             @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  results    ExitTicketResult[]
-
-  @@map("exit_tickets")
-}
-
-model ExitTicketResult {
-  id           BigInt     @id @default(autoincrement())
-  userId       BigInt     @map("user_id")
-  exitTicketId BigInt     @map("exit_ticket_id")
-  score        Int
-  maxScore     Int        @map("max_score")
-  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz()
-  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  exitTicket   ExitTicket @relation(fields: [exitTicketId], references: [id], onDelete: Cascade)
-
-  @@index([userId], map: "idx_etr_user")
-  @@map("exit_ticket_results")
 }
 
 model TutorSession {

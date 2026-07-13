@@ -1,6 +1,6 @@
 /**
  * Regents Review: a review-by-topic catalog of Regents-style multiple-choice
- * questions. Each topic holds four questions with four choices; the student
+ * questions. Each topic serves rounds of ten questions with four choices; the student
  * gets exactly one try per question (enforced server-side). Right answers get
  * a green check, wrong ones a red X plus a worked explanation, and either way
  * a Next button moves the session along. Progress feeds the Progress tab's

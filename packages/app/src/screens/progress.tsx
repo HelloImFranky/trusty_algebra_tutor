@@ -1,8 +1,8 @@
 /**
  * Progress dashboard (design doc §4.6), gamified: streaks, medal case of
  * achievements (bronze/silver/gold medallions drawn in-app — no external
- * assets), Regents Review topic progress, mastery map by unit, and recent
- * exit tickets. Guardians/teachers land here via /progress/[studentId].
+ * assets), Regents Review topic progress, and a mastery map by unit.
+ * Guardians/teachers land here via /progress/[studentId].
  */
 import { Text, XStack, YStack } from 'tamagui';
 import { trpc } from '../lib/trpc';
@@ -166,6 +166,9 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
             {data.regents.topicsCompleted} / {data.regents.topics.length} {t('completeLabel').toLowerCase()}
           </Muted>
         </XStack>
+        <Muted>
+          {data.regents.questionsAnswered} {t('questionsAnsweredLabel')}
+        </Muted>
         {data.regents.topics.map((topic) => {
           const done = topic.answered >= topic.total;
           const perfect = done && topic.correct === topic.total;
@@ -221,22 +224,6 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
           </YStack>
         ))}
         {!data.skills.length && <Muted>—</Muted>}
-      </AppCard>
-
-      <AppCard gap={6}>
-        <SubTitle>🎟️ {t('recentExitTickets')}</SubTitle>
-        {data.exitTickets.map((et, i) => (
-          <XStack key={i} justifyContent="space-between" paddingVertical={3}>
-            <Text fontWeight="700" width={50}>
-              {et.lessonCode}
-            </Text>
-            <Text>
-              {et.score} / {et.maxScore}
-            </Text>
-            <Muted>{new Date(et.at).toLocaleDateString()}</Muted>
-          </XStack>
-        ))}
-        {!data.exitTickets.length && <Muted>—</Muted>}
       </AppCard>
     </Screen>
   );

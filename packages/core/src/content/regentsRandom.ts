@@ -1,10 +1,13 @@
 /**
- * Procedurally generated Regents Review questions: once a student finishes a
- * topic's built-in four questions (round 0), they can "practice again" with a
- * freshly generated set (rounds 1, 2, ...). Every topic has four slot
- * generators mirroring the archetypes of the handwritten bank in regents.ts;
- * distractors are the same predicted-mistake wrong answers the misconception
- * system uses (forgot the inequality flip, skipped the FOIL middle terms, ...).
+ * Procedurally generated Regents Review questions. Every round serves
+ * REGENTS_ROUND_SIZE questions: round 0 is the handwritten bank in regents.ts
+ * topped up with generated questions (slots REGENTS_BANK_SIZE+1..ROUND_SIZE),
+ * and once a round is finished the student can "practice again" with a fully
+ * generated set (rounds 1, 2, ...). Every topic has four slot generators
+ * mirroring the archetypes of the handwritten bank; slots beyond the fourth
+ * cycle through those archetypes with fresh parameters. Distractors are the
+ * same predicted-mistake wrong answers the misconception system uses (forgot
+ * the inequality flip, skipped the FOIL middle terms, ...).
  *
  * Determinism is the security model: a question is fully determined by its
  * seed, which the API derives from (userId, topic, round, slot). The server
@@ -21,8 +24,11 @@ import type { RegentsQuestion } from './regents.js';
 
 export type RegentsQuestionContent = Omit<RegentsQuestion, 'id'>;
 
-/** Questions per topic per round — matches the handwritten round-0 bank. */
-export const REGENTS_ROUND_SIZE = 4;
+/** Questions per topic per round. */
+export const REGENTS_ROUND_SIZE = 10;
+
+/** Handwritten questions per topic in regents.ts (round 0 slots 1..4). */
+export const REGENTS_BANK_SIZE = 4;
 
 /* ------------------------------------------------------------------ */
 /* Ids and seeds                                                       */
@@ -33,13 +39,20 @@ export function regentsGeneratedId(slug: string, round: number, slot: number): s
   return `${slug}:r${round}:q${slot}`;
 }
 
-const GENERATED_ID = /^([a-z0-9-]+):r([1-9]\d{0,3}):q([1-4])$/;
+const GENERATED_ID = /^([a-z0-9-]+):r(0|[1-9]\d{0,3}):q(10|[1-9])$/;
 
 export function parseRegentsGeneratedId(
   id: string,
 ): { slug: string; round: number; slot: number } | null {
   const m = GENERATED_ID.exec(id);
-  return m ? { slug: m[1], round: Number(m[2]), slot: Number(m[3]) } : null;
+  if (!m) return null;
+  const round = Number(m[2]);
+  const slot = Number(m[3]);
+  // Round 0 slots 1..BANK_SIZE belong to the handwritten bank — a generated
+  // id there would let a client double-answer the same slot.
+  if (round === 0 && slot <= REGENTS_BANK_SIZE) return null;
+  if (slot > REGENTS_ROUND_SIZE) return null;
+  return { slug: m[1], round, slot };
 }
 
 /**
@@ -1003,8 +1016,12 @@ export function generateRegentsQuestion(
 ): RegentsQuestionContent {
   const gens = regentsSlotGenerators[slug];
   if (!gens) throw new Error(`no regents generators for topic: ${slug}`);
-  const gen = gens[slot - 1];
-  if (!gen) throw new Error(`bad regents slot ${slot} for topic ${slug}`);
+  if (!Number.isInteger(slot) || slot < 1 || slot > REGENTS_ROUND_SIZE) {
+    throw new Error(`bad regents slot ${slot} for topic ${slug}`);
+  }
+  // Slots past the archetype count cycle back through them; the seed already
+  // encodes the slot, so repeats of an archetype draw different parameters.
+  const gen = gens[(slot - 1) % gens.length];
   const rng = makeRng(seed);
   for (let attempt = 0; attempt < 25; attempt++) {
     let q: RegentsQuestionContent;

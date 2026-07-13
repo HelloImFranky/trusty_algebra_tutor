@@ -1,7 +1,7 @@
 /**
  * End-to-end API tests against a real Postgres test database:
  * register → curriculum → lesson → adaptive practice → per-step checks →
- * exit ticket → progress/guardian scoping — through the tRPC router.
+ * Regents review → progress/guardian scoping — through the tRPC router.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { TRPCError } from '@trpc/server';
@@ -223,47 +223,40 @@ describe('practice loop', () => {
   });
 });
 
-describe('exit tickets', () => {
-  it('grades an exit ticket and records the result', async () => {
-    const cur = await as(student).curriculum.map();
-    const lessonId = cur.units[0].lessons[0].id;
-    const et = await as(student).curriculum.exitTicket({ lessonId });
-    expect(et.problems.length).toBeGreaterThanOrEqual(4);
-
-    // answer the first correctly (peek at the key), the rest wrong
-    const key = await prisma.problem.findUnique({ where: { id: BigInt(et.problems[0].id) } });
-    const answers = et.problems.map((p, i) => ({
-      problemId: p.id,
-      submittedLatex: i === 0 ? key!.answerLatex : 'wrong-42x',
-    }));
-    const res = await as(student).curriculum.submitExitTicket({
-      exitTicketId: et.id,
-      answers,
-    });
-    expect(res.score).toBe(1);
-    expect(res.maxScore).toBe(et.problems.length);
-  });
-});
-
 describe('regents review', () => {
-  it('serves the topic catalog with four questions per topic and no progress yet', async () => {
+  it('serves the topic catalog with ten questions per topic and no progress yet', async () => {
     const res = await as(student).regents.catalog({});
     expect(res.topics.length).toBeGreaterThanOrEqual(10);
     for (const topic of res.topics) {
-      expect(topic.total).toBe(4);
+      expect(topic.total).toBe(10);
       expect(topic.answered).toBe(0);
     }
   });
 
   it('serves a topic without leaking answers, localized', async () => {
     const en = await as(student).regents.topic({ slug: 'linear-equations' });
-    expect(en.questions.length).toBe(4);
+    expect(en.questions.length).toBe(10);
     for (const q of en.questions) {
       expect(q.choices.length).toBe(4);
       expect(q.answered).toBeNull();
       expect(q).not.toHaveProperty('correctIndex');
       expect(q).not.toHaveProperty('explanation');
     }
+    // Round 0 = the four handwritten questions topped up with generated ones.
+    expect(en.questions.slice(0, 4).map((q) => q.id)).toEqual([
+      'linear-equations-q1',
+      'linear-equations-q2',
+      'linear-equations-q3',
+      'linear-equations-q4',
+    ]);
+    expect(en.questions.slice(4).map((q) => q.id)).toEqual([
+      'linear-equations:r0:q5',
+      'linear-equations:r0:q6',
+      'linear-equations:r0:q7',
+      'linear-equations:r0:q8',
+      'linear-equations:r0:q9',
+      'linear-equations:r0:q10',
+    ]);
     const es = await as(student).regents.topic({ slug: 'linear-equations', locale: 'es' });
     expect(es.title).toBe('Resolver Ecuaciones Lineales');
   });
@@ -312,25 +305,38 @@ describe('regents review', () => {
     expect(entry).toMatchObject({ answered: 2, correct: 1 });
   });
 
+  // Round-0 correct total for linear-equations; the generated top-up answers
+  // below add an amount only known at runtime.
+  let round0Correct = 3;
+
   it('completing a topic earns the Review Rookie badge on the progress tab', async () => {
     await as(student).regents.answer({ questionId: 'linear-equations-q3', choiceIndex: 2 });
     await as(student).regents.answer({ questionId: 'linear-equations-q4', choiceIndex: 3 });
 
+    // Finish the generated top-up questions (round 0 slots q5..q10) too.
+    const topic = await as(student).regents.topic({ slug: 'linear-equations' });
+    const open = topic.questions.filter((q) => !q.answered);
+    expect(open).toHaveLength(6);
+    for (const q of open) {
+      const graded = await as(student).regents.answer({ questionId: q.id, choiceIndex: 1 });
+      if (graded.correct) round0Correct++;
+    }
+
     const res = await as(student).progress.me();
     expect(res.regents.topicsCompleted).toBe(1);
-    expect(res.regents.questionsAnswered).toBe(4);
-    expect(res.regents.questionsCorrect).toBe(3);
+    expect(res.regents.questionsAnswered).toBe(10);
+    expect(res.regents.questionsCorrect).toBe(round0Correct);
     const rookie = res.achievements.find((a) => a.id === 'regents-bronze');
     expect(rookie?.earned).toBe(true);
     const perTopic = res.regents.topics.find((t) => t.slug === 'linear-equations');
-    expect(perTopic).toMatchObject({ answered: 4, correct: 3, total: 4 });
+    expect(perTopic).toMatchObject({ answered: 10, correct: round0Correct, total: 10 });
   });
 
   it('lets a finished topic renew with a freshly generated set', async () => {
     // Round 0 of linear-equations was completed above, so round 1 opens.
     const t1 = await as(student).regents.topic({ slug: 'linear-equations', round: 1 });
     expect(t1.round).toBe(1);
-    expect(t1.questions).toHaveLength(4);
+    expect(t1.questions).toHaveLength(10);
     for (const q of t1.questions) {
       expect(q.answered).toBeNull();
       expect(q.choices).toHaveLength(4);
@@ -342,12 +348,9 @@ describe('regents review', () => {
     const t2 = await as(student).regents.topic({ slug: 'linear-equations', round: 1 });
     expect(t2.questions.map((q) => q.prompt)).toEqual(t1.questions.map((q) => q.prompt));
     // Generated ids, not the handwritten bank's.
-    expect(t1.questions.map((q) => q.id)).toEqual([
-      'linear-equations:r1:q1',
-      'linear-equations:r1:q2',
-      'linear-equations:r1:q3',
-      'linear-equations:r1:q4',
-    ]);
+    expect(t1.questions.map((q) => q.id)).toEqual(
+      Array.from({ length: 10 }, (_, i) => `linear-equations:r1:q${i + 1}`),
+    );
   });
 
   it('grades a generated question once and replays the result after', async () => {
@@ -383,13 +386,14 @@ describe('regents review', () => {
   it('keeps first-run badge stats separate from extra practice rounds', async () => {
     const res = await as(student).progress.me();
     const perTopic = res.regents.topics.find((t) => t.slug === 'linear-equations');
-    expect(perTopic).toMatchObject({ answered: 4, correct: 3, total: 4 }); // round 0 only
-    expect(res.regents.questionsAnswered).toBe(5); // ...but totals count the extra round
+    // round 0 only
+    expect(perTopic).toMatchObject({ answered: 10, correct: round0Correct, total: 10 });
+    expect(res.regents.questionsAnswered).toBe(11); // ...but totals count the extra round
     expect(res.regents.topicsCompleted).toBe(1);
 
     const cat = await as(student).regents.catalog({});
     const entry = cat.topics.find((t) => t.slug === 'linear-equations');
-    expect(entry).toMatchObject({ answered: 4, correct: 3, extraRounds: 1 });
+    expect(entry).toMatchObject({ answered: 10, correct: round0Correct, extraRounds: 1 });
   });
 });
 
@@ -398,7 +402,6 @@ describe('progress & FERPA scoping', () => {
     const res = await as(student).progress.me();
     expect(res.streakDays).toBeGreaterThanOrEqual(1);
     expect(res.skills.length).toBeGreaterThan(0);
-    expect(res.exitTickets.length).toBe(1);
   });
 
   it('lets the linked guardian view the student, read-only', async () => {
