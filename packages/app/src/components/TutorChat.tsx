@@ -5,11 +5,11 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { ScrollView } from 'react-native';
-import { Input, Text, XStack, YStack } from 'tamagui';
+import { Text, XStack, YStack } from 'tamagui';
 import { client } from '../lib/trpc';
 import { useI18n } from '../lib/i18n';
 import { MathText } from './MathText';
-import { AppCard, PrimaryButton, SubTitle, COLORS } from './ui';
+import { AppCard, AppInput, PrimaryButton, SubTitle, COLORS } from './ui';
 
 interface Msg {
   role: 'user' | 'assistant';
@@ -100,7 +100,7 @@ export function TutorChat({
         </YStack>
       </ScrollView>
       <XStack gap={8} marginTop={6}>
-        <Input
+        <AppInput
           flex={1}
           value={input}
           placeholder={t('tutorPlaceholder')}

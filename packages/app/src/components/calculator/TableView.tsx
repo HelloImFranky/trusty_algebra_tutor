@@ -3,10 +3,10 @@
  * from the engine's tableValues; the start/step controls page through x.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Input, Text, XStack, YStack } from 'tamagui';
+import { Text, XStack, YStack } from 'tamagui';
 import { tableValues } from '@tutor/core';
 import { useI18n } from '../../lib/i18n';
-import { Muted, SecondaryButton, COLORS } from '../ui';
+import { AppInput, Muted, SecondaryButton, COLORS } from '../ui';
 import { useCalculatorStore } from './store';
 import { useCompiledFns } from './useCompiledFns';
 
@@ -57,7 +57,7 @@ export function TableView() {
             <Text fontWeight="700" width={106} numberOfLines={1}>
               {t('startAt')}
             </Text>
-            <Input
+            <AppInput
               width={110}
               value={startText}
               onChangeText={(v) => {
@@ -73,7 +73,7 @@ export function TableView() {
             <Text fontWeight="700" width={106} numberOfLines={1}>
               Δx =
             </Text>
-            <Input
+            <AppInput
               width={110}
               value={stepText}
               onChangeText={(v) => {

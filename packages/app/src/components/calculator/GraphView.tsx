@@ -5,7 +5,7 @@
  */
 import { useMemo, useRef, useState } from 'react';
 import { Platform, type TextInput } from 'react-native';
-import { Button, Input, Text, XStack, YStack } from 'tamagui';
+import { Button, Text, XStack, YStack } from 'tamagui';
 import {
   findIntersections,
   findRoots,
@@ -14,7 +14,7 @@ import {
   type Point,
 } from '@tutor/core';
 import { useI18n } from '../../lib/i18n';
-import { GhostButton, Muted, SecondaryButton, COLORS } from '../ui';
+import { AppInput, GhostButton, Muted, SecondaryButton, COLORS } from '../ui';
 import { GraphPlot } from './GraphPlot';
 import { MAX_EXPRESSIONS, useCalculatorStore } from './store';
 import { useCompiledFns } from './useCompiledFns';
@@ -122,7 +122,7 @@ export function GraphView() {
             <Text fontWeight="700" width={34} color="#111827">
               y{i + 1} =
             </Text>
-            <Input
+            <AppInput
               ref={((el: TextInput | null) => {
                 inputRefs.current[i] = el;
               }) as never}

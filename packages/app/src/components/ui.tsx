@@ -1,7 +1,7 @@
 /** Small shared building blocks so every screen reads the same. */
 import type { ReactNode } from 'react';
 import { ScrollView } from 'react-native';
-import { Button, Card, Spinner, Text, XStack, YStack, styled } from 'tamagui';
+import { Button, Card, Input, Spinner, Text, XStack, YStack, styled } from 'tamagui';
 
 export const BRAND = '#3b5bdb';
 export const COLORS = {
@@ -25,6 +25,15 @@ export function Screen({ children, maxWidth = 760 }: { children: ReactNode; maxW
     </ScrollView>
   );
 }
+
+/**
+ * Text input with a 16px floor: mobile Safari auto-zooms the page when a
+ * focused field's text is smaller than 16px, so every free-text input should
+ * use this (or set fontSize >= 16 explicitly).
+ */
+export const AppInput = styled(Input, {
+  fontSize: 16,
+});
 
 export const AppCard = styled(Card, {
   backgroundColor: '#ffffff',
