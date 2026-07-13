@@ -13,6 +13,7 @@ import { Animated, Easing, Platform, Text as RNText, View } from 'react-native';
 import { Text, XStack } from 'tamagui';
 import { useI18n } from '../../lib/i18n';
 import { AppCard, BRAND, COLORS, GhostButton, PrimaryButton, SecondaryButton } from '../ui';
+import { BalanceScale } from './BalanceScale';
 import { stepToText, type EqScript, type EqToken } from './model';
 
 const NATIVE = Platform.OS !== 'web';
@@ -54,12 +55,16 @@ function tokenStyle(tok: EqToken) {
   return { color, bg, strike };
 }
 
-/** x-position of every token in a step, centered inside containerW. */
+/**
+ * x-position of every token in a step, centered on containerW/2. A line
+ * wider than the container keeps its center (negative start x) so the
+ * whole-line scale transform shrinks it symmetrically into view.
+ */
 function layoutStep(
   tokens: EqToken[],
   textW: Map<string, number>,
   containerW: number,
-): Map<string, number> {
+): { pos: Map<string, number>; total: number } {
   const widths = tokens.map(
     (tok) => (textW.get(tok.text) ?? 0) + (tokenStyle(tok).bg ? CHIP_PAD * 2 : 0),
   );
@@ -67,14 +72,14 @@ function layoutStep(
   tokens.forEach((tok, i) => {
     total += widths[i] + (i === 0 ? 0 : tok.tight ? TIGHT_GAP : GAP);
   });
-  let x = Math.max(0, (containerW - total) / 2);
+  let x = (containerW - total) / 2;
   const pos = new Map<string, number>();
   tokens.forEach((tok, i) => {
     if (i > 0) x += tok.tight ? TIGHT_GAP : GAP;
     pos.set(tok.id, x);
     x += widths[i];
   });
-  return pos;
+  return { pos, total };
 }
 
 function FadeIn({ children }: { children: ReactNode }) {
@@ -96,6 +101,7 @@ export function AnimatedEquation({ script }: { script: EqScript }) {
   const anims = useRef(new Map<string, TokenAnim>());
   const widths = useRef(new Map<string, number>());
   const prevTokens = useRef<EqToken[] | null>(null);
+  const lineScale = useRef(new Animated.Value(1)).current;
 
   const texts = useMemo(
     () => Array.from(new Set(script.steps.flatMap((s) => s.tokens.map((tok) => tok.text)))),
@@ -129,11 +135,21 @@ export function AnimatedEquation({ script }: { script: EqScript }) {
   useEffect(() => {
     if (!ready || containerW === 0) return;
     const tokens = script.steps[index].tokens;
-    const pos = layoutStep(tokens, widths.current, containerW);
+    const { pos, total } = layoutStep(tokens, widths.current, containerW);
     const prev = prevTokens.current;
     const prevIds = new Set((prev ?? []).map((tok) => tok.id));
     const curIds = new Set(tokens.map((tok) => tok.id));
     const parts: Animated.CompositeAnimation[] = [];
+
+    // Shrink the whole line when it would overflow the card.
+    parts.push(
+      Animated.timing(lineScale, {
+        toValue: Math.min(1, containerW / (total + 8)),
+        duration: 420,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: NATIVE,
+      }),
+    );
 
     const exits = (prev ?? []).filter((tok) => !curIds.has(tok.id));
     for (const tok of exits) {
@@ -279,6 +295,9 @@ export function AnimatedEquation({ script }: { script: EqScript }) {
         onLayout={(e) => setContainerW(e.nativeEvent.layout.width)}
         style={{ height: LINE_H, width: '100%' }}
       >
+        <Animated.View
+          style={{ width: '100%', height: LINE_H, transform: [{ scale: lineScale }] }}
+        >
         {[...exiting, ...step.tokens].map((tok) => {
           const st = tokenStyle(tok);
           const a = getAnim(tok.id);
@@ -318,6 +337,7 @@ export function AnimatedEquation({ script }: { script: EqScript }) {
             </Animated.View>
           );
         })}
+        </Animated.View>
       </View>
 
       {/* Explanation for the current step */}
@@ -326,6 +346,9 @@ export function AnimatedEquation({ script }: { script: EqScript }) {
           {explain}
         </Text>
       </FadeIn>
+
+      {/* Balance scale: wobbles when an operation hits both sides */}
+      <BalanceScale step={step} wobble={step.tokens.some((tok) => tok.emph === 'apply')} />
 
       {/* Progress dots */}
       <XStack gap={6} justifyContent="center">
