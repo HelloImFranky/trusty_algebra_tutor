@@ -13,6 +13,7 @@ import { useI18n } from '../lib/i18n';
 import { useRequireAuth } from '../components/AppChrome';
 import { MathText } from '../components/MathText';
 import { Katex } from '../components/Katex';
+import { LessonAnimations } from '../components/stepanim/LessonAnimations';
 import { TutorChat } from '../components/TutorChat';
 import {
   AppCard, GhostButton, Loading, Muted, PrimaryButton, Screen,
@@ -120,6 +121,8 @@ export function LessonScreen({ id }: { id: number }) {
           )}
         </AppCard>
       ))}
+
+      {allShown && <LessonAnimations code={l.code} />}
 
       {l.classroomScaffolds.length > 0 && (
         <AppCard gap={8} borderLeftWidth={4} borderLeftColor={COLORS.warn}>

@@ -20,16 +20,26 @@ interface ProblemRow {
 }
 
 async function problemPayload(p: ProblemRow, locale: Locale) {
-  const steps = await prisma.problemStep.findMany({
-    where: { problemId: p.id },
-    orderBy: { position: 'asc' },
-  });
+  const [steps, extra] = await Promise.all([
+    prisma.problemStep.findMany({
+      where: { problemId: p.id },
+      orderBy: { position: 'asc' },
+    }),
+    // generator params + skill slug let the client build an animated
+    // walkthrough of this exact problem (stepanim builders)
+    prisma.problem.findUnique({
+      where: { id: p.id },
+      select: { paramsJson: true, skill: { select: { slug: true } } },
+    }),
+  ]);
   return {
     id: Number(p.id),
     skillId: Number(p.skillId),
     tier: p.tier,
     prompt: locale === 'es' ? p.promptEs : p.promptEn,
     gradingMode: p.gradingMode,
+    params: extra?.paramsJson ?? null,
+    skillSlug: extra?.skill.slug ?? null,
     steps: steps.map((s) => ({
       position: s.position,
       prompt: locale === 'es' ? s.promptEs : s.promptEn,

@@ -13,4 +13,7 @@ export { SprintScreen } from './screens/sprint';
 export { ReviewScreen } from './screens/review';
 export { ProgressScreen } from './screens/progress';
 export { CalculatorScreen } from './screens/calculator';
+export { AnimDemoScreen } from './screens/anim-demo';
+export { AnimatedEquation } from './components/stepanim/AnimatedEquation';
+export { demoScripts, type EqScript, type EqStep, type EqToken } from './components/stepanim/model';
 export { AppChrome } from './components/AppChrome';
