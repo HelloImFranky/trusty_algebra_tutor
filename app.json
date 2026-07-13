@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "7d8a724f-7d2f-4a2c-858c-ea485b4d7bc9"
+      }
+    },
+    "owner": "helloimfranky",
+    "slug": "trusty-tutor-app"
+  }
+}
