@@ -325,6 +325,72 @@ describe('regents review', () => {
     const perTopic = res.regents.topics.find((t) => t.slug === 'linear-equations');
     expect(perTopic).toMatchObject({ answered: 4, correct: 3, total: 4 });
   });
+
+  it('lets a finished topic renew with a freshly generated set', async () => {
+    // Round 0 of linear-equations was completed above, so round 1 opens.
+    const t1 = await as(student).regents.topic({ slug: 'linear-equations', round: 1 });
+    expect(t1.round).toBe(1);
+    expect(t1.questions).toHaveLength(4);
+    for (const q of t1.questions) {
+      expect(q.answered).toBeNull();
+      expect(q.choices).toHaveLength(4);
+      expect(new Set(q.choices).size).toBe(4);
+      expect(q).not.toHaveProperty('correctIndex');
+      expect(q).not.toHaveProperty('explanation');
+    }
+    // Deterministic: asking again serves the identical set.
+    const t2 = await as(student).regents.topic({ slug: 'linear-equations', round: 1 });
+    expect(t2.questions.map((q) => q.prompt)).toEqual(t1.questions.map((q) => q.prompt));
+    // Generated ids, not the handwritten bank's.
+    expect(t1.questions.map((q) => q.id)).toEqual([
+      'linear-equations:r1:q1',
+      'linear-equations:r1:q2',
+      'linear-equations:r1:q3',
+      'linear-equations:r1:q4',
+    ]);
+  });
+
+  it('grades a generated question once and replays the result after', async () => {
+    const topic = await as(student).regents.topic({ slug: 'linear-equations', round: 1 });
+    const q = topic.questions[0];
+    const res = await as(student).regents.answer({ questionId: q.id, choiceIndex: 2 });
+    expect(res.alreadyAnswered).toBe(false);
+    expect(res.correct).toBe(res.correctIndex === 2);
+    expect(res.explanation.length).toBeGreaterThan(10);
+
+    const retry = await as(student).regents.answer({ questionId: q.id, choiceIndex: 0 });
+    expect(retry.alreadyAnswered).toBe(true);
+    expect(retry.choiceIndex).toBe(2);
+
+    // A revisit shows the same graded state, and the topic resumes round 1.
+    const revisit = await as(student).regents.topic({ slug: 'linear-equations' });
+    expect(revisit.round).toBe(1);
+    expect(revisit.maxRound).toBe(1);
+    expect(revisit.questions[0].answered).toMatchObject({ choiceIndex: 2 });
+  });
+
+  it('refuses to skip ahead of an unfinished set', async () => {
+    // Round 1 has a single answer so far, so round 2 stays locked...
+    await expect(
+      as(student).regents.topic({ slug: 'linear-equations', round: 2 }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    // ...and untouched topics can't renew at all.
+    await expect(as(student).regents.topic({ slug: 'systems', round: 1 })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+  });
+
+  it('keeps first-run badge stats separate from extra practice rounds', async () => {
+    const res = await as(student).progress.me();
+    const perTopic = res.regents.topics.find((t) => t.slug === 'linear-equations');
+    expect(perTopic).toMatchObject({ answered: 4, correct: 3, total: 4 }); // round 0 only
+    expect(res.regents.questionsAnswered).toBe(5); // ...but totals count the extra round
+    expect(res.regents.topicsCompleted).toBe(1);
+
+    const cat = await as(student).regents.catalog({});
+    const entry = cat.topics.find((t) => t.slug === 'linear-equations');
+    expect(entry).toMatchObject({ answered: 4, correct: 3, extraRounds: 1 });
+  });
 });
 
 describe('progress & FERPA scoping', () => {

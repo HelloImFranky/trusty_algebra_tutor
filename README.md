@@ -33,7 +33,7 @@ What's inside:
 | 💡 **Hints** | A hint button, a "Walk me through it" button, and an AI tutor you can ask "I don't get it" (it helps you think — it won't give away answers) |
 | 🎟️ **Exit Tickets** | A quick 4–8 question check at the end of each lesson, graded instantly |
 | ⚡ **Sprint** | 90-second speed rounds — how many can you get? |
-| 📚 **Regents Review** | Mixed practice that automatically focuses on what you're rusty on |
+| 📚 **Regents Review** | Regents-style multiple choice by topic — finish a topic and hit "Practice again" for a freshly generated set with new numbers, as many times as you want |
 | 📈 **Progress** | Your streak 🔥, minutes practiced, and a mastery map of the whole course |
 | 🧮 **Calculator** | A built-in graphing calculator |
 | 📖 **Reference Sheet** | The Regents reference sheet, one tap away on every screen |

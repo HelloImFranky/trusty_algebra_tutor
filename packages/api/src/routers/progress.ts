@@ -46,13 +46,16 @@ async function buildProgress(userId: number) {
     d.setDate(d.getDate() - 1);
   }
 
-  // Regents Review: per-topic tallies from the one-try answer log.
+  // Regents Review: per-topic tallies from the one-try answer log. Topic
+  // completion and perfect-score badges track the first run (round 0);
+  // renewed "practice again" rounds only add to the raw answer totals.
   const regentsAnswers = await prisma.regentsAnswer.findMany({
     where: { userId: BigInt(userId) },
-    select: { topicSlug: true, correct: true },
+    select: { topicSlug: true, correct: true, round: true },
   });
   const regentsByTopic = new Map<string, { answered: number; correct: number }>();
   for (const a of regentsAnswers) {
+    if (a.round !== 0) continue;
     const t = regentsByTopic.get(a.topicSlug) ?? { answered: 0, correct: 0 };
     t.answered++;
     if (a.correct) t.correct++;
