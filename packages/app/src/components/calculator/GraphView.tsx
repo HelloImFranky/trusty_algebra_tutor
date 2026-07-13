@@ -31,9 +31,15 @@ export function GraphView() {
   );
 
   const analysis = useMemo(() => {
+    // The numeric solvers return values like -1.593e-20 for roots that are
+    // really 0; snap anything negligible at the window's scale to exactly 0
+    // so markers and labels read sensibly.
+    const snapX = zeroSnapper(window.xmax - window.xmin);
+    const snapY = zeroSnapper(window.ymax - window.ymin);
     const roots = plotted.map(({ fn, color }) => ({
       color,
-      xs: findRoots(fn, window.xmin, window.xmax).slice(0, 6),
+      xs: findRoots(fn, window.xmin, window.xmax).slice(0, 6).map(snapX),
+      yIntercept: snapY(fn.at(0)),
     }));
     const intersections: { point: Point; color: string }[] = [];
     for (let i = 0; i < plotted.length; i++) {
@@ -45,7 +51,7 @@ export function GraphView() {
           window.xmax,
         ).slice(0, 6)) {
           if (p.y >= window.ymin && p.y <= window.ymax) {
-            intersections.push({ point: p, color: plotted[j].color });
+            intersections.push({ point: { x: snapX(p.x), y: snapY(p.y) }, color: plotted[j].color });
           }
         }
       }
@@ -150,15 +156,26 @@ export function GraphView() {
       {plotted.length > 0 && (
         <YStack gap={4}>
           {analysis.roots.map((r, i) => (
-            <XStack key={i} gap={6} alignItems="center" flexWrap="wrap">
-              <YStack width={8} height={8} borderRadius={4} backgroundColor={r.color} />
-              <Text fontSize={13} color={COLORS.muted}>
-                {t('xIntercepts')}:{' '}
-                {r.xs.length
-                  ? r.xs.map((x) => `x = ${formatNumber(Number(x.toPrecision(6)))}`).join(',  ')
-                  : t('none')}
-              </Text>
-            </XStack>
+            <YStack key={i} gap={4}>
+              <XStack gap={6} alignItems="center" flexWrap="wrap">
+                <YStack width={8} height={8} borderRadius={4} backgroundColor={r.color} />
+                <Text fontSize={13} color={COLORS.muted}>
+                  {t('xIntercepts')}:{' '}
+                  {r.xs.length
+                    ? r.xs.map((x) => `x = ${formatNumber(Number(x.toPrecision(6)))}`).join(',  ')
+                    : t('none')}
+                </Text>
+              </XStack>
+              <XStack gap={6} alignItems="center" flexWrap="wrap">
+                <YStack width={8} height={8} borderRadius={4} backgroundColor={r.color} />
+                <Text fontSize={13} color={COLORS.muted}>
+                  {t('yIntercept')}:{' '}
+                  {Number.isFinite(r.yIntercept)
+                    ? `y = ${formatNumber(Number(r.yIntercept.toPrecision(6)))}`
+                    : t('none')}
+                </Text>
+              </XStack>
+            </YStack>
           ))}
           {plotted.length > 1 && (
             <Text fontSize={13} color={COLORS.muted}>
@@ -177,6 +194,12 @@ export function GraphView() {
       )}
     </YStack>
   );
+}
+
+/** Rounds values that are ~0 at the given scale (numeric-solver noise) to 0. */
+function zeroSnapper(span: number): (v: number) => number {
+  const tol = Math.abs(span) * 1e-7;
+  return (v) => (Math.abs(v) < tol ? 0 : v);
 }
 
 function scaleWindow(w: GraphWindow, factor: number): GraphWindow {
