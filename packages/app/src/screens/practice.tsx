@@ -303,7 +303,15 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
       )}
 
       {showTutor && (
-        <TutorChat problemId={problem.id} stepReached={phase === 'steps' ? stepIndex : undefined} />
+        <TutorChat
+          problemId={problem.id}
+          stepReached={phase === 'steps' ? stepIndex : undefined}
+          onOpenAnim={
+            animScript
+              ? (step) => openAnim(Math.min(Math.max(0, step), animScript.steps.length - 1))
+              : undefined
+          }
+        />
       )}
     </Screen>
   );

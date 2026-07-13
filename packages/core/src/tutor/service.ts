@@ -27,6 +27,9 @@ export interface TutorContext {
     stepPrompts: string[];
   } | null;
   studentStepReached?: number;
+  /** Plain-text lines of the animated walkthrough for this exact problem
+   * ("2x + 3 = 11 — We want x alone…"), when a stepanim builder matches. */
+  animSteps?: string[];
 }
 
 export function tutorAvailable(): boolean {
@@ -70,7 +73,35 @@ export function buildSystemPrompt(ctx: TutorContext): string {
       lines.push(`The student has reached step ${ctx.studentStepReached + 1}.`);
     }
   }
+  if (ctx.animSteps?.length) {
+    lines.push('', 'The app has an ANIMATED walkthrough of this exact problem. Its steps:');
+    ctx.animSteps.forEach((s, i) => lines.push(`  Step ${i + 1}: ${s}`));
+    lines.push(
+      'When watching one of those steps would genuinely help, add the marker [[anim:N]] (N = step number) at the END of your reply — the app turns it into a "watch it step by step" button that opens the animation on that step.',
+      'Use at most one marker per reply, and never as a substitute for your own guiding question.',
+    );
+  }
   return lines.join('\n');
+}
+
+const ANIM_MARKER = /\[\[anim:(\d+)\]\]/g;
+
+/**
+ * Extract the animation deep-link marker a tutor reply may carry.
+ * Returns the reply with markers stripped, plus the 0-based step index of
+ * the first marker (the prompt numbers steps from 1), or null.
+ */
+export function parseAnimMarker(text: string): { text: string; animStep: number | null } {
+  let step: number | null = null;
+  const cleaned = text
+    .replace(ANIM_MARKER, (_, n: string) => {
+      const parsed = parseInt(n, 10) - 1;
+      if (step === null && parsed >= 0) step = parsed;
+      return '';
+    })
+    .replace(/[ \t]+$/gm, '')
+    .trim();
+  return { text: cleaned, animStep: step };
 }
 
 /**

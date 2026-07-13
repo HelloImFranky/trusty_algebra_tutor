@@ -6,10 +6,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { ScrollView } from 'react-native';
 import { Text, XStack, YStack } from 'tamagui';
+import { parseAnimMarker } from '@tutor/core/tutor';
 import { client } from '../lib/trpc';
 import { useI18n } from '../lib/i18n';
 import { MathText } from './MathText';
-import { AppCard, AppInput, PrimaryButton, SubTitle, COLORS } from './ui';
+import { AppCard, AppInput, GhostButton, PrimaryButton, SubTitle, COLORS } from './ui';
 
 interface Msg {
   role: 'user' | 'assistant';
@@ -20,10 +21,14 @@ export function TutorChat({
   lessonId,
   problemId,
   stepReached,
+  onOpenAnim,
 }: {
   lessonId?: number;
   problemId?: number;
   stepReached?: number;
+  /** Open the problem's animated walkthrough at a step the tutor referenced
+   * with an [[anim:N]] marker. Omit when no animation exists. */
+  onOpenAnim?: (step: number) => void;
 }) {
   const { t, locale } = useI18n();
   const [sessionId, setSessionId] = useState<number | null>(null);
@@ -85,18 +90,28 @@ export function TutorChat({
       <SubTitle>🤖 {t('askTutor')}</SubTitle>
       <ScrollView ref={scroll} style={{ maxHeight: 280 }}>
         <YStack gap={8} paddingVertical={8}>
-          {messages.map((m, i) => (
-            <XStack
-              key={i}
-              alignSelf={m.role === 'user' ? 'flex-end' : 'flex-start'}
-              backgroundColor={m.role === 'user' ? '#eef1fd' : '#f8f9fa'}
-              borderRadius={12}
-              padding={10}
-              maxWidth="88%"
-            >
-              <MathText text={m.content || '…'} size={14} />
-            </XStack>
-          ))}
+          {messages.map((m, i) => {
+            const { text, animStep } =
+              m.role === 'assistant' ? parseAnimMarker(m.content) : { text: m.content, animStep: null };
+            return (
+              <YStack
+                key={i}
+                alignSelf={m.role === 'user' ? 'flex-end' : 'flex-start'}
+                backgroundColor={m.role === 'user' ? '#eef1fd' : '#f8f9fa'}
+                borderRadius={12}
+                padding={10}
+                maxWidth="88%"
+                gap={6}
+              >
+                <MathText text={text || '…'} size={14} />
+                {animStep !== null && onOpenAnim && (
+                  <GhostButton onPress={() => onOpenAnim(animStep)}>
+                    🎬 {t('animatedExample')}
+                  </GhostButton>
+                )}
+              </YStack>
+            );
+          })}
         </YStack>
       </ScrollView>
       <XStack gap={8} marginTop={6}>
