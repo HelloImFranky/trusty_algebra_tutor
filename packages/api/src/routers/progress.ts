@@ -1,7 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { prisma } from '@tutor/db';
-import { decayedScore, masteryLabel } from '@tutor/core';
+import { computeAchievements, decayedScore, masteryLabel, regentsTopics } from '@tutor/core';
 import { protectedProcedure, router } from '../trpc.js';
 
 async function buildProgress(userId: number) {
@@ -31,8 +31,13 @@ async function buildProgress(userId: number) {
     FROM attempts WHERE user_id = ${BigInt(userId)} AND created_at > now() - interval '30 days'
     GROUP BY 1 ORDER BY 1`;
 
-  // Streak: consecutive days (ending today or yesterday) with any attempt.
-  const days = new Set(activity.map((a) => a.day));
+  // Streak: consecutive days (ending today or yesterday) with any attempt —
+  // Regents Review answers count as activity too.
+  const regentsDays = await prisma.$queryRaw<{ day: string }[]>`
+    SELECT DISTINCT to_char(created_at::date, 'YYYY-MM-DD') AS day
+    FROM regents_answers
+    WHERE user_id = ${BigInt(userId)} AND created_at > now() - interval '30 days'`;
+  const days = new Set([...activity.map((a) => a.day), ...regentsDays.map((d) => d.day)]);
   let streak = 0;
   const d = new Date();
   if (!days.has(d.toISOString().slice(0, 10))) d.setDate(d.getDate() - 1);
@@ -40,6 +45,38 @@ async function buildProgress(userId: number) {
     streak++;
     d.setDate(d.getDate() - 1);
   }
+
+  // Regents Review: per-topic tallies from the one-try answer log.
+  const regentsAnswers = await prisma.regentsAnswer.findMany({
+    where: { userId: BigInt(userId) },
+    select: { topicSlug: true, correct: true },
+  });
+  const regentsByTopic = new Map<string, { answered: number; correct: number }>();
+  for (const a of regentsAnswers) {
+    const t = regentsByTopic.get(a.topicSlug) ?? { answered: 0, correct: 0 };
+    t.answered++;
+    if (a.correct) t.correct++;
+    regentsByTopic.set(a.topicSlug, t);
+  }
+  const regentsTopicStats = regentsTopics.map((t) => {
+    const p = regentsByTopic.get(t.slug) ?? { answered: 0, correct: 0 };
+    return {
+      slug: t.slug,
+      icon: t.icon,
+      titleEn: t.titleEn,
+      titleEs: t.titleEs,
+      total: t.questions.length,
+      answered: p.answered,
+      correct: p.correct,
+    };
+  });
+  const regents = {
+    topics: regentsTopicStats,
+    questionsAnswered: regentsAnswers.length,
+    questionsCorrect: regentsAnswers.filter((a) => a.correct).length,
+    topicsCompleted: regentsTopicStats.filter((t) => t.answered >= t.total).length,
+    perfectTopics: regentsTopicStats.filter((t) => t.correct === t.total).length,
+  };
 
   const skills = sorted.map((m) => {
     const score = decayedScore({
@@ -58,6 +95,24 @@ async function buildProgress(userId: number) {
     };
   });
 
+  // Lifetime tallies for the badge case (etResults above is capped at 20).
+  const correctAnswers = await prisma.attempt.count({
+    where: { userId: BigInt(userId), correct: true },
+  });
+  const perfectExitTickets = await prisma.$queryRaw<{ n: number }[]>`
+    SELECT count(*)::int AS n FROM exit_ticket_results
+    WHERE user_id = ${BigInt(userId)} AND score = max_score`;
+
+  const achievements = computeAchievements({
+    correctAnswers: correctAnswers + regents.questionsCorrect,
+    streakDays: streak,
+    skillsStrong: skills.filter((s) => s.label === 'mastered' || s.label === 'proficient').length,
+    perfectExitTickets: perfectExitTickets[0]?.n ?? 0,
+    regentsCorrect: regents.questionsCorrect,
+    regentsTopicsCompleted: regents.topicsCompleted,
+    regentsPerfectTopics: regents.perfectTopics,
+  });
+
   return {
     streakDays: streak,
     skills,
@@ -69,6 +124,8 @@ async function buildProgress(userId: number) {
       at: r.createdAt,
     })),
     activity,
+    regents,
+    achievements,
   };
 }
 

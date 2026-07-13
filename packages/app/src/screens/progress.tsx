@@ -1,13 +1,15 @@
 /**
- * Progress dashboard (design doc §4.6): streaks, mastery map by unit,
- * recent exit tickets. Guardians/teachers land here via /progress/[studentId].
+ * Progress dashboard (design doc §4.6), gamified: streaks, medal case of
+ * achievements (bronze/silver/gold medallions drawn in-app — no external
+ * assets), Regents Review topic progress, mastery map by unit, and recent
+ * exit tickets. Guardians/teachers land here via /progress/[studentId].
  */
 import { Text, XStack, YStack } from 'tamagui';
 import { trpc } from '../lib/trpc';
 import { useI18n, type I18nKey } from '../lib/i18n';
 import { useRequireAuth } from '../components/AppChrome';
 import {
-  AppCard, Badge, Feedback, Loading, Muted, ProgressBar, Screen, SubTitle, Title, COLORS,
+  AppCard, Badge, Feedback, Loading, Muted, ProgressBar, Screen, SubTitle, Title, BRAND, COLORS,
 } from '../components/ui';
 
 function Stat({ icon, value, label }: { icon: string; value: number | string; label: string }) {
@@ -22,8 +24,65 @@ function Stat({ icon, value, label }: { icon: string; value: number | string; la
   );
 }
 
+const TIER_STYLE = {
+  bronze: { ring: '#b08d57', fill: '#f6ead9', label: '#8a6a3b' },
+  silver: { ring: '#97a2b0', fill: '#eef1f5', label: '#5f6b7a' },
+  gold: { ring: '#e6a817', fill: '#fff3cd', label: '#9a7000' },
+} as const;
+
+interface AchievementView {
+  id: string;
+  icon: string;
+  tier: keyof typeof TIER_STYLE;
+  target: number;
+  value: number;
+  earned: boolean;
+  name: string;
+  desc: string;
+}
+
+/** A medallion drawn with plain shapes so it renders identically everywhere. */
+function Medal({ a }: { a: AchievementView }) {
+  const tier = TIER_STYLE[a.tier];
+  return (
+    <YStack width={104} alignItems="center" gap={5} paddingVertical={6} opacity={a.earned ? 1 : 0.85}>
+      <YStack
+        width={62}
+        height={62}
+        borderRadius={999}
+        borderWidth={4}
+        borderColor={a.earned ? tier.ring : COLORS.border}
+        backgroundColor={a.earned ? tier.fill : '#f1f3f5'}
+        alignItems="center"
+        justifyContent="center"
+      >
+        <Text fontSize={26} opacity={a.earned ? 1 : 0.4}>
+          {a.earned ? a.icon : '🔒'}
+        </Text>
+      </YStack>
+      {a.earned ? (
+        <XStack backgroundColor={tier.fill} borderRadius={999} paddingHorizontal={8} paddingVertical={1}>
+          <Text fontSize={10} fontWeight="900" color={tier.label} textTransform="uppercase">
+            {a.tier}
+          </Text>
+        </XStack>
+      ) : (
+        <XStack width={70} gap={0} alignItems="center">
+          <ProgressBar ratio={a.target ? a.value / a.target : 0} />
+        </XStack>
+      )}
+      <Text fontSize={12} fontWeight="800" textAlign="center">
+        {a.name}
+      </Text>
+      <Muted size={10.5}>
+        {a.earned ? a.desc : `${a.desc} (${Math.min(a.value, a.target)}/${a.target})`}
+      </Muted>
+    </YStack>
+  );
+}
+
 export function ProgressScreen({ studentId }: { studentId?: number }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const authed = useRequireAuth();
   const me = trpc.progress.me.useQuery(undefined, { enabled: authed && !studentId });
   const other = trpc.progress.student.useQuery(
@@ -47,8 +106,28 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
   const units = [...new Set(data.skills.map((s) => s.unitNumber))].sort((a, b) => a - b);
   const totalMinutes = data.activity.reduce((sum, a) => sum + Number(a.minutes), 0);
 
+  const achievements: AchievementView[] = data.achievements.map((a) => ({
+    id: a.id,
+    icon: a.icon,
+    tier: a.tier,
+    target: a.target,
+    value: a.value,
+    earned: a.earned,
+    name: locale === 'es' ? a.nameEs : a.nameEn,
+    desc: locale === 'es' ? a.descEs : a.descEn,
+  }));
+  const earned = achievements.filter((a) => a.earned);
+  // Earned medals first (gold → bronze), then the nearest locked goals.
+  const tierRank = { gold: 0, silver: 1, bronze: 2 } as const;
+  const medalCase = [
+    ...earned.sort((a, b) => tierRank[a.tier] - tierRank[b.tier]),
+    ...achievements
+      .filter((a) => !a.earned)
+      .sort((a, b) => b.value / b.target - a.value / a.target),
+  ];
+
   return (
-    <Screen>
+    <Screen maxWidth={980}>
       <Title>
         📈 {t('progress')}
         {data.student ? ` — ${data.student.displayName}` : ''}
@@ -62,7 +141,57 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
           value={data.skills.filter((s) => s.label === 'mastered' || s.label === 'proficient').length}
           label={t('mastered')}
         />
+        <Stat icon="🏅" value={`${earned.length}/${achievements.length}`} label={t('badgesEarned')} />
+        <Stat icon="🎯" value={data.regents.questionsCorrect} label={t('regentsCorrectLabel')} />
       </XStack>
+
+      <AppCard gap={4}>
+        <XStack justifyContent="space-between" alignItems="center">
+          <SubTitle>🏅 {t('achievements')}</SubTitle>
+          <Muted>
+            {earned.length} / {achievements.length}
+          </Muted>
+        </XStack>
+        <XStack flexWrap="wrap" justifyContent="space-evenly">
+          {medalCase.map((a) => (
+            <Medal key={a.id} a={a} />
+          ))}
+        </XStack>
+      </AppCard>
+
+      <AppCard gap={10}>
+        <XStack justifyContent="space-between" alignItems="center">
+          <SubTitle>📚 {t('review')}</SubTitle>
+          <Muted>
+            {data.regents.topicsCompleted} / {data.regents.topics.length} {t('completeLabel').toLowerCase()}
+          </Muted>
+        </XStack>
+        {data.regents.topics.map((topic) => {
+          const done = topic.answered >= topic.total;
+          const perfect = done && topic.correct === topic.total;
+          return (
+            <XStack key={topic.slug} alignItems="center" gap={10} paddingVertical={2}>
+              <Text fontSize={16} width={26}>
+                {topic.icon}
+              </Text>
+              <Text fontSize={13.5} fontWeight="700" width={170} numberOfLines={1}>
+                {locale === 'es' ? topic.titleEs : topic.titleEn}
+              </Text>
+              <ProgressBar ratio={topic.answered / topic.total} />
+              <Text
+                fontSize={12.5}
+                fontWeight="800"
+                width={54}
+                textAlign="right"
+                color={perfect ? COLORS.good : done ? BRAND : COLORS.muted}
+              >
+                {perfect ? '🌟 ' : done ? '✓ ' : ''}
+                {topic.correct}/{topic.total}
+              </Text>
+            </XStack>
+          );
+        })}
+      </AppCard>
 
       {data.struggleFlags.length > 0 && (
         <AppCard borderLeftWidth={4} borderLeftColor={COLORS.bad} gap={4}>
