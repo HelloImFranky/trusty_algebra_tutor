@@ -1,95 +1,327 @@
-/** Regents review mode (design doc §4.5): mixed-unit problems from seen skills. */
-import { useEffect, useState } from 'react';
-import { XStack } from 'tamagui';
-import { client } from '../lib/trpc';
-import { attemptOrQueue } from '../lib/offline';
+/**
+ * Regents Review: a review-by-topic catalog of Regents-style multiple-choice
+ * questions. Each topic holds four questions with four choices; the student
+ * gets exactly one try per question (enforced server-side). Right answers get
+ * a green check, wrong ones a red X plus a worked explanation, and either way
+ * a Next button moves the session along. Progress feeds the Progress tab's
+ * badges.
+ */
+import { useMemo, useState } from 'react';
+import { Text, XStack, YStack } from 'tamagui';
+import { trpc } from '../lib/trpc';
 import { useI18n } from '../lib/i18n';
 import { useRequireAuth } from '../components/AppChrome';
-import { MathInput } from '../components/MathInput';
 import { MathText } from '../components/MathText';
-import { AppCard, Feedback, Loading, Muted, PrimaryButton, Screen, SubTitle, Title } from '../components/ui';
+import {
+  AppCard, Feedback, GhostButton, Loading, Muted, PrimaryButton, ProgressBar, Screen,
+  SubTitle, Title, BRAND, COLORS,
+} from '../components/ui';
 
-interface Problem {
-  id: number;
-  prompt: string;
-}
+const LETTERS = ['A', 'B', 'C', 'D'];
 
 export function ReviewScreen() {
-  const { t, locale } = useI18n();
   const authed = useRequireAuth();
-  const [problems, setProblems] = useState<Problem[]>([]);
-  const [index, setIndex] = useState(0);
-  const [answer, setAnswer] = useState('');
-  const [feedback, setFeedback] = useState('');
-  const [score, setScore] = useState(0);
-  const [done, setDone] = useState(false);
-  const [empty, setEmpty] = useState(false);
+  const [slug, setSlug] = useState<string | null>(null);
+  if (!authed) return <Loading />;
+  return slug ? (
+    <TopicQuiz slug={slug} onExit={() => setSlug(null)} />
+  ) : (
+    <TopicCatalog onOpen={setSlug} />
+  );
+}
 
-  useEffect(() => {
-    if (!authed) return;
-    client.practice.reviewSession
-      .query({ locale })
-      .then((r) => {
-        setProblems(r.problems);
-        if (!r.problems.length) setEmpty(true);
-      })
-      .catch(() => setEmpty(true));
-  }, [authed, locale]);
+/** Landing page: the review-by-topic catalog. */
+function TopicCatalog({ onOpen }: { onOpen: (slug: string) => void }) {
+  const { t, locale } = useI18n();
+  const catalog = trpc.regents.catalog.useQuery({ locale });
 
-  const submit = async () => {
-    if (!answer.trim()) return;
-    const p = problems[index];
-    const res = await attemptOrQueue({
-      problemId: p.id,
-      submittedLatex: answer,
-      context: 'review',
-    });
-    const correct = !res.queued && res.correct;
-    if (correct) setScore((s) => s + 1);
-    setFeedback(correct ? 'good' : 'bad');
-    setTimeout(() => {
-      setFeedback('');
-      setAnswer('');
-      if (index + 1 < problems.length) setIndex((i) => i + 1);
-      else setDone(true);
-    }, 900);
-  };
+  return (
+    <Screen maxWidth={980}>
+      <Title>📚 {t('review')}</Title>
+      <Muted size={14}>
+        {t('reviewIntro')} {t('oneTryHint')}
+      </Muted>
+      {catalog.error && <Feedback kind="bad">{catalog.error.message}</Feedback>}
+      {catalog.isLoading && <Loading />}
+      <XStack flexWrap="wrap" gap={12}>
+        {catalog.data?.topics.map((topic) => {
+          const done = topic.answered >= topic.total;
+          const perfect = done && topic.correct === topic.total;
+          return (
+            <AppCard
+              key={topic.slug}
+              flexBasis={300}
+              flexGrow={1}
+              gap={8}
+              cursor="pointer"
+              hoverStyle={{ borderColor: BRAND }}
+              pressStyle={{ backgroundColor: '#f3f5fd' }}
+              onPress={() => onOpen(topic.slug)}
+            >
+              <XStack gap={10} alignItems="center">
+                <Text fontSize={30}>{topic.icon}</Text>
+                <YStack flexShrink={1}>
+                  <Text fontSize={16} fontWeight="800">
+                    {topic.title}
+                  </Text>
+                  <Muted>{topic.blurb}</Muted>
+                </YStack>
+              </XStack>
+              <XStack gap={10} alignItems="center">
+                <ProgressBar ratio={topic.answered / topic.total} />
+                {done ? (
+                  <XStack
+                    backgroundColor={perfect ? COLORS.goodBg : '#eef1fd'}
+                    borderRadius={999}
+                    paddingHorizontal={10}
+                    paddingVertical={3}
+                    gap={4}
+                    alignItems="center"
+                  >
+                    <Text fontSize={12} fontWeight="800" color={perfect ? COLORS.good : BRAND}>
+                      {perfect ? '🌟' : '✓'} {topic.correct}/{topic.total}
+                    </Text>
+                  </XStack>
+                ) : (
+                  <Muted>
+                    {topic.answered}/{topic.total}
+                  </Muted>
+                )}
+              </XStack>
+              <XStack>
+                <Text fontSize={13} fontWeight="800" color={BRAND}>
+                  {done ? t('completeLabel') : topic.answered > 0 ? `${t('resumeTopic')} →` : `${t('startTopic')} →`}
+                </Text>
+              </XStack>
+            </AppCard>
+          );
+        })}
+      </XStack>
+    </Screen>
+  );
+}
 
-  if (empty) {
+interface AnsweredState {
+  choiceIndex: number;
+  correct: boolean;
+  correctIndex: number;
+  explanation: string;
+}
+
+/** One topic's quiz: question-by-question, single try each. */
+function TopicQuiz({ slug, onExit }: { slug: string; onExit: () => void }) {
+  const { t, locale } = useI18n();
+  const utils = trpc.useUtils();
+  const topic = trpc.regents.topic.useQuery({ slug, locale });
+  const answerMut = trpc.regents.answer.useMutation({
+    onSuccess: () => {
+      // Keep the catalog, the topic snapshot, and the badge case in sync.
+      void utils.regents.catalog.invalidate();
+      void utils.regents.topic.invalidate({ slug, locale });
+      void utils.progress.me.invalidate();
+    },
+  });
+
+  const [selected, setSelected] = useState<number | null>(null);
+  // Answers revealed during THIS visit (question id -> graded result); the
+  // server fills in questions answered on earlier visits.
+  const [session, setSession] = useState<Record<string, AnsweredState>>({});
+  const [cursor, setCursor] = useState<number | null>(null);
+  const [summary, setSummary] = useState(false);
+
+  const questions = topic.data?.questions;
+  const answerFor = (q: NonNullable<typeof questions>[number]): AnsweredState | null =>
+    session[q.id] ?? q.answered;
+
+  // Resume at the first unanswered question (or the summary when none left).
+  const firstOpen = useMemo(() => {
+    if (!questions) return null;
+    const i = questions.findIndex((q) => !q.answered);
+    return i === -1 ? questions.length : i;
+  }, [questions]);
+
+  if (topic.error) {
     return (
-      <Screen>
-        <Title>📚 {t('review')}</Title>
-        <AppCard>
-          <Muted size={15}>{t('reviewEmpty')}</Muted>
+      <Screen maxWidth={720}>
+        <Feedback kind="bad">{topic.error.message}</Feedback>
+        <XStack>
+          <GhostButton onPress={onExit}>{t('backToTopics')}</GhostButton>
+        </XStack>
+      </Screen>
+    );
+  }
+  if (!topic.data || !questions || firstOpen === null) return <Loading />;
+
+  const index = cursor ?? firstOpen;
+
+  if (summary || index >= questions.length) {
+    const score = questions.reduce((n, q) => n + (answerFor(q)?.correct ? 1 : 0), 0);
+    const perfect = score === questions.length;
+    return (
+      <Screen maxWidth={720}>
+        <Title>
+          {topic.data.icon} {topic.data.title}
+        </Title>
+        <AppCard alignItems="center" gap={10} paddingVertical={30}>
+          <Text fontSize={54}>{perfect ? '🏆' : score >= questions.length / 2 ? '🎉' : '💪'}</Text>
+          <SubTitle>{perfect ? `${t('perfectTopic')} 🌟` : t('topicComplete')}</SubTitle>
+          <Text fontSize={30} fontWeight="900" color={perfect ? COLORS.good : BRAND}>
+            {score} / {questions.length}
+          </Text>
+          <XStack gap={8} marginTop={6}>
+            {questions.map((q) => {
+              const a = answerFor(q);
+              return (
+                <Text key={q.id} fontSize={22}>
+                  {a?.correct ? '✅' : '❌'}
+                </Text>
+              );
+            })}
+          </XStack>
+          <PrimaryButton marginTop={10} onPress={onExit}>
+            {t('backToTopics')}
+          </PrimaryButton>
         </AppCard>
       </Screen>
     );
   }
-  if (!problems.length) return <Loading />;
+
+  const q = questions[index];
+  const answered = answerFor(q);
+
+  const submit = async () => {
+    if (selected === null || answered || answerMut.isPending) return;
+    // Pin the view on this question: the background refetch marks it
+    // answered, which would otherwise advance `firstOpen` mid-feedback.
+    setCursor(index);
+    const res = await answerMut.mutateAsync({ questionId: q.id, choiceIndex: selected, locale });
+    setSession((s) => ({
+      ...s,
+      [q.id]: {
+        choiceIndex: res.choiceIndex,
+        correct: res.correct,
+        correctIndex: res.correctIndex,
+        explanation: res.explanation,
+      },
+    }));
+  };
+
+  const next = () => {
+    setSelected(null);
+    if (index + 1 >= questions.length) setSummary(true);
+    else setCursor(index + 1);
+  };
 
   return (
-    <Screen maxWidth={640}>
-      <Title>📚 {t('review')}</Title>
-      {!done ? (
-        <AppCard gap={10}>
+    <Screen maxWidth={720}>
+      <XStack justifyContent="space-between" alignItems="center">
+        <Title>
+          {topic.data.icon} {topic.data.title}
+        </Title>
+        <GhostButton size="$2" onPress={onExit}>
+          ← {t('backToTopics')}
+        </GhostButton>
+      </XStack>
+
+      <AppCard gap={14}>
+        <XStack justifyContent="space-between" alignItems="center">
           <Muted>
-            {index + 1} / {problems.length}
+            {t('question')} {index + 1} {t('of')} {questions.length}
           </Muted>
-          <MathText text={problems[index].prompt} size={18} />
-          <MathInput value={answer} onChange={setAnswer} onSubmit={submit} />
-          {feedback === 'good' && <Feedback kind="good">{t('correct')}</Feedback>}
-          {feedback === 'bad' && <Feedback kind="bad">{t('incorrect')}</Feedback>}
-          <XStack>
-            <PrimaryButton onPress={submit}>{t('check')}</PrimaryButton>
-          </XStack>
-        </AppCard>
-      ) : (
-        <AppCard alignItems="center">
-          <SubTitle>
-            {t('score')}: {score} / {problems.length}
-          </SubTitle>
-        </AppCard>
-      )}
+          {!answered && <Muted>{t('oneTryHint')}</Muted>}
+        </XStack>
+        <MathText text={q.prompt} size={17} />
+
+        <YStack gap={8}>
+          {q.choices.map((choice, i) => {
+            const isPick = answered ? answered.choiceIndex === i : selected === i;
+            const isRight = answered ? answered.correctIndex === i : false;
+            const showWrongPick = answered && isPick && !isRight;
+            const borderColor = isRight && answered ? COLORS.good : showWrongPick ? COLORS.bad : isPick ? BRAND : COLORS.border;
+            const backgroundColor = isRight && answered ? COLORS.goodBg : showWrongPick ? COLORS.badBg : isPick ? '#eef1fd' : '#ffffff';
+            return (
+              <XStack
+                key={i}
+                gap={10}
+                alignItems="center"
+                padding={12}
+                borderRadius={12}
+                borderWidth={2}
+                borderColor={borderColor}
+                backgroundColor={backgroundColor}
+                cursor={answered ? 'default' : 'pointer'}
+                hoverStyle={answered ? undefined : { borderColor: BRAND }}
+                onPress={() => {
+                  if (!answered && !answerMut.isPending) setSelected(i);
+                }}
+              >
+                <XStack
+                  width={28}
+                  height={28}
+                  borderRadius={999}
+                  alignItems="center"
+                  justifyContent="center"
+                  backgroundColor={isRight && answered ? COLORS.good : showWrongPick ? COLORS.bad : isPick ? BRAND : '#eef1f5'}
+                >
+                  <Text fontWeight="900" fontSize={14} color={isPick || (isRight && answered) ? 'white' : COLORS.muted}>
+                    {answered ? (isRight ? '✓' : showWrongPick ? '✗' : LETTERS[i]) : LETTERS[i]}
+                  </Text>
+                </XStack>
+                <YStack flexShrink={1}>
+                  <MathText text={choice} size={15} />
+                </YStack>
+              </XStack>
+            );
+          })}
+        </YStack>
+
+        {answered && (
+          <YStack gap={10}>
+            <XStack gap={10} alignItems="center">
+              <XStack
+                width={40}
+                height={40}
+                borderRadius={999}
+                alignItems="center"
+                justifyContent="center"
+                backgroundColor={answered.correct ? COLORS.good : COLORS.bad}
+              >
+                <Text color="white" fontSize={22} fontWeight="900">
+                  {answered.correct ? '✓' : '✗'}
+                </Text>
+              </XStack>
+              <Text fontSize={17} fontWeight="800" color={answered.correct ? COLORS.good : COLORS.bad}>
+                {answered.correct ? t('correct') : t('notQuite')}
+              </Text>
+            </XStack>
+            {!answered.correct && (
+              <YStack
+                backgroundColor={COLORS.badBg}
+                borderLeftWidth={4}
+                borderLeftColor={COLORS.bad}
+                borderRadius={10}
+                padding={12}
+                gap={6}
+              >
+                <Text fontSize={13} fontWeight="800" color={COLORS.bad}>
+                  💡 {t('howToSolve')}
+                </Text>
+                <MathText text={answered.explanation} size={14.5} />
+              </YStack>
+            )}
+          </YStack>
+        )}
+
+        <XStack justifyContent="flex-end">
+          {answered ? (
+            <PrimaryButton onPress={next}>{t('next')} →</PrimaryButton>
+          ) : (
+            <PrimaryButton disabled={selected === null || answerMut.isPending} opacity={selected === null ? 0.5 : 1} onPress={submit}>
+              {t('submit')}
+            </PrimaryButton>
+          )}
+        </XStack>
+      </AppCard>
     </Screen>
   );
 }

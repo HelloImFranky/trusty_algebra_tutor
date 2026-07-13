@@ -245,6 +245,88 @@ describe('exit tickets', () => {
   });
 });
 
+describe('regents review', () => {
+  it('serves the topic catalog with four questions per topic and no progress yet', async () => {
+    const res = await as(student).regents.catalog({});
+    expect(res.topics.length).toBeGreaterThanOrEqual(10);
+    for (const topic of res.topics) {
+      expect(topic.total).toBe(4);
+      expect(topic.answered).toBe(0);
+    }
+  });
+
+  it('serves a topic without leaking answers, localized', async () => {
+    const en = await as(student).regents.topic({ slug: 'linear-equations' });
+    expect(en.questions.length).toBe(4);
+    for (const q of en.questions) {
+      expect(q.choices.length).toBe(4);
+      expect(q.answered).toBeNull();
+      expect(q).not.toHaveProperty('correctIndex');
+      expect(q).not.toHaveProperty('explanation');
+    }
+    const es = await as(student).regents.topic({ slug: 'linear-equations', locale: 'es' });
+    expect(es.title).toBe('Resolver Ecuaciones Lineales');
+  });
+
+  it('rejects an unknown topic', async () => {
+    await expect(as(student).regents.topic({ slug: 'nope' })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
+  it('grades a correct choice with a green light and a wrong one with the explanation', async () => {
+    // linear-equations q1: 3x + 7 = 22 -> x = 5 (index 1)
+    const right = await as(student).regents.answer({
+      questionId: 'linear-equations-q1',
+      choiceIndex: 1,
+    });
+    expect(right.correct).toBe(true);
+    expect(right.alreadyAnswered).toBe(false);
+
+    const wrong = await as(student).regents.answer({
+      questionId: 'linear-equations-q2',
+      choiceIndex: 0,
+    });
+    expect(wrong.correct).toBe(false);
+    expect(wrong.correctIndex).toBe(3);
+    expect(wrong.explanation.length).toBeGreaterThan(10);
+  });
+
+  it('gives exactly one try per question', async () => {
+    const retry = await as(student).regents.answer({
+      questionId: 'linear-equations-q1',
+      choiceIndex: 0, // different (wrong) choice on the retry
+    });
+    expect(retry.alreadyAnswered).toBe(true);
+    expect(retry.correct).toBe(true); // the original result stands
+    expect(retry.choiceIndex).toBe(1);
+  });
+
+  it('shows prior answers when revisiting a topic and tracks catalog progress', async () => {
+    const topic = await as(student).regents.topic({ slug: 'linear-equations' });
+    const q1 = topic.questions.find((q) => q.id === 'linear-equations-q1');
+    expect(q1?.answered).toMatchObject({ choiceIndex: 1, correct: true, correctIndex: 1 });
+
+    const cat = await as(student).regents.catalog({});
+    const entry = cat.topics.find((t) => t.slug === 'linear-equations');
+    expect(entry).toMatchObject({ answered: 2, correct: 1 });
+  });
+
+  it('completing a topic earns the Review Rookie badge on the progress tab', async () => {
+    await as(student).regents.answer({ questionId: 'linear-equations-q3', choiceIndex: 2 });
+    await as(student).regents.answer({ questionId: 'linear-equations-q4', choiceIndex: 3 });
+
+    const res = await as(student).progress.me();
+    expect(res.regents.topicsCompleted).toBe(1);
+    expect(res.regents.questionsAnswered).toBe(4);
+    expect(res.regents.questionsCorrect).toBe(3);
+    const rookie = res.achievements.find((a) => a.id === 'regents-bronze');
+    expect(rookie?.earned).toBe(true);
+    const perTopic = res.regents.topics.find((t) => t.slug === 'linear-equations');
+    expect(perTopic).toMatchObject({ answered: 4, correct: 3, total: 4 });
+  });
+});
+
 describe('progress & FERPA scoping', () => {
   it('returns the student dashboard with streak and struggle flags', async () => {
     const res = await as(student).progress.me();

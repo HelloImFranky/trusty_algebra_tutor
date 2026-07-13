@@ -4,6 +4,7 @@ import { calculatorRouter } from './routers/calculator.js';
 import { curriculumRouter } from './routers/curriculum.js';
 import { practiceRouter } from './routers/practice.js';
 import { progressRouter } from './routers/progress.js';
+import { regentsRouter } from './routers/regents.js';
 import { tutorRouter } from './routers/tutor.js';
 
 export const appRouter = router({
@@ -12,6 +13,7 @@ export const appRouter = router({
   curriculum: curriculumRouter,
   practice: practiceRouter,
   progress: progressRouter,
+  regents: regentsRouter,
   tutor: tutorRouter,
 });
 
