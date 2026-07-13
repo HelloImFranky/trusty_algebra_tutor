@@ -1,65 +1,129 @@
 /**
- * Scientific calculator tab: history tape (tap to reuse), live math preview,
- * and a keypad. Evaluation happens in @tutor/core's engine via the store —
- * this component only renders state.
+ * Scientific calculator tab, styled after the iOS calculator: history tape
+ * (tap to reuse), a large right-aligned display with live math preview, and
+ * a pill-key pad — scientific rows up top, digit grid with the orange
+ * operator column below. Evaluation happens in @tutor/core's engine via the
+ * store — this component only renders state.
  */
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { TextInput } from 'react-native';
 import { Button, Input, Text, XStack, YStack } from 'tamagui';
+import { formatNumber } from '@tutor/core';
 import { useI18n } from '../../lib/i18n';
-import { Feedback, GhostButton, Muted, PrimaryButton, BRAND, COLORS } from '../ui';
+import { Feedback, GhostButton, Muted, COLORS } from '../ui';
 import { Katex } from '../Katex';
 import { toPreviewTex } from '../MathInput';
 import { useCalculatorStore } from './store';
 
-type Key =
-  | { label: string; insert: string }
-  | { label: string; action: 'backspace' | 'clearEntry' };
+type Action =
+  | 'backspace'
+  | 'clearEntry'
+  | 'negate'
+  | 'second'
+  | 'angle'
+  | 'equals'
+  | 'memClear'
+  | 'memAdd'
+  | 'memSubtract'
+  | 'memRecall';
 
-const KEYS: Key[][] = [
+type Variant = 'sci' | 'util' | 'digit' | 'op';
+
+interface KeyDef {
+  label: string;
+  aria?: string;
+  insert?: string;
+  action?: Action;
+  /** alternate meaning while the 2nd key is latched */
+  second?: { label: string; insert: string; aria?: string };
+}
+
+/* Scientific rows: 6 columns of small pills, mirroring the iOS layout. */
+const SCI_KEYS: KeyDef[][] = [
   [
-    { label: 'sin', insert: 'sin(' },
-    { label: 'cos', insert: 'cos(' },
-    { label: 'tan', insert: 'tan(' },
-    { label: '√', insert: 'sqrt(' },
-    { label: 'π', insert: 'pi' },
-  ],
-  [
-    { label: 'x²', insert: '^2' },
-    { label: '^', insert: '^' },
-    { label: 'ln', insert: 'ln(' },
-    { label: 'log', insert: 'log10(' },
-    { label: 'e', insert: 'e' },
-  ],
-  [
-    { label: '7', insert: '7' },
-    { label: '8', insert: '8' },
-    { label: '9', insert: '9' },
     { label: '(', insert: '(' },
     { label: ')', insert: ')' },
+    { label: 'mc', action: 'memClear', aria: 'memory clear' },
+    { label: 'm+', action: 'memAdd', aria: 'memory add' },
+    { label: 'm−', action: 'memSubtract', aria: 'memory subtract' },
+    { label: 'mr', action: 'memRecall', aria: 'memory recall' },
   ],
   [
-    { label: '4', insert: '4' },
-    { label: '5', insert: '5' },
-    { label: '6', insert: '6' },
-    { label: '×', insert: '*' },
-    { label: '÷', insert: '/' },
+    { label: '2nd', action: 'second', aria: 'second functions' },
+    { label: 'x²', insert: '^2', aria: 'squared' },
+    { label: 'x³', insert: '^3', aria: 'cubed' },
+    { label: 'xʸ', insert: '^', aria: 'to the power' },
+    { label: 'eˣ', insert: 'e^(', aria: 'e to the power' },
+    { label: '10ˣ', insert: '10^(', aria: 'ten to the power' },
   ],
   [
-    { label: '1', insert: '1' },
-    { label: '2', insert: '2' },
-    { label: '3', insert: '3' },
-    { label: '+', insert: '+' },
-    { label: '−', insert: '-' },
+    { label: '¹⁄ₓ', insert: '1/(', aria: 'reciprocal' },
+    { label: '²√x', insert: 'sqrt(', aria: 'square root' },
+    { label: '³√x', insert: 'cbrt(', aria: 'cube root' },
+    { label: 'ʸ√x', insert: 'nthRoot(', aria: 'nth root' },
+    { label: 'ln', insert: 'ln(' },
+    { label: 'log₁₀', insert: 'log10(', aria: 'log base 10' },
   ],
   [
-    { label: '0', insert: '0' },
-    { label: '.', insert: '.' },
-    { label: 'ans', insert: 'ans' },
-    { label: '⌫', action: 'backspace' },
-    { label: 'C', action: 'clearEntry' },
+    { label: 'x!', insert: '!', aria: 'factorial' },
+    { label: 'sin', insert: 'sin(', second: { label: 'sin⁻¹', insert: 'asin(', aria: 'inverse sine' } },
+    { label: 'cos', insert: 'cos(', second: { label: 'cos⁻¹', insert: 'acos(', aria: 'inverse cosine' } },
+    { label: 'tan', insert: 'tan(', second: { label: 'tan⁻¹', insert: 'atan(', aria: 'inverse tangent' } },
+    { label: 'e', insert: 'e' },
+    { label: 'EE', insert: '*10^', aria: 'times ten to the power' },
+  ],
+  [
+    { label: 'Rand', insert: 'random()', aria: 'random number' },
+    { label: 'sinh', insert: 'sinh(', second: { label: 'sinh⁻¹', insert: 'asinh(', aria: 'inverse hyperbolic sine' } },
+    { label: 'cosh', insert: 'cosh(', second: { label: 'cosh⁻¹', insert: 'acosh(', aria: 'inverse hyperbolic cosine' } },
+    { label: 'tanh', insert: 'tanh(', second: { label: 'tanh⁻¹', insert: 'atanh(', aria: 'inverse hyperbolic tangent' } },
+    { label: 'π', insert: 'pi' },
+    { label: '', action: 'angle' }, // label depends on the current angle mode
   ],
 ];
+
+/* Main pad: 4 columns, operators in the accent column on the right. */
+const MAIN_KEYS: { key: KeyDef; variant: Variant }[][] = [
+  [
+    { key: { label: '⌫', action: 'backspace', aria: 'backspace' }, variant: 'util' },
+    { key: { label: 'AC', action: 'clearEntry', aria: 'clear entry' }, variant: 'util' },
+    { key: { label: '%', insert: '/100', aria: 'percent' }, variant: 'util' },
+    { key: { label: '÷', insert: '/', aria: 'divide' }, variant: 'op' },
+  ],
+  [
+    { key: { label: '7', insert: '7' }, variant: 'digit' },
+    { key: { label: '8', insert: '8' }, variant: 'digit' },
+    { key: { label: '9', insert: '9' }, variant: 'digit' },
+    { key: { label: '×', insert: '*', aria: 'multiply' }, variant: 'op' },
+  ],
+  [
+    { key: { label: '4', insert: '4' }, variant: 'digit' },
+    { key: { label: '5', insert: '5' }, variant: 'digit' },
+    { key: { label: '6', insert: '6' }, variant: 'digit' },
+    { key: { label: '−', insert: '-', aria: 'subtract' }, variant: 'op' },
+  ],
+  [
+    { key: { label: '1', insert: '1' }, variant: 'digit' },
+    { key: { label: '2', insert: '2' }, variant: 'digit' },
+    { key: { label: '3', insert: '3' }, variant: 'digit' },
+    { key: { label: '+', insert: '+', aria: 'add' }, variant: 'op' },
+  ],
+  [
+    { key: { label: '⁺⁄₋', action: 'negate', aria: 'toggle sign' }, variant: 'digit' },
+    { key: { label: '0', insert: '0' }, variant: 'digit' },
+    { key: { label: '.', insert: '.' }, variant: 'digit' },
+    { key: { label: '=', action: 'equals', aria: 'equals' }, variant: 'op' },
+  ],
+];
+
+/* Light-mode translation of the iOS key shades (dark theme comes later). */
+type Hex = `#${string}`;
+const KEY_STYLE: Record<Variant, { bg: Hex; press: Hex; color: Hex; fontSize: number; height: number }> = {
+  sci: { bg: '#e8ebf1', press: '#d6dbe4', color: '#1f2937', fontSize: 14, height: 38 },
+  util: { bg: '#d9dee6', press: '#c6cdd8', color: '#111827', fontSize: 17, height: 52 },
+  digit: { bg: '#f4f5f8', press: '#e4e7ed', color: '#111827', fontSize: 20, height: 52 },
+  op: { bg: '#ff9f0a', press: '#e68e00', color: '#ffffff', fontSize: 24, height: 52 },
+};
 
 export function CalcView() {
   const { t } = useI18n();
@@ -67,63 +131,126 @@ export function CalcView() {
   const inputError = useCalculatorStore((s) => s.inputError);
   const history = useCalculatorStore((s) => s.history);
   const angleMode = useCalculatorStore((s) => s.angleMode);
-  const { setInput, setAngleMode, evaluate, recall, clearHistory } = useCalculatorStore();
+  const memory = useCalculatorStore((s) => s.memory);
+  const { setInput, setAngleMode, evaluate, recall, clearHistory, memoryAdd, memoryClear } =
+    useCalculatorStore();
+  const [second, setSecond] = useState(false);
 
   const ref = useRef<TextInput>(null);
   const selection = useRef({ start: input.length, end: input.length });
 
-  const press = (key: Key) => {
-    if ('action' in key) {
-      if (key.action === 'clearEntry') {
+  const insertText = (text: string) => {
+    const { start, end } = selection.current;
+    const s = Math.min(start, input.length);
+    const e = Math.min(end, input.length);
+    setInput(input.slice(0, s) + text + input.slice(e));
+    selection.current = { start: s + text.length, end: s + text.length };
+  };
+
+  const press = (key: KeyDef) => {
+    switch (key.action) {
+      case 'second':
+        setSecond((v) => !v);
+        return;
+      case 'angle':
+        setAngleMode(angleMode === 'rad' ? 'deg' : 'rad');
+        return;
+      case 'equals':
+        evaluate();
+        return;
+      case 'memClear':
+        memoryClear();
+        return;
+      case 'memAdd':
+        memoryAdd(1);
+        return;
+      case 'memSubtract':
+        memoryAdd(-1);
+        return;
+      case 'clearEntry':
         setInput('');
-      } else {
+        selection.current = { start: 0, end: 0 };
+        break;
+      case 'backspace': {
         const { start, end } = selection.current;
         const s = Math.min(start, input.length);
         const e = Math.min(end, input.length);
         const from = s === e ? Math.max(0, s - 1) : s;
         setInput(input.slice(0, from) + input.slice(e));
         selection.current = { start: from, end: from };
+        break;
       }
-    } else {
-      const { start, end } = selection.current;
-      const s = Math.min(start, input.length);
-      const e = Math.min(end, input.length);
-      setInput(input.slice(0, s) + key.insert + input.slice(e));
-      selection.current = { start: s + key.insert.length, end: s + key.insert.length };
+      case 'negate': {
+        const next = input.startsWith('-') ? input.slice(1) : `-${input}`;
+        const d = next.length - input.length;
+        setInput(next);
+        selection.current = {
+          start: Math.max(0, selection.current.start + d),
+          end: Math.max(0, selection.current.end + d),
+        };
+        break;
+      }
+      case 'memRecall':
+        insertText(formatNumber(memory ?? 0));
+        break;
+      default:
+        insertText(second && key.second ? key.second.insert : key.insert ?? '');
     }
     ref.current?.focus();
   };
 
+  const renderKey = (key: KeyDef, variant: Variant) => {
+    const isSecondToggle = key.action === 'second';
+    const isAngle = key.action === 'angle';
+    const alt = second && key.second ? key.second : null;
+    const label = isAngle ? (angleMode === 'rad' ? 'Deg' : 'Rad') : alt?.label ?? key.label;
+    const aria = isAngle
+      ? angleMode === 'rad'
+        ? 'switch to degrees'
+        : 'switch to radians'
+      : alt?.aria ?? key.aria ?? label;
+    const memDisabled =
+      (key.action === 'memClear' || key.action === 'memRecall') && memory == null;
+    const s = KEY_STYLE[variant];
+    const latched = isSecondToggle && second;
+    return (
+      <Button
+        key={key.action ?? key.label}
+        flex={1}
+        height={s.height}
+        minWidth={0}
+        paddingHorizontal={0}
+        borderRadius={999}
+        backgroundColor={latched ? '#374151' : s.bg}
+        color={latched ? '#ffffff' : s.color}
+        fontWeight="600"
+        fontSize={s.fontSize}
+        disabled={memDisabled}
+        opacity={memDisabled ? 0.4 : 1}
+        hoverStyle={{ backgroundColor: latched ? '#374151' : s.press }}
+        pressStyle={{ backgroundColor: latched ? '#1f2937' : s.press }}
+        onPress={() => press(key)}
+        aria-label={aria}
+      >
+        {label}
+      </Button>
+    );
+  };
+
   return (
     <YStack gap={10}>
-      <XStack justifyContent="space-between" alignItems="center">
-        <XStack gap={4} backgroundColor="#eef1fd" borderRadius={10} padding={2}>
-          {(['rad', 'deg'] as const).map((m) => (
-            <Button
-              key={m}
-              size="$2"
-              borderRadius={8}
-              backgroundColor={angleMode === m ? BRAND : 'transparent'}
-              color={angleMode === m ? '#fff' : BRAND}
-              fontWeight="700"
-              onPress={() => setAngleMode(m)}
-              aria-label={m === 'rad' ? 'radians' : 'degrees'}
-            >
-              {m.toUpperCase()}
-            </Button>
-          ))}
-        </XStack>
-        {history.length > 0 && (
-          <GhostButton size="$2" onPress={clearHistory}>
-            {t('clear')}
-          </GhostButton>
-        )}
-      </XStack>
-
       {history.length === 0 ? (
-        <Muted>{t('calcHistoryEmpty')}</Muted>
+        <YStack gap={2}>
+          <Muted>{t('calcHistoryEmpty')}</Muted>
+          <Muted>{t('calcPlaceholder')}</Muted>
+        </YStack>
       ) : (
         <YStack gap={2}>
+          <XStack justifyContent="flex-end">
+            <GhostButton size="$2" onPress={clearHistory}>
+              {t('clear')}
+            </GhostButton>
+          </XStack>
           {history.slice(-12).map((h, i) => (
             <Button
               key={`${i}-${h.input}`}
@@ -153,25 +280,35 @@ export function CalcView() {
         </YStack>
       )}
 
-      <Input
-        ref={ref as never}
-        value={input}
-        placeholder={t('calcPlaceholder')}
-        onChangeText={setInput}
-        onSelectionChange={(e) => {
-          selection.current = e.nativeEvent.selection;
-        }}
-        onSubmitEditing={evaluate}
-        autoCapitalize="none"
-        autoCorrect={false}
-        spellCheck={false}
-        enterKeyHint="done"
-        fontSize={18}
-        borderColor={COLORS.border}
-        backgroundColor="#fff"
-        aria-label={t('calcTab')}
-      />
-      <YStack minHeight={24} paddingHorizontal={4} aria-live="polite">
+      <XStack alignItems="center" gap={8}>
+        <Text fontSize={13} fontWeight="600" color={COLORS.muted}>
+          {angleMode === 'rad' ? 'Rad' : 'Deg'}
+        </Text>
+        <Input
+          ref={ref as never}
+          flex={1}
+          value={input}
+          placeholder="0"
+          placeholderTextColor="#9ca3af"
+          onChangeText={setInput}
+          onSelectionChange={(e) => {
+            selection.current = e.nativeEvent.selection;
+          }}
+          onSubmitEditing={evaluate}
+          autoCapitalize="none"
+          autoCorrect={false}
+          spellCheck={false}
+          enterKeyHint="done"
+          fontSize={34}
+          textAlign="right"
+          borderWidth={0}
+          backgroundColor="transparent"
+          paddingHorizontal={4}
+          focusStyle={{ borderWidth: 0, outlineWidth: 0 }}
+          aria-label={t('calcTab')}
+        />
+      </XStack>
+      <YStack minHeight={24} paddingHorizontal={4} alignItems="flex-end" aria-live="polite">
         {input ? <Katex tex={toPreviewTex(input)} /> : null}
       </YStack>
       {inputError === 'equation' ? (
@@ -181,29 +318,18 @@ export function CalcView() {
       ) : null}
 
       <YStack gap={6}>
-        {KEYS.map((row, ri) => (
+        {SCI_KEYS.map((row, ri) => (
           <XStack key={ri} gap={6}>
-            {row.map((key) => (
-              <Button
-                key={key.label}
-                flex={1}
-                size="$3"
-                borderRadius={10}
-                backgroundColor={'action' in key ? '#fde8e8' : /\d|\./.test(key.label) ? '#f8f9fb' : '#eef1fd'}
-                color={'action' in key ? COLORS.bad : /\d|\./.test(key.label) ? '#111827' : BRAND}
-                fontWeight="700"
-                fontSize={16}
-                onPress={() => press(key)}
-                aria-label={key.label}
-              >
-                {key.label}
-              </Button>
-            ))}
+            {row.map((key) => renderKey(key, 'sci'))}
           </XStack>
         ))}
-        <PrimaryButton onPress={evaluate} aria-label="=">
-          =
-        </PrimaryButton>
+      </YStack>
+      <YStack gap={8}>
+        {MAIN_KEYS.map((row, ri) => (
+          <XStack key={ri} gap={8}>
+            {row.map(({ key, variant }) => renderKey(key, variant))}
+          </XStack>
+        ))}
       </YStack>
     </YStack>
   );

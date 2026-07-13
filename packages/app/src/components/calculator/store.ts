@@ -28,6 +28,8 @@ interface CalculatorStore {
   inputError: string | null;
   angleMode: AngleMode;
   ans: number | null;
+  /** memory register (mc / m+ / m− / mr); session-only, never persisted */
+  memory: number | null;
   variables: Record<string, number>;
   history: HistoryEntry[];
   expressions: string[];
@@ -41,6 +43,9 @@ interface CalculatorStore {
   evaluate: () => void;
   recall: (entry: HistoryEntry) => void;
   clearHistory: () => void;
+  /** m+ / m−: fold the current entry (or the last answer) into memory */
+  memoryAdd: (sign: 1 | -1) => void;
+  memoryClear: () => void;
   setExpression: (index: number, value: string) => void;
   addExpression: () => void;
   removeExpression: (index: number) => void;
@@ -58,6 +63,7 @@ export const useCalculatorStore = create<CalculatorStore>()((set, get) => ({
   inputError: null,
   angleMode: EMPTY_CALCULATOR_STATE.angleMode,
   ans: null,
+  memory: null,
   variables: {},
   history: [],
   expressions: [...EMPTY_CALCULATOR_STATE.expressions],
@@ -90,6 +96,22 @@ export const useCalculatorStore = create<CalculatorStore>()((set, get) => ({
 
   recall: (entry) => set({ input: entry.input, inputError: null }),
   clearHistory: () => set({ history: [], ans: null, variables: {} }),
+
+  memoryAdd: (sign) => {
+    const { input, angleMode, ans, variables, memory } = get();
+    let value = ans;
+    if (input.trim()) {
+      const r = evaluateCalculation(input, { angleMode, ans, variables });
+      if (!r.ok || r.value === undefined) {
+        set({ inputError: r.error ?? 'syntax error' });
+        return;
+      }
+      value = r.value;
+    }
+    if (value == null) return;
+    set({ memory: (memory ?? 0) + sign * value, inputError: null });
+  },
+  memoryClear: () => set({ memory: null }),
 
   setExpression: (index, value) =>
     set({ expressions: get().expressions.map((e, i) => (i === index ? value : e)) }),
