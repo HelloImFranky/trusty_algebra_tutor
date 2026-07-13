@@ -7,3 +7,5 @@ export * from './achievements.js';
 export * from './content/index.js';
 export { classroomScaffolds, type ScaffoldSection } from './content/classroomScaffolds.js';
 export { referenceSheet } from './content/referenceSheet.js';
+export * from './anim/model.js';
+export * from './anim/builders.js';
