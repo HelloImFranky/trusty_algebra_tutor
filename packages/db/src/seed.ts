@@ -240,10 +240,6 @@ export async function seed(): Promise<void> {
         }
       }
 
-      const etIds = standardProblemIds.slice(0, Math.max(4, Math.min(8, lesson.exitTicketSize)));
-      if (etIds.length) {
-        await prisma.exitTicket.create({ data: { lessonId: lessonRow.id, problemIds: etIds } });
-      }
       console.log(`seeded lesson ${lesson.code} (${standardProblemIds.length} standard problems)`);
     }
   }

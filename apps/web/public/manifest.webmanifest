@@ -1,7 +1,7 @@
 {
   "name": "Algebra Tutor",
   "short_name": "Algebra",
-  "description": "Self-paced Algebra 1 tutor with scaffolded lessons, exit tickets, and adaptive practice (EN/ES).",
+  "description": "Self-paced Algebra 1 tutor with scaffolded lessons, Regents review, and adaptive practice (EN/ES).",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f6f7fb",

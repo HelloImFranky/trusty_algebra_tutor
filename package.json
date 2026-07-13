@@ -2,7 +2,7 @@
   "name": "trusty-algebra-tutor",
   "private": true,
   "version": "0.2.0",
-  "description": "Middle school Algebra 1 tutor modeled on the Algebra 891 classroom (scaffolded lessons, exit tickets, adaptive practice, EN/ES). Turborepo: Next.js web + Expo native + tRPC + Prisma.",
+  "description": "Middle school Algebra 1 tutor modeled on the Algebra 891 classroom (scaffolded lessons, Regents review, adaptive practice, EN/ES). Turborepo: Next.js web + Expo native + tRPC + Prisma.",
   "workspaces": [
     "apps/*",
     "packages/*"

@@ -43,7 +43,6 @@ export const unit1: UnitSeed = {
         { template: 'exponent_product_rule', tier: 'challenge', count: 6 },
         { template: 'sprint_perfect_squares', tier: 'standard', count: 12, sprint: true },
       ],
-      exitTicketSize: 5,
     },
     {
       code: '1.2',
@@ -76,7 +75,6 @@ export const unit1: UnitSeed = {
         { template: 'simplify_radical', tier: 'standard', count: 8 },
         { template: 'simplify_radical', tier: 'challenge', count: 6 },
       ],
-      exitTicketSize: 4,
     },
     {
       code: '1.3',
@@ -105,7 +103,6 @@ export const unit1: UnitSeed = {
         { template: 'radical_multiply', tier: 'standard', count: 4 },
         { template: 'radical_multiply', tier: 'challenge', count: 6 },
       ],
-      exitTicketSize: 5,
     },
     {
       code: '1.4',
@@ -133,7 +130,6 @@ export const unit1: UnitSeed = {
         { template: 'rational_irrational', tier: 'standard', count: 8 },
         { template: 'rational_irrational', tier: 'challenge', count: 4 },
       ],
-      exitTicketSize: 4,
     },
     {
       code: '1.5',
@@ -166,7 +162,6 @@ export const unit1: UnitSeed = {
         { template: 'dimensional_analysis', tier: 'standard', count: 8 },
         { template: 'dimensional_analysis', tier: 'challenge', count: 4 },
       ],
-      exitTicketSize: 4,
     },
     {
       code: '1.6',
@@ -256,7 +251,6 @@ export const unit1: UnitSeed = {
         },
       ],
       generated: [{ template: 'sprint_integer_ops', tier: 'standard', count: 12, sprint: true }],
-      exitTicketSize: 4,
     },
   ],
 };
@@ -320,7 +314,6 @@ export const unit2: UnitSeed = {
         { template: 'evaluate_expression', tier: 'standard', count: 8 },
         { template: 'evaluate_expression', tier: 'challenge', count: 5 },
       ],
-      exitTicketSize: 5,
     },
     {
       code: '2.2',
@@ -354,7 +347,6 @@ export const unit2: UnitSeed = {
         { template: 'distribute_simplify', tier: 'standard', count: 5 },
         { template: 'distribute_simplify', tier: 'challenge', count: 6 },
       ],
-      exitTicketSize: 5,
     },
     {
       code: '2.3',
@@ -394,7 +386,6 @@ export const unit2: UnitSeed = {
         { template: 'foil', tier: 'standard', count: 6 },
         { template: 'foil', tier: 'challenge', count: 6 },
       ],
-      exitTicketSize: 6,
     },
   ],
 };
@@ -437,7 +428,6 @@ export const unit3: UnitSeed = {
         { template: 'multi_step_equation', tier: 'challenge', count: 6 },
         { template: 'sprint_one_step_equations', tier: 'standard', count: 12, sprint: true },
       ],
-      exitTicketSize: 5,
     },
     {
       code: '3.2',
@@ -496,7 +486,6 @@ export const unit3: UnitSeed = {
         { template: 'var_both_sides', tier: 'standard', count: 8 },
         { template: 'var_both_sides', tier: 'challenge', count: 4 },
       ],
-      exitTicketSize: 5,
     },
     {
       code: '3.3',
@@ -538,7 +527,6 @@ export const unit3: UnitSeed = {
         { template: 'two_step_inequality', tier: 'standard', count: 8 },
         { template: 'two_step_inequality', tier: 'challenge', count: 5 },
       ],
-      exitTicketSize: 5,
     },
   ],
 };

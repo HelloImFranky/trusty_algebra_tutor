@@ -3,8 +3,8 @@
 A free, self-paced **Algebra 1 tutor** for middle school, built to match a real
 accelerated 8th grade classroom (the "Algebra 891" curriculum). It teaches the
 same way class does: short scaffolded lessons, lots of low-stakes practice,
-step-by-step help when you're stuck, and quick exit tickets — in **English and
-Spanish**, on any phone, tablet, or Chromebook.
+step-by-step help when you're stuck, and Regents-style review — in **English
+and Spanish**, on any phone, tablet, or Chromebook.
 
 It's aligned to the NY Algebra I (NGLS) Regents standards, and every lesson
 includes the **original scaffold notes from class** — the teacher's actual
@@ -31,7 +31,6 @@ What's inside:
 | 📄 **Lessons** | Step-by-step explanations, worked examples, and the **original scaffold notes from class** — tap a topic to open the real notes |
 | ✏️ **Practice** | Problems matched to your level. Wrong answer? The app walks you through it **one step at a time** — it never just says "incorrect" |
 | 💡 **Hints** | A hint button, a "Walk me through it" button, and an AI tutor you can ask "I don't get it" (it helps you think — it won't give away answers) |
-| 🎟️ **Exit Tickets** | A quick 4–8 question check at the end of each lesson, graded instantly |
 | ⚡ **Sprint** | 90-second speed rounds — how many can you get? |
 | 📚 **Regents Review** | Regents-style multiple choice by topic — finish a topic and hit "Practice again" for a freshly generated set with new numbers, as many times as you want |
 | 📈 **Progress** | Your streak 🔥, minutes practiced, and a mastery map of the whole course |
@@ -54,8 +53,8 @@ equivalent form you'd accept — and, where it matters, insists on the taught
 final form ("your value is right, but it's not in standard form yet").
 
 **What you can see.** Each student's Progress page shows their streak,
-practice minutes, exit-ticket history, and a 🚩 "needs help" flag on any skill
-they're struggling with. Parents/guardians who sign up with the email a
+practice minutes, Regents Review progress, and a 🚩 "needs help" flag on any
+skill they're struggling with. Parents/guardians who sign up with the email a
 student listed get the same read-only view of just their child.
 
 **Student privacy.** Students never enter an email. Under-13 signups require

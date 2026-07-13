@@ -10,14 +10,14 @@ export type AchievementTier = 'bronze' | 'silver' | 'gold';
 
 /** Everything an achievement can be measured against. */
 export interface AchievementMetrics {
-  /** Correct answers across practice, sprints, and exit tickets. */
+  /** Correct answers across practice, sprints, and Regents Review. */
   correctAnswers: number;
+  /** Longest run of consecutive correct answers (all-time best). */
+  correctStreakBest: number;
   /** Consecutive-day activity streak. */
   streakDays: number;
   /** Skills currently at proficient or mastered. */
   skillsStrong: number;
-  /** Exit tickets with a perfect score. */
-  perfectExitTickets: number;
   /** Regents Review: correct multiple-choice answers. */
   regentsCorrect: number;
   /** Regents Review: topics with all questions answered. */
@@ -40,20 +40,53 @@ export interface AchievementDef {
 
 export const achievementDefs: AchievementDef[] = [
   // — Problem solving —
+  // Milestone ladder: starts at 25 and each next target is 60% more than the
+  // last, rounded up (25 → 40 → 64 → 103 → 165 → 264).
   {
-    id: 'solver-bronze', icon: '✏️', tier: 'bronze', metric: 'correctAnswers', target: 10,
+    id: 'solver-25', icon: '✏️', tier: 'bronze', metric: 'correctAnswers', target: 25,
     nameEn: 'Getting Started', nameEs: 'Buen Comienzo',
-    descEn: 'Answer 10 problems correctly', descEs: 'Responde 10 problemas correctamente',
+    descEn: 'Answer 25 problems correctly', descEs: 'Responde 25 problemas correctamente',
   },
   {
-    id: 'solver-silver', icon: '🧠', tier: 'silver', metric: 'correctAnswers', target: 50,
+    id: 'solver-40', icon: '🚀', tier: 'bronze', metric: 'correctAnswers', target: 40,
+    nameEn: 'Warmed Up', nameEs: 'En Marcha',
+    descEn: 'Answer 40 problems correctly', descEs: 'Responde 40 problemas correctamente',
+  },
+  {
+    id: 'solver-64', icon: '🧠', tier: 'silver', metric: 'correctAnswers', target: 64,
     nameEn: 'Problem Solver', nameEs: 'Solucionador',
-    descEn: 'Answer 50 problems correctly', descEs: 'Responde 50 problemas correctamente',
+    descEn: 'Answer 64 problems correctly', descEs: 'Responde 64 problemas correctamente',
   },
   {
-    id: 'solver-gold', icon: '🏆', tier: 'gold', metric: 'correctAnswers', target: 150,
+    id: 'solver-103', icon: '🧙', tier: 'silver', metric: 'correctAnswers', target: 103,
+    nameEn: 'Math Whiz', nameEs: 'Genio Matemático',
+    descEn: 'Answer 103 problems correctly', descEs: 'Responde 103 problemas correctamente',
+  },
+  {
+    id: 'solver-165', icon: '🏆', tier: 'gold', metric: 'correctAnswers', target: 165,
     nameEn: 'Math Machine', nameEs: 'Máquina Matemática',
-    descEn: 'Answer 150 problems correctly', descEs: 'Responde 150 problemas correctamente',
+    descEn: 'Answer 165 problems correctly', descEs: 'Responde 165 problemas correctamente',
+  },
+  {
+    id: 'solver-264', icon: '🐐', tier: 'gold', metric: 'correctAnswers', target: 264,
+    nameEn: 'Math Legend', nameEs: 'Leyenda Matemática',
+    descEn: 'Answer 264 problems correctly', descEs: 'Responde 264 problemas correctamente',
+  },
+  // — Correct answers in a row —
+  {
+    id: 'row-5', icon: '🎳', tier: 'bronze', metric: 'correctStreakBest', target: 5,
+    nameEn: 'Hot Streak', nameEs: 'Racha Caliente',
+    descEn: 'Answer 5 questions correctly in a row', descEs: 'Responde 5 preguntas correctas seguidas',
+  },
+  {
+    id: 'row-10', icon: '⚡', tier: 'silver', metric: 'correctStreakBest', target: 10,
+    nameEn: 'In the Zone', nameEs: 'En la Zona',
+    descEn: 'Answer 10 questions correctly in a row', descEs: 'Responde 10 preguntas correctas seguidas',
+  },
+  {
+    id: 'row-20', icon: '💎', tier: 'gold', metric: 'correctStreakBest', target: 20,
+    nameEn: 'Flawless', nameEs: 'Impecable',
+    descEn: 'Answer 20 questions correctly in a row', descEs: 'Responde 20 preguntas correctas seguidas',
   },
   // — Streaks —
   {
@@ -87,12 +120,6 @@ export const achievementDefs: AchievementDef[] = [
     nameEn: 'Constellation', nameEs: 'Constelación',
     descEn: 'Reach proficient on 15 skills', descEs: 'Alcanza competente en 15 habilidades',
   },
-  // — Exit tickets —
-  {
-    id: 'ticket-ace', icon: '🎟️', tier: 'silver', metric: 'perfectExitTickets', target: 1,
-    nameEn: 'Ticket Ace', nameEs: 'As del Boleto',
-    descEn: 'Score 100% on an exit ticket', descEs: 'Obtén 100% en un boleto de salida',
-  },
   // — Regents Review —
   {
     id: 'regents-bronze', icon: '📚', tier: 'bronze', metric: 'regentsTopicsCompleted', target: 1,
@@ -119,10 +146,21 @@ export const achievementDefs: AchievementDef[] = [
     nameEn: 'Eagle Eye', nameEs: 'Ojo de Águila',
     descEn: 'Get perfect scores on 5 Regents topics', descEs: 'Logra puntajes perfectos en 5 temas Regents',
   },
+  // Same +60% ladder as the solver milestones: 25 → 40 → 64.
   {
-    id: 'regents-25', icon: '🥇', tier: 'gold', metric: 'regentsCorrect', target: 25,
+    id: 'regents-25', icon: '🥉', tier: 'bronze', metric: 'regentsCorrect', target: 25,
     nameEn: 'Exam Ready', nameEs: 'Listo para el Examen',
     descEn: 'Answer 25 Regents questions correctly', descEs: 'Responde 25 preguntas Regents correctamente',
+  },
+  {
+    id: 'regents-40', icon: '🥈', tier: 'silver', metric: 'regentsCorrect', target: 40,
+    nameEn: 'Regents Pro', nameEs: 'Profesional Regents',
+    descEn: 'Answer 40 Regents questions correctly', descEs: 'Responde 40 preguntas Regents correctamente',
+  },
+  {
+    id: 'regents-64', icon: '🥇', tier: 'gold', metric: 'regentsCorrect', target: 64,
+    nameEn: 'Regents Champion', nameEs: 'Campeón Regents',
+    descEn: 'Answer 64 Regents questions correctly', descEs: 'Responde 64 preguntas Regents correctamente',
   },
 ];
 

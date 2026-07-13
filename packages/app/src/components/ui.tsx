@@ -151,7 +151,7 @@ export function Badge({ label, text }: { label: string; text?: string }) {
   );
 }
 
-/** Thin progress bar used for mastery and exit-ticket scores. */
+/** Thin progress bar used for mastery and review scores. */
 export function ProgressBar({ ratio }: { ratio: number }) {
   return (
     <YStack flex={1} height={10} backgroundColor="#eef1f5" borderRadius={999} overflow="hidden">

@@ -1,7 +1,9 @@
 /**
  * Regents Review catalog: topic-by-topic multiple-choice question banks in
- * the style of the NY Algebra I Regents exam. Each topic carries exactly
- * four questions; each question has four answer choices, one correct index,
+ * the style of the NY Algebra I Regents exam. Each topic carries a
+ * handwritten bank of four questions; a served round tops that up to
+ * REGENTS_ROUND_SIZE with procedurally generated questions (regentsRandom.ts).
+ * Each question has four answer choices, one correct index,
  * and a worked explanation shown after the (single) attempt. Prompts,
  * choices, and explanations use the same markdown-lite + $math$ format as
  * the rest of the content package.
