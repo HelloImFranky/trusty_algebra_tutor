@@ -4,6 +4,7 @@
  * assets), Regents Review topic progress, and a mastery map by unit.
  * Guardians/teachers land here via /progress/[studentId].
  */
+import { useState } from 'react';
 import { Text, XStack, YStack } from 'tamagui';
 import { trpc } from '../lib/trpc';
 import { useI18n, type I18nKey } from '../lib/i18n';
@@ -84,6 +85,9 @@ function Medal({ a }: { a: AchievementView }) {
 export function ProgressScreen({ studentId }: { studentId?: number }) {
   const { t, locale } = useI18n();
   const authed = useRequireAuth();
+  // Which Regents topic's detail dropdown is open (one at a time keeps the
+  // scoreboard tidy).
+  const [openTopic, setOpenTopic] = useState<string | null>(null);
   const me = trpc.progress.me.useQuery(undefined, { enabled: authed && !studentId });
   const other = trpc.progress.student.useQuery(
     { studentId: studentId ?? 0 },
@@ -167,31 +171,68 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
           </Muted>
         </XStack>
         <Muted>
-          {data.regents.questionsAnswered} {t('questionsAnsweredLabel')}
+          {data.regents.questionsAnswered} {t('questionsAnsweredLabel')} · ✅{' '}
+          {data.regents.questionsCorrect} {t('rightLabel')} · ❌{' '}
+          {data.regents.questionsAnswered - data.regents.questionsCorrect} {t('wrongLabel')}
         </Muted>
         {data.regents.topics.map((topic) => {
           const done = topic.answered >= topic.total;
           const perfect = done && topic.correct === topic.total;
+          const open = openTopic === topic.slug;
           return (
-            <XStack key={topic.slug} alignItems="center" gap={10} paddingVertical={2}>
-              <Text fontSize={16} width={26}>
-                {topic.icon}
-              </Text>
-              <Text fontSize={13.5} fontWeight="700" width={170} numberOfLines={1}>
-                {locale === 'es' ? topic.titleEs : topic.titleEn}
-              </Text>
-              <ProgressBar ratio={topic.answered / topic.total} />
-              <Text
-                fontSize={12.5}
-                fontWeight="800"
-                width={54}
-                textAlign="right"
-                color={perfect ? COLORS.good : done ? BRAND : COLORS.muted}
+            <YStack key={topic.slug}>
+              <XStack
+                alignItems="center"
+                gap={10}
+                paddingVertical={2}
+                cursor="pointer"
+                hoverStyle={{ opacity: 0.8 }}
+                onPress={() => setOpenTopic(open ? null : topic.slug)}
               >
-                {perfect ? '🌟 ' : done ? '✓ ' : ''}
-                {topic.correct}/{topic.total}
-              </Text>
-            </XStack>
+                <Text fontSize={16} width={26}>
+                  {topic.icon}
+                </Text>
+                <Text fontSize={13.5} fontWeight="700" width={170} numberOfLines={1}>
+                  {locale === 'es' ? topic.titleEs : topic.titleEn}
+                </Text>
+                <ProgressBar ratio={topic.answered / topic.total} />
+                <Text
+                  fontSize={12.5}
+                  fontWeight="800"
+                  width={54}
+                  textAlign="right"
+                  color={perfect ? COLORS.good : done ? BRAND : COLORS.muted}
+                >
+                  {perfect ? '🌟 ' : done ? '✓ ' : ''}
+                  {topic.correct}/{topic.total}
+                </Text>
+                <Text fontSize={11} width={14} color={COLORS.muted}>
+                  {open ? '▾' : '▸'}
+                </Text>
+              </XStack>
+              {open && (
+                <XStack
+                  gap={14}
+                  flexWrap="wrap"
+                  marginLeft={36}
+                  marginVertical={4}
+                  paddingHorizontal={12}
+                  paddingVertical={8}
+                  borderRadius={10}
+                  backgroundColor="#f6f7fb"
+                >
+                  <Muted size={12.5}>
+                    ✅ {topic.correctAll} {t('rightLabel')}
+                  </Muted>
+                  <Muted size={12.5}>
+                    ❌ {topic.wrongAll} {t('wrongLabel')}
+                  </Muted>
+                  <Muted size={12.5}>
+                    🔁 {topic.completions} {t('completedTimesLabel')}
+                  </Muted>
+                </XStack>
+              )}
+            </YStack>
           );
         })}
       </AppCard>
