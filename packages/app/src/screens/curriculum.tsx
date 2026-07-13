@@ -51,7 +51,9 @@ export function CurriculumScreen() {
                   <Text flexShrink={1} fontSize={14.5}>
                     <Text fontWeight="800">{l.code}</Text> {l.title}
                   </Text>
-                  <Badge label={l.mastery.label} text={t(l.mastery.label as I18nKey)} />
+                  {l.mastery.label !== 'not_started' && (
+                    <Badge label={l.mastery.label} text={t(l.mastery.label as I18nKey)} />
+                  )}
                 </XStack>
               </Link>
             ))}

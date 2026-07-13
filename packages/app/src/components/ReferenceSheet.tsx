@@ -29,7 +29,7 @@ export function ReferenceSheetButton({ compact = false }: { compact?: boolean })
         onPress={() => setOpen(true)}
         aria-label={t('referenceSheet')}
       >
-        📖{compact ? '' : ` ${t('referenceSheet')}`}
+        📖 {compact ? t('referenceSheetShort') : t('referenceSheet')}
       </Button>
       <Sheet
         modal
