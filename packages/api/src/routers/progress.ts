@@ -47,21 +47,33 @@ async function buildProgress(userId: number) {
 
   // Regents Review: per-topic tallies from the one-try answer log. Topic
   // completion and perfect-score badges track the first run (round 0);
-  // renewed "practice again" rounds only add to the raw answer totals.
+  // renewed "practice again" rounds add to the lifetime right/wrong totals
+  // and to the count of completed rounds shown in the per-topic detail.
   const regentsAnswers = await prisma.regentsAnswer.findMany({
     where: { userId: BigInt(userId) },
     select: { topicSlug: true, correct: true, round: true, createdAt: true },
   });
-  const regentsByTopic = new Map<string, { answered: number; correct: number }>();
+  const emptyTally = () => ({
+    answered: 0, // round 0
+    correct: 0, // round 0
+    correctAll: 0,
+    wrongAll: 0,
+    perRound: new Map<number, number>(),
+  });
+  const regentsByTopic = new Map<string, ReturnType<typeof emptyTally>>();
   for (const a of regentsAnswers) {
-    if (a.round !== 0) continue;
-    const t = regentsByTopic.get(a.topicSlug) ?? { answered: 0, correct: 0 };
-    t.answered++;
-    if (a.correct) t.correct++;
+    const t = regentsByTopic.get(a.topicSlug) ?? emptyTally();
+    if (a.round === 0) {
+      t.answered++;
+      if (a.correct) t.correct++;
+    }
+    if (a.correct) t.correctAll++;
+    else t.wrongAll++;
+    t.perRound.set(a.round, (t.perRound.get(a.round) ?? 0) + 1);
     regentsByTopic.set(a.topicSlug, t);
   }
   const regentsTopicStats = regentsTopics.map((t) => {
-    const p = regentsByTopic.get(t.slug) ?? { answered: 0, correct: 0 };
+    const p = regentsByTopic.get(t.slug) ?? emptyTally();
     return {
       slug: t.slug,
       icon: t.icon,
@@ -70,6 +82,10 @@ async function buildProgress(userId: number) {
       total: REGENTS_ROUND_SIZE,
       answered: p.answered,
       correct: p.correct,
+      // Lifetime detail across every round, for the per-topic dropdown.
+      correctAll: p.correctAll,
+      wrongAll: p.wrongAll,
+      completions: [...p.perRound.values()].filter((n) => n >= REGENTS_ROUND_SIZE).length,
     };
   });
   const regents = {

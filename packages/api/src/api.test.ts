@@ -395,6 +395,19 @@ describe('regents review', () => {
     const entry = cat.topics.find((t) => t.slug === 'linear-equations');
     expect(entry).toMatchObject({ answered: 10, correct: round0Correct, extraRounds: 1 });
   });
+
+  it('reports lifetime right/wrong tallies and completed rounds per topic', async () => {
+    const res = await as(student).progress.me();
+    const perTopic = res.regents.topics.find((t) => t.slug === 'linear-equations')!;
+    // 10 round-0 answers + 1 round-1 answer, split between right and wrong.
+    expect(perTopic.correctAll + perTopic.wrongAll).toBe(11);
+    expect(perTopic.correctAll).toBeGreaterThanOrEqual(round0Correct);
+    // Only round 0 is finished; the round-1 renewal has one answer so far.
+    expect(perTopic.completions).toBe(1);
+
+    const untouched = res.regents.topics.find((t) => t.slug === 'systems')!;
+    expect(untouched).toMatchObject({ correctAll: 0, wrongAll: 0, completions: 0 });
+  });
 });
 
 describe('progress & FERPA scoping', () => {
