@@ -2,11 +2,21 @@
 import { useState } from 'react';
 import { Link } from 'solito/link';
 import { useRouter } from 'solito/navigation';
-import { Checkbox, Input, Label, Text, XStack, YStack } from 'tamagui';
+import { Checkbox, Label, Text, XStack, YStack } from 'tamagui';
 import { client } from '../lib/trpc';
 import { setAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
-import { AppCard, Feedback, Muted, PrimaryButton, Screen, Title, BRAND, COLORS } from '../components/ui';
+import {
+  AppCard,
+  AppInput,
+  Feedback,
+  Muted,
+  PrimaryButton,
+  Screen,
+  Title,
+  BRAND,
+  COLORS,
+} from '../components/ui';
 
 function Field({
   label,
@@ -26,7 +36,7 @@ function Field({
       <Label fontSize={13} fontWeight="700" color="#374151">
         {label}
       </Label>
-      <Input
+      <AppInput
         value={value}
         onChangeText={onChange}
         secureTextEntry={secure}
