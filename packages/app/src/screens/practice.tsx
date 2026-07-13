@@ -6,7 +6,7 @@
  * 3. Hints escalate: nudge → mnemonic/step hint → show the step worked → LLM
  *    tutor chat as the final escalation (deterministic ladder first, §6).
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'solito/link';
 import { Text, XStack } from 'tamagui';
 import { client } from '../lib/trpc';
@@ -15,6 +15,8 @@ import { useI18n } from '../lib/i18n';
 import { useRequireAuth } from '../components/AppChrome';
 import { MathInput } from '../components/MathInput';
 import { MathText } from '../components/MathText';
+import { AnimatedEquation } from '../components/stepanim/AnimatedEquation';
+import { buildScriptForProblem } from '../components/stepanim/builders';
 import { TutorChat } from '../components/TutorChat';
 import {
   AppCard, Badge, Feedback, GhostButton, Loading, Muted, PrimaryButton, Screen,
@@ -33,6 +35,8 @@ interface Problem {
   tier: string;
   prompt: string;
   gradingMode: string;
+  params?: unknown;
+  skillSlug?: string | null;
   steps: ProblemStep[];
 }
 
@@ -54,8 +58,15 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
   const [stepAnswer, setStepAnswer] = useState('');
   const [stepFeedback, setStepFeedback] = useState('');
   const [showTutor, setShowTutor] = useState(false);
+  const [showAnim, setShowAnim] = useState(false);
   const [solved, setSolved] = useState(0);
   const [startedAt, setStartedAt] = useState(Date.now());
+
+  // Animated walkthrough of this exact problem, when a builder understands it.
+  const animScript = useMemo(
+    () => (problem ? buildScriptForProblem(problem.skillSlug, problem.params) : null),
+    [problem],
+  );
 
   const loadNext = useCallback(async () => {
     setAnswer('');
@@ -68,6 +79,7 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
     setStepAnswer('');
     setStepFeedback('');
     setShowTutor(false);
+    setShowAnim(false);
     setStartedAt(Date.now());
     try {
       const r = await client.practice.next.query({ skillId, locale });
@@ -213,7 +225,16 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
                   <GhostButton onPress={() => setShowTutor((s) => !s)}>🤖 {t('askTutor')}</GhostButton>
                 </>
               )}
-              {phase === 'done' && <PrimaryButton onPress={loadNext}>{t('next')} →</PrimaryButton>}
+              {phase === 'done' && (
+                <>
+                  <PrimaryButton onPress={loadNext}>{t('next')} →</PrimaryButton>
+                  {animScript && (
+                    <GhostButton onPress={() => setShowAnim((s) => !s)}>
+                      🎬 {t('animatedExample')}
+                    </GhostButton>
+                  )}
+                </>
+              )}
             </XStack>
           </>
         )}
@@ -231,13 +252,25 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
                 {stepFeedback === 'bad' ? t('incorrect') : <>💡 <MathText text={stepFeedback} size={14} /></>}
               </Feedback>
             )}
-            <XStack gap={8} marginTop={4}>
+            <XStack gap={8} marginTop={4} flexWrap="wrap">
               <PrimaryButton onPress={checkStep}>{t('check')}</PrimaryButton>
+              {animScript && (
+                <GhostButton
+                  onPress={() => {
+                    setShowAnim((s) => !s);
+                    if (!showAnim) setHintsUsed((h) => h + 1); // watching = a hint
+                  }}
+                >
+                  🎬 {t('animatedExample')}
+                </GhostButton>
+              )}
               <GhostButton onPress={() => setShowTutor((s) => !s)}>🤖 {t('askTutor')}</GhostButton>
             </XStack>
           </>
         )}
       </AppCard>
+
+      {showAnim && animScript && <AnimatedEquation key={problem.id} script={animScript} />}
 
       {showTutor && (
         <TutorChat problemId={problem.id} stepReached={phase === 'steps' ? stepIndex : undefined} />

@@ -16,7 +16,8 @@ export type Emph =
   | 'apply' /* the operation being applied to both sides (orange chip) */
   | 'focus' /* terms the student should look at (blue chip) */
   | 'result' /* a freshly computed value (green chip) */
-  | 'cancel'; /* struck-through gray: this pair adds/divides to nothing */
+  | 'cancel' /* struck-through gray: this pair adds/divides to nothing */
+  | 'flip'; /* red chip: the inequality symbol just flipped — look here! */
 
 export interface EqToken {
   /** Stable identity across steps — drives the morph animation. */
@@ -380,11 +381,74 @@ export const bothSidesScript: EqScript = {
   ],
 };
 
+/** Inequality with the sign flip: 12 − 5x > 72 (the 3.3 classroom example). */
+export const inequalityScript: EqScript = {
+  id: 'inequality-flip',
+  titleEn: 'Inequality: flip the symbol',
+  titleEs: 'Desigualdad: voltea el símbolo',
+  steps: [
+    {
+      tokens: [
+        t('n12', '12', 'num'),
+        t('minus', '−', 'op'),
+        t('a', '5x', 'var'),
+        t('rel', '>', 'rel'),
+        t('n72', '72', 'num'),
+      ],
+      explainEn: 'Same steps as an equation: isolate the x-term. First undo the 12.',
+      explainEs: 'Los mismos pasos que una ecuación: aísla el término con x. Primero deshaz el 12.',
+    },
+    {
+      tokens: [
+        t('n12', '12', 'num'),
+        t('minus', '−', 'op'),
+        t('a', '5x', 'var'),
+        t('m12L', '− 12', 'op', { emph: 'apply' }),
+        t('rel', '>', 'rel'),
+        t('n72', '72', 'num'),
+        t('m12R', '− 12', 'op', { emph: 'apply' }),
+      ],
+      explainEn: 'Subtract 12 from BOTH sides.',
+      explainEs: 'Resta 12 de AMBOS lados.',
+    },
+    {
+      tokens: [
+        t('a', '−5x', 'var'),
+        t('rel', '>', 'rel'),
+        t('n60', '60', 'num', { emph: 'result' }),
+      ],
+      explainEn: '12 − 12 cancels. The x-term keeps its minus sign: −5x. And 72 − 12 = 60.',
+      explainEs: '12 − 12 se cancela. El término con x conserva su signo menos: −5x. Y 72 − 12 = 60.',
+    },
+    {
+      tokens: [
+        t('a', '−5x', 'var'),
+        t('d5L', '÷ (−5)', 'op', { emph: 'apply' }),
+        t('rel', '>', 'rel'),
+        t('n60', '60', 'num'),
+        t('d5R', '÷ (−5)', 'op', { emph: 'apply' }),
+      ],
+      explainEn: 'Divide BOTH sides by −5. Careful — that number is NEGATIVE…',
+      explainEs: 'Divide AMBOS lados entre −5. Cuidado — ¡ese número es NEGATIVO…',
+    },
+    {
+      tokens: [
+        t('x', 'x', 'var'),
+        t('rel', '<', 'rel', { emph: 'flip' }),
+        t('nf', '−12', 'num', { emph: 'result' }),
+      ],
+      explainEn: 'Dividing by a negative FLIPS the symbol: > becomes <. So x < −12.',
+      explainEs: 'Dividir entre un negativo VOLTEA el símbolo: > se convierte en <. Así que x < −12.',
+    },
+  ],
+};
+
 export const demoScripts: EqScript[] = [
   twoStepScript,
   likeTermsScript,
   distributeScript,
   bothSidesScript,
+  inequalityScript,
 ];
 
 /**
@@ -395,6 +459,7 @@ export const scriptsByLessonCode: Record<string, EqScript[]> = {
   '2.2': [likeTermsScript],
   '3.1': [twoStepScript, distributeScript],
   '3.2': [bothSidesScript],
+  '3.3': [inequalityScript],
 };
 
 /** Split a step at its relation token (=, ≤, …) for the balance scale. */

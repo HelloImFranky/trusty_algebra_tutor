@@ -51,6 +51,10 @@ function tokenStyle(tok: EqToken) {
       color = '#9ca3af';
       strike = true;
       break;
+    case 'flip':
+      color = COLORS.bad;
+      bg = COLORS.badBg;
+      break;
   }
   return { color, bg, strike };
 }
