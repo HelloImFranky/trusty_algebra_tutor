@@ -17,4 +17,5 @@ export const curriculum: UnitSeed[] = [
 
 export { referenceSheet } from './referenceSheet.js';
 export * from './regents.js';
+export * from './regentsRandom.js';
 export * from './types.js';

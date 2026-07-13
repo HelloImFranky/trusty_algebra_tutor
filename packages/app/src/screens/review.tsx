@@ -69,6 +69,7 @@ function TopicCatalog({ onOpen }: { onOpen: (slug: string) => void }) {
               </XStack>
               <XStack gap={10} alignItems="center">
                 <ProgressBar ratio={topic.answered / topic.total} />
+                {topic.extraRounds > 0 && <Muted size={12}>🔄 ×{topic.extraRounds}</Muted>}
                 {done ? (
                   <XStack
                     backgroundColor={perfect ? COLORS.goodBg : '#eef1fd'}
@@ -112,12 +113,15 @@ interface AnsweredState {
 function TopicQuiz({ slug, onExit }: { slug: string; onExit: () => void }) {
   const { t, locale } = useI18n();
   const utils = trpc.useUtils();
-  const topic = trpc.regents.topic.useQuery({ slug, locale });
+  // undefined = let the server pick the student's latest round; renewing a
+  // finished round requests the next one, which is generated on the fly.
+  const [round, setRound] = useState<number | undefined>(undefined);
+  const topic = trpc.regents.topic.useQuery({ slug, locale, round });
   const answerMut = trpc.regents.answer.useMutation({
     onSuccess: () => {
       // Keep the catalog, the topic snapshot, and the badge case in sync.
       void utils.regents.catalog.invalidate();
-      void utils.regents.topic.invalidate({ slug, locale });
+      void utils.regents.topic.invalidate();
       void utils.progress.me.invalidate();
     },
   });
@@ -153,6 +157,17 @@ function TopicQuiz({ slug, onExit }: { slug: string; onExit: () => void }) {
   if (!topic.data || !questions || firstOpen === null) return <Loading />;
 
   const index = cursor ?? firstOpen;
+  const servedRound = topic.data.round;
+
+  // A fresh set of generated problems for this topic: reset the local quiz
+  // state and ask the server for the next round.
+  const renew = () => {
+    setSession({});
+    setCursor(null);
+    setSelected(null);
+    setSummary(false);
+    setRound(servedRound + 1);
+  };
 
   if (summary || index >= questions.length) {
     const score = questions.reduce((n, q) => n + (answerFor(q)?.correct ? 1 : 0), 0);
@@ -165,6 +180,11 @@ function TopicQuiz({ slug, onExit }: { slug: string; onExit: () => void }) {
         <AppCard alignItems="center" gap={10} paddingVertical={30}>
           <Text fontSize={54}>{perfect ? '🏆' : score >= questions.length / 2 ? '🎉' : '💪'}</Text>
           <SubTitle>{perfect ? `${t('perfectTopic')} 🌟` : t('topicComplete')}</SubTitle>
+          {servedRound > 0 && (
+            <Muted>
+              🔄 {t('roundLabel')} {servedRound + 1}
+            </Muted>
+          )}
           <Text fontSize={30} fontWeight="900" color={perfect ? COLORS.good : BRAND}>
             {score} / {questions.length}
           </Text>
@@ -178,9 +198,11 @@ function TopicQuiz({ slug, onExit }: { slug: string; onExit: () => void }) {
               );
             })}
           </XStack>
-          <PrimaryButton marginTop={10} onPress={onExit}>
-            {t('backToTopics')}
+          <PrimaryButton marginTop={10} onPress={renew}>
+            🔄 {t('practiceAgain')}
           </PrimaryButton>
+          <Muted size={12}>{t('newProblemsHint')}</Muted>
+          <GhostButton onPress={onExit}>{t('backToTopics')}</GhostButton>
         </AppCard>
       </Screen>
     );
@@ -227,6 +249,7 @@ function TopicQuiz({ slug, onExit }: { slug: string; onExit: () => void }) {
         <XStack justifyContent="space-between" alignItems="center">
           <Muted>
             {t('question')} {index + 1} {t('of')} {questions.length}
+            {servedRound > 0 ? ` · 🔄 ${t('roundLabel')} ${servedRound + 1}` : ''}
           </Muted>
           {!answered && <Muted>{t('oneTryHint')}</Muted>}
         </XStack>
