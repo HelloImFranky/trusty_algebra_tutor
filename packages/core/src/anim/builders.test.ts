@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   buildMultiStepEquation,
   buildScriptForProblem,
+  buildSlopeFromPoints,
+  buildSlopeInterceptRewrite,
   buildTwoStepEquation,
   buildTwoStepInequality,
   buildVarBothSides,
 } from './builders.js';
-import { stepToText, type EqScript } from './model.js';
+import { scriptsByLessonCode, stepToText, type EqScript } from './model.js';
 
 const lines = (s: EqScript | null) => (s ? s.steps.map(stepToText) : []);
 const lastStep = (s: EqScript) => s.steps[s.steps.length - 1];
@@ -124,6 +126,75 @@ describe('buildMultiStepEquation', () => {
   });
 });
 
+describe('buildSlopeFromPoints', () => {
+  it('substitutes, computes, and simplifies the fraction', () => {
+    // (1, 2) → (5, 8): rise 6, run 4 → 3/2
+    expect(lines(buildSlopeFromPoints(1, 2, 5, 8))).toEqual([
+      'm = (y₂ − y₁)/(x₂ − x₁)',
+      'm = (8 − (2))/(5 − (1))',
+      'm = 6/4',
+      'm = 3/2',
+    ]);
+  });
+
+  it('collapses to an integer slope when the run divides the rise', () => {
+    // (0, 0) → (2, 6): 6/2 → 3
+    const s = buildSlopeFromPoints(0, 0, 2, 6)!;
+    expect(lines(s)[lines(s).length - 1]).toBe('m = 3');
+    const final = lastStep(s).tokens.find((t) => t.id === 'fr');
+    expect(final?.kind).toBe('num');
+    expect(final?.emph).toBe('result');
+  });
+
+  it('moves a negative run sign to the numerator', () => {
+    // (3, 1) → (0, 2): rise 1, run −3 → −1/3
+    const l = lines(buildSlopeFromPoints(3, 1, 0, 2));
+    expect(l[l.length - 1]).toBe('m = −1/3');
+  });
+
+  it('keeps an already-simplest fraction and marks it the result', () => {
+    // (0, 0) → (3, 2): 2/3 already reduced
+    const s = buildSlopeFromPoints(0, 0, 3, 2)!;
+    const l = lines(s);
+    expect(l[l.length - 1]).toBe('m = 2/3');
+    expect(lastStep(s).holdMs).toBeGreaterThan(2200);
+  });
+
+  it('handles a zero rise (horizontal line)', () => {
+    const l = lines(buildSlopeFromPoints(1, 4, 5, 4));
+    expect(l[l.length - 1]).toBe('m = 0');
+  });
+
+  it('returns null for a vertical line', () => {
+    expect(buildSlopeFromPoints(2, 1, 2, 5)).toBeNull();
+  });
+});
+
+describe('buildSlopeInterceptRewrite', () => {
+  it('rewrites −mx + y = b as y = mx + b', () => {
+    expect(lines(buildSlopeInterceptRewrite(2, 5))).toEqual([
+      '−2x + y = 5',
+      '−2x + y + 2x = 5 + 2x',
+      '−2x + y + 2x = 5 + 2x', // emphasis-only cancel beat
+      'y = 2x + 5',
+    ]);
+  });
+
+  it('handles negative m and b', () => {
+    const l = lines(buildSlopeInterceptRewrite(-3, -7));
+    expect(l[0]).toBe('3x + y = −7');
+    expect(l[1]).toBe('3x + y − 3x = −7 − 3x');
+    expect(l[l.length - 1]).toBe('y = −3x − 7');
+  });
+});
+
+describe('lesson script registry', () => {
+  it('registers the slope scripts for lessons 5.2 and 5.3', () => {
+    expect(scriptsByLessonCode['5.2']?.[0]?.id).toBe('slope-two-points');
+    expect(scriptsByLessonCode['5.3']?.[0]?.id).toBe('slope-intercept');
+  });
+});
+
 describe('buildScriptForProblem dispatch', () => {
   it('routes inequalities params to the inequality builder', () => {
     const s = buildScriptForProblem('inequalities', { a: -4, b: -4, x: 4, baseOp: '>' });
@@ -143,6 +214,21 @@ describe('buildScriptForProblem dispatch', () => {
   it('routes var-both-sides params to the both-sides builder', () => {
     const s = buildScriptForProblem('var-both-sides', { a: -1, b: -12, c: 8, x: 6 });
     expect(lines(s)[0]).toBe('−n − 12 = −66 + 8n');
+  });
+
+  it('routes slope-intercepts point params to the slope builder', () => {
+    const s = buildScriptForProblem('slope-intercepts', { x1: 1, y1: 2, x2: 5, y2: 8 });
+    expect(lines(s)[0]).toBe('m = (y₂ − y₁)/(x₂ − x₁)');
+  });
+
+  it('routes slope-intercept-form {m, b} params to the rewrite builder', () => {
+    const s = buildScriptForProblem('slope-intercept-form', { m: 2, b: 5 });
+    expect(lines(s)[0]).toBe('−2x + y = 5');
+  });
+
+  it('does not animate identify_slope_yint read-off questions', () => {
+    expect(buildScriptForProblem('slope-intercepts', { m: 2, b: 5, which: true })).toBeNull();
+    expect(buildScriptForProblem('slope-intercept-form', { m: 2, b: 5, which: false })).toBeNull();
   });
 
   it('returns null for shapes it cannot animate', () => {

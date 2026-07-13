@@ -5,4 +5,6 @@ export {
   buildTwoStepInequality,
   buildVarBothSides,
   buildMultiStepEquation,
+  buildSlopeFromPoints,
+  buildSlopeInterceptRewrite,
 } from '@tutor/core';

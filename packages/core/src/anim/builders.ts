@@ -24,6 +24,19 @@ const tok = (
 
 const FLIP: Record<string, string> = { '>': '<', '<': '>', '≥': '≤', '≤': '≥' };
 
+const gcd = (a: number, b: number): number => (b === 0 ? Math.abs(a) : gcd(b, a % b));
+
+/** Stacked-fraction token; text fallback parenthesizes multi-term parts. */
+const ftok = (
+  id: string,
+  num: string,
+  den: string,
+  extra?: Partial<{ emph: Emph }>,
+): EqToken => {
+  const wrap = (s: string) => (s.includes(' ') ? `(${s})` : s);
+  return { id, text: `${wrap(num)}/${wrap(den)}`, kind: 'frac', num, den, ...extra };
+};
+
 /**
  * Steps for solving A·v + B rel C (A ≠ 0), including the inequality flip
  * when dividing by a negative A. Token ids are stable ('ax', 'op', 'b',
@@ -292,6 +305,136 @@ export function buildMultiStepEquation(
   };
 }
 
+/** slope_two_points template: line through (x1, y1) and (x2, y2). */
+export function buildSlopeFromPoints(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+): EqScript | null {
+  if (x2 === x1) return null;
+  const rise = y2 - y1;
+  const run = x2 - x1;
+  const g = gcd(rise, run) || 1;
+  // canonical form: positive denominator, sign on the numerator
+  const sign = run < 0 ? -1 : 1;
+  const sn = (rise / g) * sign;
+  const sd = (run / g) * sign;
+
+  const head = [tok('m', 'm', 'var'), tok('rel', '=', 'rel')];
+  const steps: EqStep[] = [
+    {
+      tokens: [...head, ftok('fr', 'y₂ − y₁', 'x₂ − x₁')],
+      explainEn: `Slope through (${M(x1)}, ${M(y1)}) and (${M(x2)}, ${M(y2)}): m is RISE (y-change) over RUN (x-change).`,
+      explainEs: `Pendiente por (${M(x1)}, ${M(y1)}) y (${M(x2)}, ${M(y2)}): m es ELEVACIÓN (cambio en y) sobre AVANCE (cambio en x).`,
+    },
+    {
+      tokens: [...head, ftok('fr', `${M(y2)} − (${M(y1)})`, `${M(x2)} − (${M(x1)})`, { emph: 'focus' })],
+      explainEn: 'Substitute the points. Subtract in the SAME order on top and bottom.',
+      explainEs: 'Sustituye los puntos. Resta en el MISMO orden arriba y abajo.',
+    },
+    {
+      tokens: [...head, ftok('fr', M(rise), M(run), { emph: 'result' })],
+      explainEn: `${M(y2)} − (${M(y1)}) = ${M(rise)} (the rise) and ${M(x2)} − (${M(x1)}) = ${M(run)} (the run).`,
+      explainEs: `${M(y2)} − (${M(y1)}) = ${M(rise)} (la elevación) y ${M(x2)} − (${M(x1)}) = ${M(run)} (el avance).`,
+    },
+  ];
+
+  if (sd === 1) {
+    // the fraction collapses to an integer (0 rise included: 0/run → 0)
+    steps.push({
+      tokens: [...head, tok('fr', M(sn), 'num', { emph: 'result' })],
+      explainEn: `Simplify: ${M(rise)} ÷ ${M(run)} = ${M(sn)}. The slope is ${M(sn)}.`,
+      explainEs: `Simplifica: ${M(rise)} ÷ ${M(run)} = ${M(sn)}. La pendiente es ${M(sn)}.`,
+      holdMs: 3000,
+    });
+  } else if (g > 1 || run < 0) {
+    steps.push({
+      tokens: [...head, ftok('fr', M(sn), M(sd), { emph: 'result' })],
+      explainEn:
+        run < 0 && g === 1
+          ? `A negative bottom moves its sign to the top: the slope is ${M(sn)}/${M(sd)}.`
+          : `Simplify: divide top and bottom by ${g}. The slope is ${M(sn)}/${M(sd)}.`,
+      explainEs:
+        run < 0 && g === 1
+          ? `Un negativo abajo pasa su signo arriba: la pendiente es ${M(sn)}/${M(sd)}.`
+          : `Simplifica: divide arriba y abajo entre ${g}. La pendiente es ${M(sn)}/${M(sd)}.`,
+      holdMs: 3000,
+    });
+  } else {
+    const last = steps[steps.length - 1];
+    last.explainEn += ` Already in simplest form — the slope is ${M(sn)}/${M(sd)}.`;
+    last.explainEs += ` Ya está en su forma más simple — la pendiente es ${M(sn)}/${M(sd)}.`;
+    last.holdMs = 3000;
+  }
+  return {
+    id: `gen-slope-${x1}-${y1}-${x2}-${y2}`,
+    titleEn: 'Your problem, step by step',
+    titleEs: 'Tu problema, paso a paso',
+    steps,
+  };
+}
+
+/** slope_intercept_rewrite template: −m·x + y = b → y = m·x + b, params {m, b}. */
+export function buildSlopeInterceptRewrite(m: number, b: number): EqScript | null {
+  if (m === 0) return null;
+  const A = -m;
+  const inv = A > 0 ? `− ${cf(A, 'x')}` : `+ ${cf(-A, 'x')}`;
+  const bOp = b >= 0 ? '+' : '−';
+  const lhs = [tok('a', cf(A, 'x'), 'var'), tok('plus', '+', 'op'), tok('y', 'y', 'var')];
+
+  const steps: EqStep[] = [
+    {
+      tokens: [...lhs, tok('rel', '=', 'rel'), tok('b0', M(b), 'num')],
+      explainEn: 'We want y ALONE on the left — that is slope-intercept form, y = mx + b.',
+      explainEs: 'Queremos la y SOLA a la izquierda — esa es la forma pendiente-intercepto, y = mx + b.',
+    },
+    {
+      tokens: [
+        ...lhs,
+        tok('gL', inv, 'op', { emph: 'apply' }),
+        tok('rel', '=', 'rel'),
+        tok('b0', M(b), 'num'),
+        tok('gR', inv, 'op', { emph: 'apply' }),
+      ],
+      explainEn: `y has ${cf(A, 'x')} next to it. ${A > 0 ? 'Subtract' : 'Add'} ${cf(Math.abs(A), 'x')} on BOTH sides to remove it.`,
+      explainEs: `La y tiene ${cf(A, 'x')} al lado. ${A > 0 ? 'Resta' : 'Suma'} ${cf(Math.abs(A), 'x')} en AMBOS lados para quitarlo.`,
+    },
+    {
+      tokens: [
+        tok('a', cf(A, 'x'), 'var', { emph: 'cancel' }),
+        tok('plus', '+', 'op'),
+        tok('y', 'y', 'var'),
+        tok('gL', inv, 'op', { emph: 'cancel' }),
+        tok('rel', '=', 'rel'),
+        tok('b0', M(b), 'num', { emph: 'focus' }),
+        tok('gR', inv, 'op', { emph: 'focus' }),
+      ],
+      explainEn: `${cf(A, 'x')} ${inv} cancels — they add to zero. Only y is left on the left side.`,
+      explainEs: `${cf(A, 'x')} ${inv} se cancela — suman cero. Solo queda y en el lado izquierdo.`,
+      holdMs: 3000,
+    },
+    {
+      tokens: [
+        tok('y', 'y', 'var'),
+        tok('rel', '=', 'rel'),
+        tok('mx', cf(m, 'x'), 'var', { emph: 'result' }),
+        tok('bop', bOp, 'op'),
+        tok('bb', M(Math.abs(b)), 'num', { emph: 'result' }),
+      ],
+      explainEn: `Write the x-term first: y = ${cf(m, 'x')} ${bOp} ${M(Math.abs(b))}. Slope m = ${M(m)}, y-intercept b = ${M(b)}!`,
+      explainEs: `Escribe primero el término con x: y = ${cf(m, 'x')} ${bOp} ${M(Math.abs(b))}. ¡Pendiente m = ${M(m)}, intercepto en y b = ${M(b)}!`,
+    },
+  ];
+
+  return {
+    id: `gen-slope-int-${m}-${b}`,
+    titleEn: 'Your problem, step by step',
+    titleEs: 'Tu problema, paso a paso',
+    steps,
+  };
+}
+
 /**
  * Pick a builder from the problem's skill slug + params shape.
  * Returns null when no builder understands the problem.
@@ -303,6 +446,22 @@ export function buildScriptForProblem(
   if (!skillSlug || !params || typeof params !== 'object') return null;
   const p = params as Record<string, unknown>;
   const num = (k: string): number | null => (typeof p[k] === 'number' ? (p[k] as number) : null);
+
+  // slope templates carry point/line params, not the {a, b, x} shape below
+  if (skillSlug === 'slope-intercepts') {
+    const [x1, y1, x2, y2] = [num('x1'), num('y1'), num('x2'), num('y2')];
+    if (x1 === null || y1 === null || x2 === null || y2 === null) return null;
+    return buildSlopeFromPoints(x1, y1, x2, y2);
+  }
+  if (skillSlug === 'slope-intercept-form') {
+    const m = num('m');
+    const b = num('b');
+    // identify_slope_yint (modified tier) also has {m, b} but adds `which` —
+    // it's a read-off question, nothing to animate
+    if (m === null || b === null || 'which' in p) return null;
+    return buildSlopeInterceptRewrite(m, b);
+  }
+
   const a = num('a');
   const b = num('b');
   const x = num('x');

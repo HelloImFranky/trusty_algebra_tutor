@@ -33,7 +33,13 @@ function Pan({ text, tint, textColor }: { text: string; tint: string; textColor:
           alignItems: 'center',
         }}
       >
-        <RNText style={{ fontSize: 13, fontWeight: '700', color: textColor }} numberOfLines={1}>
+        <RNText
+          style={{ fontSize: 13, fontWeight: '700', color: textColor, maxWidth: 84 }}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+          adjustsFontSizeToFit
+          minimumFontScale={0.7}
+        >
           {text}
         </RNText>
       </View>

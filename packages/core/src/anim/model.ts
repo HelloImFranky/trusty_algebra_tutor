@@ -9,7 +9,7 @@
  * canceling pairs being struck out) instead of just swapping lines.
  */
 
-export type TokenKind = 'num' | 'var' | 'op' | 'rel';
+export type TokenKind = 'num' | 'var' | 'op' | 'rel' | 'frac';
 
 /** Visual emphasis for a token within one step. */
 export type Emph =
@@ -27,6 +27,10 @@ export interface EqToken {
   emph?: Emph;
   /** Render flush against the previous token (e.g. the "x" in "2x"). */
   tight?: boolean;
+  /** Stacked fraction parts, for kind 'frac'. `text` stays the plain
+   * rendering (e.g. "3/4") for history lines and screen readers. */
+  num?: string;
+  den?: string;
 }
 
 export interface EqStep {
@@ -51,6 +55,18 @@ const t = (
   kind: TokenKind,
   extra?: Partial<Pick<EqToken, 'emph' | 'tight'>>,
 ): EqToken => ({ id, text, kind, ...extra });
+
+/** Stacked-fraction token. Multi-term parts get parenthesized in the
+ * plain-text fallback so "8 − 2/5 − 1" can't be misread. */
+const f = (
+  id: string,
+  num: string,
+  den: string,
+  extra?: Partial<Pick<EqToken, 'emph' | 'tight'>>,
+): EqToken => {
+  const wrap = (s: string) => (s.includes(' ') ? `(${s})` : s);
+  return { id, text: `${wrap(num)}/${wrap(den)}`, kind: 'frac', num, den, ...extra };
+};
 
 /** Two-step equation: 2x + 3 = 11 (Unit 2 style). */
 export const twoStepScript: EqScript = {
@@ -485,6 +501,94 @@ export const evaluateScript: EqScript = {
   ],
 };
 
+/** Slope from two points: (1, 2) and (5, 8) (Unit 5). */
+export const slopeTwoPointsScript: EqScript = {
+  id: 'slope-two-points',
+  titleEn: 'Slope from two points',
+  titleEs: 'Pendiente con dos puntos',
+  steps: [
+    {
+      tokens: [t('m', 'm', 'var'), t('eq', '=', 'rel'), f('fr', 'y₂ − y₁', 'x₂ − x₁')],
+      explainEn: 'Find the slope through (1, 2) and (5, 8). Slope m is RISE (y-change) over RUN (x-change).',
+      explainEs: 'Encuentra la pendiente por (1, 2) y (5, 8). La pendiente m es ELEVACIÓN (cambio en y) sobre AVANCE (cambio en x).',
+    },
+    {
+      tokens: [t('m', 'm', 'var'), t('eq', '=', 'rel'), f('fr', '8 − 2', '5 − 1', { emph: 'focus' })],
+      explainEn: 'Substitute the points. Subtract in the SAME order on top and bottom.',
+      explainEs: 'Sustituye los puntos. Resta en el MISMO orden arriba y abajo.',
+    },
+    {
+      tokens: [t('m', 'm', 'var'), t('eq', '=', 'rel'), f('fr', '6', '4', { emph: 'result' })],
+      explainEn: '8 − 2 = 6 (the rise) and 5 − 1 = 4 (the run).',
+      explainEs: '8 − 2 = 6 (la elevación) y 5 − 1 = 4 (el avance).',
+    },
+    {
+      tokens: [t('m', 'm', 'var'), t('eq', '=', 'rel'), f('fr', '3', '2', { emph: 'result' })],
+      explainEn: 'Simplify: divide top and bottom by 2. The slope is 3/2 — up 3 for every 2 right.',
+      explainEs: 'Simplifica: divide arriba y abajo entre 2. La pendiente es 3/2 — sube 3 por cada 2 a la derecha.',
+      holdMs: 3000,
+    },
+  ],
+};
+
+/** Rewrite in slope-intercept form: −2x + y = 5 (Unit 5). */
+export const slopeInterceptScript: EqScript = {
+  id: 'slope-intercept',
+  titleEn: 'Slope-intercept form',
+  titleEs: 'Forma pendiente-intercepto',
+  steps: [
+    {
+      tokens: [
+        t('a', '−2x', 'var'),
+        t('plus', '+', 'op'),
+        t('y', 'y', 'var'),
+        t('eq', '=', 'rel'),
+        t('n5', '5', 'num'),
+      ],
+      explainEn: 'We want y ALONE on the left — that is slope-intercept form, y = mx + b.',
+      explainEs: 'Queremos la y SOLA a la izquierda — esa es la forma pendiente-intercepto, y = mx + b.',
+    },
+    {
+      tokens: [
+        t('a', '−2x', 'var'),
+        t('plus', '+', 'op'),
+        t('y', 'y', 'var'),
+        t('gL', '+ 2x', 'op', { emph: 'apply' }),
+        t('eq', '=', 'rel'),
+        t('n5', '5', 'num'),
+        t('gR', '+ 2x', 'op', { emph: 'apply' }),
+      ],
+      explainEn: 'y has −2x next to it. Add 2x to BOTH sides to remove it.',
+      explainEs: 'La y tiene −2x al lado. Suma 2x a AMBOS lados para quitarlo.',
+    },
+    {
+      tokens: [
+        t('a', '−2x', 'var', { emph: 'cancel' }),
+        t('plus', '+', 'op'),
+        t('y', 'y', 'var'),
+        t('gL', '+ 2x', 'op', { emph: 'cancel' }),
+        t('eq', '=', 'rel'),
+        t('n5', '5', 'num', { emph: 'focus' }),
+        t('gR', '+ 2x', 'op', { emph: 'focus' }),
+      ],
+      explainEn: '−2x + 2x cancels — they add to zero. Only y is left on the left side.',
+      explainEs: '−2x + 2x se cancela — suman cero. Solo queda y en el lado izquierdo.',
+      holdMs: 3000,
+    },
+    {
+      tokens: [
+        t('y', 'y', 'var'),
+        t('eq', '=', 'rel'),
+        t('mx', '2x', 'var', { emph: 'result' }),
+        t('bop', '+', 'op'),
+        t('bb', '5', 'num', { emph: 'result' }),
+      ],
+      explainEn: 'Write the x-term first: y = 2x + 5. Slope m = 2, y-intercept b = 5!',
+      explainEs: 'Escribe primero el término con x: y = 2x + 5. ¡Pendiente m = 2, intercepto en y b = 5!',
+    },
+  ],
+};
+
 export const demoScripts: EqScript[] = [
   twoStepScript,
   likeTermsScript,
@@ -492,6 +596,8 @@ export const demoScripts: EqScript[] = [
   bothSidesScript,
   inequalityScript,
   evaluateScript,
+  slopeTwoPointsScript,
+  slopeInterceptScript,
 ];
 
 /**
@@ -504,6 +610,8 @@ export const scriptsByLessonCode: Record<string, EqScript[]> = {
   '3.1': [twoStepScript, distributeScript],
   '3.2': [bothSidesScript],
   '3.3': [inequalityScript],
+  '5.2': [slopeTwoPointsScript],
+  '5.3': [slopeInterceptScript],
 };
 
 /** Split a step at its relation token (=, ≤, …) for the balance scale. */

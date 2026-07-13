@@ -11,6 +11,8 @@ export {
   bothSidesScript,
   inequalityScript,
   evaluateScript,
+  slopeTwoPointsScript,
+  slopeInterceptScript,
   demoScripts,
   scriptsByLessonCode,
   splitSides,

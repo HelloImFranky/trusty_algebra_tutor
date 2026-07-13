@@ -23,6 +23,9 @@ const GAP = 10;
 const TIGHT_GAP = 1;
 const LINE_H = 48;
 const CHIP_PAD = 7;
+// stacked fractions: numerator/denominator font + padding around the rule
+const FRAC_FONT = 16;
+const FRAC_PAD = 4;
 
 interface TokenAnim {
   x: Animated.Value;
@@ -31,7 +34,8 @@ interface TokenAnim {
 }
 
 function tokenStyle(tok: EqToken) {
-  let color: string = tok.kind === 'var' ? BRAND : tok.kind === 'num' ? '#111827' : '#6b7280';
+  let color: string =
+    tok.kind === 'var' ? BRAND : tok.kind === 'num' || tok.kind === 'frac' ? '#111827' : '#6b7280';
   let bg: string | undefined;
   let strike = false;
   switch (tok.emph) {
@@ -59,6 +63,16 @@ function tokenStyle(tok: EqToken) {
   return { color, bg, strike };
 }
 
+/** Width of one token: measured text, or the widest fraction part. */
+function tokenWidth(tok: EqToken, textW: Map<string, number>): number {
+  if (tok.kind === 'frac') {
+    const nw = textW.get(`frac:${tok.num ?? ''}`) ?? 0;
+    const dw = textW.get(`frac:${tok.den ?? ''}`) ?? 0;
+    return Math.max(nw, dw) + FRAC_PAD * 2;
+  }
+  return textW.get(tok.text) ?? 0;
+}
+
 /**
  * x-position of every token in a step, centered on containerW/2. A line
  * wider than the container keeps its center (negative start x) so the
@@ -70,7 +84,7 @@ function layoutStep(
   containerW: number,
 ): { pos: Map<string, number>; total: number } {
   const widths = tokens.map(
-    (tok) => (textW.get(tok.text) ?? 0) + (tokenStyle(tok).bg ? CHIP_PAD * 2 : 0),
+    (tok) => tokenWidth(tok, textW) + (tokenStyle(tok).bg ? CHIP_PAD * 2 : 0),
   );
   let total = 0;
   tokens.forEach((tok, i) => {
@@ -132,10 +146,26 @@ export function AnimatedEquation({
   const prevTokens = useRef<EqToken[] | null>(null);
   const lineScale = useRef(new Animated.Value(1)).current;
 
-  const texts = useMemo(
-    () => Array.from(new Set(script.steps.flatMap((s) => s.tokens.map((tok) => tok.text)))),
-    [script],
-  );
+  // One measurement entry per unique plain text, plus every fraction part
+  // (measured at the smaller fraction font, keyed with a "frac:" prefix).
+  const measures = useMemo(() => {
+    const plain = new Set<string>();
+    const parts = new Set<string>();
+    for (const s of script.steps) {
+      for (const tok of s.tokens) {
+        if (tok.kind === 'frac') {
+          parts.add(tok.num ?? '');
+          parts.add(tok.den ?? '');
+        } else {
+          plain.add(tok.text);
+        }
+      }
+    }
+    return [
+      ...Array.from(plain, (text) => ({ key: text, text, frac: false })),
+      ...Array.from(parts, (text) => ({ key: `frac:${text}`, text, frac: true })),
+    ];
+  }, [script]);
   const step = script.steps[index];
   const atEnd = index >= script.steps.length - 1;
 
@@ -287,16 +317,16 @@ export function AnimatedEquation({
         pointerEvents="none"
         style={{ position: 'absolute', left: 0, top: 0, opacity: 0, flexDirection: 'row' }}
       >
-        {texts.map((txt) => (
+        {measures.map((m) => (
           <RNText
-            key={txt}
-            style={{ fontSize: FONT, fontWeight: WEIGHT }}
+            key={m.key}
+            style={{ fontSize: m.frac ? FRAC_FONT : FONT, fontWeight: WEIGHT }}
             onLayout={(e) => {
-              widths.current.set(txt, e.nativeEvent.layout.width);
-              if (widths.current.size >= texts.length) setReady(true);
+              widths.current.set(m.key, e.nativeEvent.layout.width);
+              if (widths.current.size >= measures.length) setReady(true);
             }}
           >
-            {txt}
+            {m.text}
           </RNText>
         ))}
       </View>
@@ -354,16 +384,50 @@ export function AnimatedEquation({
                   paddingVertical: 2,
                 }}
               >
-                <RNText
-                  style={{
-                    fontSize: FONT,
-                    fontWeight: WEIGHT,
-                    color: st.color,
-                    textDecorationLine: st.strike ? 'line-through' : 'none',
-                  }}
-                >
-                  {tok.text}
-                </RNText>
+                {tok.kind === 'frac' ? (
+                  <View style={{ alignItems: 'center', paddingHorizontal: FRAC_PAD }}>
+                    <RNText
+                      style={{
+                        fontSize: FRAC_FONT,
+                        fontWeight: WEIGHT,
+                        color: st.color,
+                        textDecorationLine: st.strike ? 'line-through' : 'none',
+                      }}
+                    >
+                      {tok.num}
+                    </RNText>
+                    <View
+                      style={{
+                        alignSelf: 'stretch',
+                        height: 1.5,
+                        borderRadius: 1,
+                        backgroundColor: st.color,
+                        marginVertical: 1.5,
+                      }}
+                    />
+                    <RNText
+                      style={{
+                        fontSize: FRAC_FONT,
+                        fontWeight: WEIGHT,
+                        color: st.color,
+                        textDecorationLine: st.strike ? 'line-through' : 'none',
+                      }}
+                    >
+                      {tok.den}
+                    </RNText>
+                  </View>
+                ) : (
+                  <RNText
+                    style={{
+                      fontSize: FONT,
+                      fontWeight: WEIGHT,
+                      color: st.color,
+                      textDecorationLine: st.strike ? 'line-through' : 'none',
+                    }}
+                  >
+                    {tok.text}
+                  </RNText>
+                )}
               </View>
             </Animated.View>
           );
