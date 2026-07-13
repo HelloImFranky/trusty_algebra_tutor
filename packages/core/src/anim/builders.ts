@@ -19,7 +19,7 @@ const tok = (
   id: string,
   text: string,
   kind: TokenKind,
-  extra?: Partial<{ emph: Emph; tight: boolean }>,
+  extra?: Partial<{ emph: Emph; tight: boolean; row: 0 | 1 }>,
 ): EqToken => ({ id, text, kind, ...extra });
 
 const FLIP: Record<string, string> = { '>': '<', '<': '>', '≥': '≤', '≤': '≥' };
@@ -305,6 +305,153 @@ export function buildMultiStepEquation(
   };
 }
 
+/**
+ * add_polynomials template: (a1x² + b1x + c1) ± (a2x² + b2x + c2),
+ * params {a1, b1, c1, a2, b2, c2, sub}. Stacks the polynomials on two
+ * rows (row: 1 tokens) so like terms line up in columns.
+ */
+export function buildAddPolynomials(
+  a1: number,
+  b1: number,
+  c1: number,
+  a2: number,
+  b2: number,
+  c2: number,
+  sub: boolean,
+): EqScript {
+  // after distributing the minus sign, subtraction is addition of negated terms
+  const n2 = sub ? -a2 : a2;
+  const n1 = sub ? -b2 : b2;
+  const n0 = sub ? -c2 : c2;
+  const A = a1 + n2;
+  const B = b1 + n1;
+  const C = c1 + n0;
+
+  const op = (v: number) => (v >= 0 ? '+' : '−');
+  const topRow = (emph2?: Emph, emph1?: Emph, emph0?: Emph): EqToken[] => [
+    tok('a2', cf(a1, 'x²'), 'var', emph2 ? { emph: emph2 } : undefined),
+    tok('ao1', op(b1), 'op'),
+    tok('a1', cf(Math.abs(b1), 'x'), 'var', emph1 ? { emph: emph1 } : undefined),
+    tok('ao2', op(c1), 'op'),
+    tok('a0', M(Math.abs(c1)), 'num', emph0 ? { emph: emph0 } : undefined),
+  ];
+  const secondPoly = (
+    s2: number,
+    s1: number,
+    s0: number,
+    row: 0 | 1,
+    emphAll?: Emph,
+    emph2?: Emph,
+    emph1?: Emph,
+    emph0?: Emph,
+  ): EqToken[] => {
+    const e = (own?: Emph) => (emphAll ?? own ? { emph: emphAll ?? own } : {});
+    const r = row ? { row } : {};
+    return [
+      tok('mid', op(s2), 'op', { ...r, ...e() }),
+      tok('b2', cf(Math.abs(s2), 'x²'), 'var', { ...r, ...e(emph2) }),
+      tok('bo1', op(s1), 'op', { ...r, ...e() }),
+      tok('b1', cf(Math.abs(s1), 'x'), 'var', { ...r, ...e(emph1) }),
+      tok('bo2', op(s0), 'op', { ...r, ...e() }),
+      tok('b0', M(Math.abs(s0)), 'num', { ...r, ...e(emph0) }),
+    ];
+  };
+
+  // "3x² + 2x² = 5x²" for one column (handles zero results and constants)
+  const col = (l: number, r: number, unit: string) => {
+    const fmt = (v: number) => (unit ? cf(v, unit) : M(v));
+    const sum = l + r;
+    return `${fmt(l)} ${op(r)} ${unit ? cf(Math.abs(r), unit) : M(Math.abs(r))} = ${sum === 0 ? '0' : fmt(sum)}`;
+  };
+
+  const steps: EqStep[] = [
+    {
+      tokens: [
+        tok('lp', '(', 'op'),
+        ...topRow().map((tk, i) => (i === 0 ? { ...tk, tight: true } : tk)),
+        tok('rp', ')', 'op', { tight: true }),
+        tok('mid', sub ? '−' : '+', 'op'),
+        tok('lq', '(', 'op'),
+        tok('b2', cf(a2, 'x²'), 'var', { tight: true }),
+        tok('bo1', op(b2), 'op'),
+        tok('b1', cf(Math.abs(b2), 'x'), 'var'),
+        tok('bo2', op(c2), 'op'),
+        tok('b0', M(Math.abs(c2)), 'num'),
+        tok('rq', ')', 'op', { tight: true }),
+      ],
+      explainEn: sub
+        ? 'Careful: subtracting a polynomial means subtracting EVERY term inside.'
+        : 'To ADD polynomials, combine like terms. Stack them so the like terms line up.',
+      explainEs: sub
+        ? 'Cuidado: restar un polinomio significa restar TODOS sus términos.'
+        : 'Para SUMAR polinomios, combina los términos semejantes. Apílalos para que queden alineados.',
+    },
+  ];
+
+  if (sub) {
+    steps.push({
+      tokens: [...topRow(), ...secondPoly(n2, n1, n0, 0, 'apply')],
+      explainEn: 'Distribute the minus sign: it flips EVERY sign in the second polynomial.',
+      explainEs: 'Distribuye el signo menos: cambia TODOS los signos del segundo polinomio.',
+      holdMs: 3000,
+    });
+  }
+
+  steps.push(
+    {
+      tokens: [...topRow(), ...secondPoly(n2, n1, n0, 1)],
+      explainEn: 'Each column holds like terms: x² over x², x over x, numbers over numbers.',
+      explainEs: 'Cada columna tiene términos semejantes: x² sobre x², x sobre x, números sobre números.',
+    },
+    {
+      tokens: [...topRow('focus'), ...secondPoly(n2, n1, n0, 1, undefined, 'focus')],
+      explainEn: `The x² column: ${col(a1, n2, 'x²')}.`,
+      explainEs: `La columna de x²: ${col(a1, n2, 'x²')}.`,
+    },
+    {
+      tokens: [...topRow(undefined, 'focus'), ...secondPoly(n2, n1, n0, 1, undefined, undefined, 'focus')],
+      explainEn: `The x column: ${col(b1, n1, 'x')}.`,
+      explainEs: `La columna de x: ${col(b1, n1, 'x')}.`,
+    },
+    {
+      tokens: [
+        ...topRow(undefined, undefined, 'focus'),
+        ...secondPoly(n2, n1, n0, 1, undefined, undefined, undefined, 'focus'),
+      ],
+      explainEn: `The number column: ${col(c1, n0, '')}.`,
+      explainEs: `La columna de números: ${col(c1, n0, '')}.`,
+    },
+  );
+
+  // result in standard form, skipping zero terms
+  const terms = [
+    { v: A, unit: 'x²', kind: 'var' as TokenKind },
+    { v: B, unit: 'x', kind: 'var' as TokenKind },
+    { v: C, unit: '', kind: 'num' as TokenKind },
+  ].filter((tm) => tm.v !== 0);
+  const result: EqToken[] = terms.length
+    ? terms.flatMap((tm, i) => {
+        const text = tm.unit ? cf(i === 0 ? tm.v : Math.abs(tm.v), tm.unit) : M(i === 0 ? tm.v : Math.abs(tm.v));
+        const term = tok(`s${i}`, text, tm.kind, { emph: 'result' });
+        return i === 0 ? [term] : [tok(`so${i}`, op(tm.v), 'op'), term];
+      })
+    : [tok('s0', '0', 'num', { emph: 'result' })];
+  const answer = result.map((tk, i) => (i === 0 ? tk.text : ` ${tk.text}`)).join('');
+  steps.push({
+    tokens: result,
+    explainEn: `Put the columns together: ${answer}. Standard form — highest power first!`,
+    explainEs: `Junta las columnas: ${answer}. Forma estándar — ¡la potencia mayor primero!`,
+    holdMs: 3000,
+  });
+
+  return {
+    id: `gen-poly-add-${a1}-${b1}-${c1}-${a2}-${b2}-${c2}-${sub ? 's' : 'a'}`,
+    titleEn: 'Your problem, step by step',
+    titleEs: 'Tu problema, paso a paso',
+    steps,
+  };
+}
+
 /** slope_two_points template: line through (x1, y1) and (x2, y2). */
 export function buildSlopeFromPoints(
   x1: number,
@@ -446,6 +593,16 @@ export function buildScriptForProblem(
   if (!skillSlug || !params || typeof params !== 'object') return null;
   const p = params as Record<string, unknown>;
   const num = (k: string): number | null => (typeof p[k] === 'number' ? (p[k] as number) : null);
+
+  // add_polynomials params: two coefficient triples + the add/subtract flag.
+  // foil / mono_times_poly (same skill) have different shapes → null below.
+  if (skillSlug === 'polynomial-operations') {
+    const [a1, b1, c1, a2, b2, c2] = ['a1', 'b1', 'c1', 'a2', 'b2', 'c2'].map(num);
+    if (a1 === null || b1 === null || c1 === null || a2 === null || b2 === null || c2 === null) {
+      return null;
+    }
+    return buildAddPolynomials(a1, b1, c1, a2, b2, c2, p.sub === true);
+  }
 
   // slope templates carry point/line params, not the {a, b, x} shape below
   if (skillSlug === 'slope-intercepts') {

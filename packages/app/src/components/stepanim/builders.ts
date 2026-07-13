@@ -7,4 +7,5 @@ export {
   buildMultiStepEquation,
   buildSlopeFromPoints,
   buildSlopeInterceptRewrite,
+  buildAddPolynomials,
 } from '@tutor/core';

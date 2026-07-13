@@ -31,6 +31,9 @@ export interface EqToken {
    * rendering (e.g. "3/4") for history lines and screen readers. */
   num?: string;
   den?: string;
+  /** Second-line placement for vertical layouts (polynomial addition).
+   * Default 0 = the main line. */
+  row?: 0 | 1;
 }
 
 export interface EqStep {
@@ -53,7 +56,7 @@ const t = (
   id: string,
   text: string,
   kind: TokenKind,
-  extra?: Partial<Pick<EqToken, 'emph' | 'tight'>>,
+  extra?: Partial<Pick<EqToken, 'emph' | 'tight' | 'row'>>,
 ): EqToken => ({ id, text, kind, ...extra });
 
 /** Stacked-fraction token. Multi-term parts get parenthesized in the
@@ -501,6 +504,116 @@ export const evaluateScript: EqScript = {
   ],
 };
 
+/** Adding polynomials vertically: (3x² + 2x + 4) + (2x² + 5x + 1) (Unit 2). */
+export const polyAddScript: EqScript = {
+  id: 'poly-add',
+  titleEn: 'Add polynomials',
+  titleEs: 'Suma de polinomios',
+  steps: [
+    {
+      tokens: [
+        t('lp', '(', 'op'),
+        t('a2', '3x²', 'var', { tight: true }),
+        t('ao1', '+', 'op'),
+        t('a1', '2x', 'var'),
+        t('ao2', '+', 'op'),
+        t('a0', '4', 'num'),
+        t('rp', ')', 'op', { tight: true }),
+        t('mid', '+', 'op'),
+        t('lq', '(', 'op'),
+        t('b2', '2x²', 'var', { tight: true }),
+        t('bo1', '+', 'op'),
+        t('b1', '5x', 'var'),
+        t('bo2', '+', 'op'),
+        t('b0', '1', 'num'),
+        t('rq', ')', 'op', { tight: true }),
+      ],
+      explainEn: 'To ADD polynomials, combine like terms. Stack them so the like terms line up.',
+      explainEs: 'Para SUMAR polinomios, combina los términos semejantes. Apílalos para que queden alineados.',
+    },
+    {
+      tokens: [
+        t('a2', '3x²', 'var'),
+        t('ao1', '+', 'op'),
+        t('a1', '2x', 'var'),
+        t('ao2', '+', 'op'),
+        t('a0', '4', 'num'),
+        t('mid', '+', 'op', { row: 1 }),
+        t('b2', '2x²', 'var', { row: 1 }),
+        t('bo1', '+', 'op', { row: 1 }),
+        t('b1', '5x', 'var', { row: 1 }),
+        t('bo2', '+', 'op', { row: 1 }),
+        t('b0', '1', 'num', { row: 1 }),
+      ],
+      explainEn: 'Each column holds like terms: x² over x², x over x, numbers over numbers.',
+      explainEs: 'Cada columna tiene términos semejantes: x² sobre x², x sobre x, números sobre números.',
+    },
+    {
+      tokens: [
+        t('a2', '3x²', 'var', { emph: 'focus' }),
+        t('ao1', '+', 'op'),
+        t('a1', '2x', 'var'),
+        t('ao2', '+', 'op'),
+        t('a0', '4', 'num'),
+        t('mid', '+', 'op', { row: 1 }),
+        t('b2', '2x²', 'var', { emph: 'focus', row: 1 }),
+        t('bo1', '+', 'op', { row: 1 }),
+        t('b1', '5x', 'var', { row: 1 }),
+        t('bo2', '+', 'op', { row: 1 }),
+        t('b0', '1', 'num', { row: 1 }),
+      ],
+      explainEn: 'The x² column: 3x² + 2x² = 5x².',
+      explainEs: 'La columna de x²: 3x² + 2x² = 5x².',
+    },
+    {
+      tokens: [
+        t('a2', '3x²', 'var'),
+        t('ao1', '+', 'op'),
+        t('a1', '2x', 'var', { emph: 'focus' }),
+        t('ao2', '+', 'op'),
+        t('a0', '4', 'num'),
+        t('mid', '+', 'op', { row: 1 }),
+        t('b2', '2x²', 'var', { row: 1 }),
+        t('bo1', '+', 'op', { row: 1 }),
+        t('b1', '5x', 'var', { emph: 'focus', row: 1 }),
+        t('bo2', '+', 'op', { row: 1 }),
+        t('b0', '1', 'num', { row: 1 }),
+      ],
+      explainEn: 'The x column: 2x + 5x = 7x.',
+      explainEs: 'La columna de x: 2x + 5x = 7x.',
+    },
+    {
+      tokens: [
+        t('a2', '3x²', 'var'),
+        t('ao1', '+', 'op'),
+        t('a1', '2x', 'var'),
+        t('ao2', '+', 'op'),
+        t('a0', '4', 'num', { emph: 'focus' }),
+        t('mid', '+', 'op', { row: 1 }),
+        t('b2', '2x²', 'var', { row: 1 }),
+        t('bo1', '+', 'op', { row: 1 }),
+        t('b1', '5x', 'var', { row: 1 }),
+        t('bo2', '+', 'op', { row: 1 }),
+        t('b0', '1', 'num', { emph: 'focus', row: 1 }),
+      ],
+      explainEn: 'The number column: 4 + 1 = 5.',
+      explainEs: 'La columna de números: 4 + 1 = 5.',
+    },
+    {
+      tokens: [
+        t('s2', '5x²', 'var', { emph: 'result' }),
+        t('so1', '+', 'op'),
+        t('s1', '7x', 'var', { emph: 'result' }),
+        t('so2', '+', 'op'),
+        t('s0', '5', 'num', { emph: 'result' }),
+      ],
+      explainEn: 'Put the columns together: 5x² + 7x + 5. Already in standard form — highest power first!',
+      explainEs: 'Junta las columnas: 5x² + 7x + 5. ¡Ya está en forma estándar — la potencia mayor primero!',
+      holdMs: 3000,
+    },
+  ],
+};
+
 /** Slope from two points: (1, 2) and (5, 8) (Unit 5). */
 export const slopeTwoPointsScript: EqScript = {
   id: 'slope-two-points',
@@ -596,6 +709,7 @@ export const demoScripts: EqScript[] = [
   bothSidesScript,
   inequalityScript,
   evaluateScript,
+  polyAddScript,
   slopeTwoPointsScript,
   slopeInterceptScript,
 ];
@@ -607,6 +721,7 @@ export const demoScripts: EqScript[] = [
 export const scriptsByLessonCode: Record<string, EqScript[]> = {
   '2.1': [evaluateScript],
   '2.2': [likeTermsScript],
+  '2.3': [polyAddScript],
   '3.1': [twoStepScript, distributeScript],
   '3.2': [bothSidesScript],
   '3.3': [inequalityScript],
@@ -625,9 +740,12 @@ function tokensToText(tokens: EqToken[]): string {
   return tokens.map((tok, i) => (i === 0 || tok.tight ? tok.text : ` ${tok.text}`)).join('');
 }
 
-/** Plain-text rendering of a step, for the history stack / accessibility. */
+/** Plain-text rendering of a step, for the history stack / accessibility.
+ * Two-row steps (vertical polynomial addition) join with a newline. */
 export function stepToText(step: EqStep): string {
-  return tokensToText(step.tokens);
+  const top = step.tokens.filter((tok) => !tok.row);
+  const bottom = step.tokens.filter((tok) => tok.row === 1);
+  return bottom.length ? `${tokensToText(top)}\n${tokensToText(bottom)}` : tokensToText(top);
 }
 
 /** Plain-text rendering of one side, for the balance-scale pans. */

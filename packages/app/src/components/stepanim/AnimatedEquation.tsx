@@ -74,28 +74,40 @@ function tokenWidth(tok: EqToken, textW: Map<string, number>): number {
 }
 
 /**
- * x-position of every token in a step, centered on containerW/2. A line
- * wider than the container keeps its center (negative start x) so the
- * whole-line scale transform shrinks it symmetrically into view.
+ * Position of every token in a step. Each row (vertical polynomial layouts
+ * use `row: 1` for the second line) is centered on containerW/2, and the
+ * row block is centered vertically in containerH. A line wider than the
+ * container keeps its center (negative start x) so the whole-line scale
+ * transform shrinks it symmetrically into view.
  */
 function layoutStep(
   tokens: EqToken[],
   textW: Map<string, number>,
   containerW: number,
-): { pos: Map<string, number>; total: number } {
-  const widths = tokens.map(
-    (tok) => tokenWidth(tok, textW) + (tokenStyle(tok).bg ? CHIP_PAD * 2 : 0),
+  containerH: number,
+): { pos: Map<string, { x: number; y: number }>; total: number } {
+  const rows = [tokens.filter((tok) => !tok.row), tokens.filter((tok) => tok.row === 1)].filter(
+    (r) => r.length > 0,
   );
+  const pos = new Map<string, { x: number; y: number }>();
+  const yPad = (containerH - rows.length * LINE_H) / 2;
   let total = 0;
-  tokens.forEach((tok, i) => {
-    total += widths[i] + (i === 0 ? 0 : tok.tight ? TIGHT_GAP : GAP);
-  });
-  let x = (containerW - total) / 2;
-  const pos = new Map<string, number>();
-  tokens.forEach((tok, i) => {
-    if (i > 0) x += tok.tight ? TIGHT_GAP : GAP;
-    pos.set(tok.id, x);
-    x += widths[i];
+  rows.forEach((rowTokens, r) => {
+    const widths = rowTokens.map(
+      (tok) => tokenWidth(tok, textW) + (tokenStyle(tok).bg ? CHIP_PAD * 2 : 0),
+    );
+    let rowTotal = 0;
+    rowTokens.forEach((tok, i) => {
+      rowTotal += widths[i] + (i === 0 ? 0 : tok.tight ? TIGHT_GAP : GAP);
+    });
+    let x = (containerW - rowTotal) / 2;
+    const y = yPad + r * LINE_H;
+    rowTokens.forEach((tok, i) => {
+      if (i > 0) x += tok.tight ? TIGHT_GAP : GAP;
+      pos.set(tok.id, { x, y });
+      x += widths[i];
+    });
+    total = Math.max(total, rowTotal);
   });
   return { pos, total };
 }
@@ -144,7 +156,15 @@ export function AnimatedEquation({
   const anims = useRef(new Map<string, TokenAnim>());
   const widths = useRef(new Map<string, number>());
   const prevTokens = useRef<EqToken[] | null>(null);
+  const prevPos = useRef(new Map<string, { x: number; y: number }>());
   const lineScale = useRef(new Animated.Value(1)).current;
+
+  // Scripts with a second row (vertical polynomial addition) get a taller
+  // stage for the whole run so the card doesn't jump between steps.
+  const stageH = useMemo(
+    () => (script.steps.some((s) => s.tokens.some((tok) => tok.row)) ? LINE_H * 2 : LINE_H),
+    [script],
+  );
 
   // One measurement entry per unique plain text, plus every fraction part
   // (measured at the smaller fraction font, keyed with a "frac:" prefix).
@@ -196,7 +216,7 @@ export function AnimatedEquation({
     // reduced motion: zero-duration timings — steps swap instead of animating
     const dur = (ms: number) => (reduceMotion ? 0 : ms);
     const tokens = script.steps[index].tokens;
-    const { pos, total } = layoutStep(tokens, widths.current, containerW);
+    const { pos, total } = layoutStep(tokens, widths.current, containerW, stageH);
     const prev = prevTokens.current;
     const prevIds = new Set((prev ?? []).map((tok) => tok.id));
     const curIds = new Set(tokens.map((tok) => tok.id));
@@ -216,10 +236,11 @@ export function AnimatedEquation({
     for (const tok of exits) {
       const a = anims.current.get(tok.id);
       if (!a) continue;
+      const fromY = prevPos.current.get(tok.id)?.y ?? 0;
       parts.push(
         Animated.parallel([
           Animated.timing(a.o, { toValue: 0, duration: dur(260), useNativeDriver: NATIVE }),
-          Animated.timing(a.y, { toValue: 14, duration: dur(260), useNativeDriver: NATIVE }),
+          Animated.timing(a.y, { toValue: fromY + 14, duration: dur(260), useNativeDriver: NATIVE }),
         ]),
       );
     }
@@ -231,17 +252,22 @@ export function AnimatedEquation({
       if (prevIds.has(tok.id)) {
         parts.push(
           Animated.timing(a.x, {
-            toValue: target,
+            toValue: target.x,
             duration: dur(420),
             easing: Easing.out(Easing.cubic),
             useNativeDriver: NATIVE,
           }),
           Animated.timing(a.o, { toValue: 1, duration: dur(200), useNativeDriver: NATIVE }),
-          Animated.timing(a.y, { toValue: 0, duration: dur(200), useNativeDriver: NATIVE }),
+          Animated.timing(a.y, {
+            toValue: target.y,
+            duration: dur(420),
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: NATIVE,
+          }),
         );
       } else {
-        a.x.setValue(target);
-        a.y.setValue(-18);
+        a.x.setValue(target.x);
+        a.y.setValue(target.y - 18);
         a.o.setValue(0);
         parts.push(
           Animated.parallel([
@@ -252,7 +278,7 @@ export function AnimatedEquation({
               useNativeDriver: NATIVE,
             }),
             Animated.timing(a.y, {
-              toValue: 0,
+              toValue: target.y,
               duration: dur(320),
               delay: dur(enterDelay),
               easing: Easing.out(Easing.back(1.6)),
@@ -266,6 +292,7 @@ export function AnimatedEquation({
 
     setExiting(exits);
     prevTokens.current = tokens;
+    prevPos.current = pos;
     const handle = Animated.parallel(parts);
     handle.start(({ finished }) => {
       if (!finished) return;
@@ -273,7 +300,7 @@ export function AnimatedEquation({
       for (const tok of exits) anims.current.delete(tok.id);
     });
     return () => handle.stop();
-  }, [index, ready, containerW, script, reduceMotion]);
+  }, [index, ready, containerW, script, reduceMotion, stageH]);
 
   const next = () => {
     if (atEnd) return;
@@ -354,10 +381,10 @@ export function AnimatedEquation({
       {/* Active animated line */}
       <View
         onLayout={(e) => setContainerW(e.nativeEvent.layout.width)}
-        style={{ height: LINE_H, width: '100%' }}
+        style={{ height: stageH, width: '100%' }}
       >
         <Animated.View
-          style={{ width: '100%', height: LINE_H, transform: [{ scale: lineScale }] }}
+          style={{ width: '100%', height: stageH, transform: [{ scale: lineScale }] }}
         >
         {[...exiting, ...step.tokens].map((tok) => {
           const st = tokenStyle(tok);

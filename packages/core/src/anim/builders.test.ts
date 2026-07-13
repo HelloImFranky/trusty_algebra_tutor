@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildAddPolynomials,
   buildMultiStepEquation,
   buildScriptForProblem,
   buildSlopeFromPoints,
@@ -126,6 +127,48 @@ describe('buildMultiStepEquation', () => {
   });
 });
 
+describe('buildAddPolynomials', () => {
+  it('stacks addition on two rows and combines columns', () => {
+    // (3x² + 2x + 4) + (2x² + 5x + 1) = 5x² + 7x + 5
+    const s = buildAddPolynomials(3, 2, 4, 2, 5, 1, false);
+    const l = lines(s);
+    expect(l[0]).toBe('(3x² + 2x + 4) + (2x² + 5x + 1)');
+    // stacked step: top row then bottom row on its own line
+    expect(l[1]).toBe('3x² + 2x + 4\n+ 2x² + 5x + 1');
+    expect(l[l.length - 1]).toBe('5x² + 7x + 5');
+    const secondRow = s.steps[1].tokens.filter((t) => t.row === 1);
+    expect(secondRow.length).toBe(6);
+  });
+
+  it('subtraction distributes the minus sign before stacking', () => {
+    // (3x² + 2x + 4) − (2x² + 5x + 1) = x² − 3x + 3
+    const s = buildAddPolynomials(3, 2, 4, 2, 5, 1, true);
+    const l = lines(s);
+    expect(l[0]).toBe('(3x² + 2x + 4) − (2x² + 5x + 1)');
+    expect(l[1]).toBe('3x² + 2x + 4 − 2x² − 5x − 1'); // flipped, single row
+    expect(s.steps[1].tokens.filter((t) => t.emph === 'apply').length).toBe(6);
+    expect(l[2]).toBe('3x² + 2x + 4\n− 2x² − 5x − 1');
+    expect(l[l.length - 1]).toBe('x² − 3x + 3');
+  });
+
+  it('drops zeroed-out terms from the result', () => {
+    // (2x² + 3x + 1) − (2x² + 3x + 1) = 0
+    const zero = buildAddPolynomials(2, 3, 1, 2, 3, 1, true);
+    expect(lines(zero).pop()).toBe('0');
+    // (2x² + 3x + 1) + (−2x² + 2x + 2) = 5x + 3
+    const partial = buildAddPolynomials(2, 3, 1, -2, 2, 2, false);
+    expect(lines(partial).pop()).toBe('5x + 3');
+  });
+
+  it('handles negative middle coefficients', () => {
+    // (x² − 4x + 2) + (3x² + x − 5) = 4x² − 3x − 3
+    const s = buildAddPolynomials(1, -4, 2, 3, 1, -5, false);
+    const l = lines(s);
+    expect(l[0]).toBe('(x² − 4x + 2) + (3x² + x − 5)');
+    expect(l[l.length - 1]).toBe('4x² − 3x − 3');
+  });
+});
+
 describe('buildSlopeFromPoints', () => {
   it('substitutes, computes, and simplifies the fraction', () => {
     // (1, 2) → (5, 8): rise 6, run 4 → 3/2
@@ -214,6 +257,15 @@ describe('buildScriptForProblem dispatch', () => {
   it('routes var-both-sides params to the both-sides builder', () => {
     const s = buildScriptForProblem('var-both-sides', { a: -1, b: -12, c: 8, x: 6 });
     expect(lines(s)[0]).toBe('−n − 12 = −66 + 8n');
+  });
+
+  it('routes add_polynomials params to the polynomial builder', () => {
+    const s = buildScriptForProblem('polynomial-operations', {
+      a1: 3, b1: 2, c1: 4, a2: 2, b2: 5, c2: 1, sub: false,
+    });
+    expect(lines(s)[0]).toBe('(3x² + 2x + 4) + (2x² + 5x + 1)');
+    // foil params under the same skill are not animatable
+    expect(buildScriptForProblem('polynomial-operations', { p: 2, q: 3 })).toBeNull();
   });
 
   it('routes slope-intercepts point params to the slope builder', () => {
