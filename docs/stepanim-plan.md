@@ -5,6 +5,13 @@ Companion to `stepanim-next-steps.md` (items A–H). That doc describes
 decisions so each phase can be picked up by a fresh session. Written on
 branch `claude/stepanim-next-steps-plan-tn1jrj` (2026-07-13).
 
+**Status (2026-07-14):** Phases 1–5 are shipped on this branch (analytics,
+fraction tokens + slope scripts, polynomial two-row layout, tutor handoff,
+sprint/Regents review surfaces). Only Phase 6 (A → B, the native device
+pass and the conditional Reanimated swap) remains, and it needs a local
+session with a simulator/device — it cannot run in a cloud container. See
+the "Done (follow-up branch)" section of `stepanim-next-steps.md`.
+
 ## Sequencing at a glance
 
 | Phase | Items | Why this order |

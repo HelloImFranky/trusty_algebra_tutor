@@ -2,7 +2,9 @@
 
 Roadmap for the token-morphing step animator ("stepanim"). Written so a
 fresh session can implement any item without re-deriving context. Last
-updated on branch `claude/stepanim-app-features` (2026-07-13).
+updated on branch `claude/stepanim-next-steps-plan-tn1jrj` (2026-07-14):
+items D, E, F, G and the C scripts (2.3, 5.2, 5.3) shipped. The phased
+plan that drove that work is in `docs/stepanim-plan.md`.
 
 ## Current state (what already exists)
 
@@ -69,13 +71,46 @@ start` → Playwright at `/opt/pw-browsers/chromium`; native via
 7. ~~Reduced motion + live region~~ — zero-duration morphs when the OS
    asks; explanations announced politely.
 
+## Done (follow-up branch, 2026-07-14)
+
+8. ~~E. Usage analytics~~ — `anim_views` column on `attempts` (migration
+   `009_anim_views.sql`, prisma `animViews`), `attemptInput.animViews`
+   persisted, counter in `practice.tsx`. Additive: opening during guided
+   practice still costs a hint; the column is separate so mastery math is
+   untouched.
+9. ~~D. Fraction tokens~~ — `kind: 'frac'` with `num`/`den`, rendered as a
+   stacked column (two `RNText` + a 1.5px rule); measured at a smaller
+   font, keyed `frac:<part>`; width = `max(numW, denW) + pad`. `text`
+   stays the plain `num/den` fallback for history + live region.
+10. ~~C. 5.2 / 5.3 slope scripts~~ — `slope_from_points` (substitute →
+    rise/run → simplify, negative-run + integer-collapse cases) and
+    `slope_intercept_rewrite` (isolate y → reorder to y = mx + b) param
+    builders, plus hand-authored library scripts registered for 5.2/5.3.
+11. ~~C. 2.3 polynomial addition~~ — optional `row: 0 | 1` on tokens; the
+    player lays each row out independently, centers the block, and
+    animates y alongside x. `add_polynomials` builder stacks like terms
+    in columns (distribute-the-minus beat for subtraction) + a 2.3
+    library script. `stepToText` joins rows with a newline.
+12. ~~G. Tutor chat handoff~~ — when a builder matches the problem, the
+    tutor prompt lists the walkthrough steps and may emit `[[anim:N]]`;
+    the chat parses it (`parseAnimMarker`, in the client-safe anim
+    module) into a 🎬 chip that opens the animation at that step.
+13. ~~F. Sprint / review surfaces~~ — post-sprint review of misses with a
+    🎬 per problem (sprint payload now carries params + slug). Regents
+    questions gained an optional `anim` payload (skill slug + params)
+    revealed **only after the attempt** (params can encode the answer),
+    on the five archetypes a builder covers.
+
 ## Remaining
 
 ### A. Real device pass on native (needs a local session)
 
 Only bundle-checked (`expo export`). On simulator/device check: token
 measurement timing, chip radius on Android, the border-trick triangle,
-wobble performance, lesson/practice embeds, reduced-motion path.
+wobble performance, lesson/practice embeds, reduced-motion path — **plus**
+the new surfaces: fraction-token rendering (5.2/5.3), the two-row
+polynomial layout (2.3), the tutor-chat 🎬 chip, and the sprint/Regents
+review buttons.
 
 ### B. Reanimated driver on native (measure first)
 
@@ -84,44 +119,16 @@ Swap RN `Animated` for Reanimated **only if** a real device shows jank
 `BalanceScale.tsx`. Reanimated ~4.1 is installed in `apps/native` but
 NOT for web — keep the current web path.
 
-### C. More scripts
+### C. More scripts (future)
 
-- **2.3 polynomial addition** — needs a two-line layout (model currently
-  assumes one line per step).
-- **5.x slope / slope-intercept** — `y = mx + b` slot-filling; pairs
-  with the calculator's `GraphPlot`. Needs fraction tokens (item D).
-- Keep scripts ≤ 8 steps, EN + ES, reuse existing emph colors.
-
-### D. Fraction tokens
-
-Add `kind: 'frac'` with `num`/`den`, rendered as a small column (two
-`RNText` + 1px rule); width = `max(numW, denW) + pad` in the measurement
-pass. Morph machinery unchanged. Build together with the first script
-that needs it (5.x).
-
-### E. Usage analytics
-
-Opening the animation currently increments `hintsUsed` (except after a
-correct answer). To measure whether animations help mastery, add a
-dedicated `anim_views` column to `attempts` (SQL migration in
-`packages/db`) + thread through `attemptInput` and `practice.tsx`.
-
-### F. Sprint / review surfaces
-
-Sprint mid-round is wrong (timed); post-sprint review of misses is the
-right slot. Regents review problems are fixed seeds without params —
-needs hand-authored scripts keyed by problem id, or params added to
-seeds. Decide product-side first.
-
-### G. Tutor chat handoff
-
-`startAtStep` exists now; let `TutorChat` deep-link the animation at a
-referenced step. Prompt changes live in `packages/core/src/tutor/`.
+- **2.4+ FOIL / factoring** — would reuse the two-row layout and could
+  pair with the polynomial builders. Keep scripts ≤ 8 steps, EN + ES,
+  reuse existing emph colors.
 
 ### H. Small nits
 
 - The player's Back button replays enter animations for tokens that
   exited going forward (acceptable; reverse-aware exits would be nicer).
-- `BalanceScale` pan chips can overflow their 70px slot for very long
-  hand-authored sides.
+- ~~`BalanceScale` pan chips overflow~~ — fixed: pan text now
+  `numberOfLines={1}` with `adjustsFontSizeToFit` + `maxWidth`.
 - Optional auto-play speed toggle (1×/1.5×) if teachers ask.
