@@ -12,12 +12,19 @@ import { trpc } from '../lib/trpc';
 import { useI18n } from '../lib/i18n';
 import { useRequireAuth } from '../components/AppChrome';
 import { MathText } from '../components/MathText';
+import { AnimatedEquation } from '../components/stepanim/AnimatedEquation';
+import { buildScriptForProblem } from '../components/stepanim/builders';
 import {
   AppCard, Feedback, GhostButton, Loading, Muted, PrimaryButton, ProgressBar, Screen,
   SubTitle, Title, BRAND, COLORS,
 } from '../components/ui';
 
 const LETTERS = ['A', 'B', 'C', 'D'];
+
+interface AnimRef {
+  skillSlug: string;
+  params: unknown;
+}
 
 export function ReviewScreen() {
   const authed = useRequireAuth();
@@ -107,6 +114,7 @@ interface AnsweredState {
   correct: boolean;
   correctIndex: number;
   explanation: string;
+  anim: AnimRef | null;
 }
 
 /** One topic's quiz: question-by-question, single try each. */
@@ -132,6 +140,8 @@ function TopicQuiz({ slug, onExit }: { slug: string; onExit: () => void }) {
   const [session, setSession] = useState<Record<string, AnsweredState>>({});
   const [cursor, setCursor] = useState<number | null>(null);
   const [summary, setSummary] = useState(false);
+  // Which answered question currently has its worked animation open.
+  const [animOpen, setAnimOpen] = useState<string | null>(null);
 
   const questions = topic.data?.questions;
   const answerFor = (q: NonNullable<typeof questions>[number]): AnsweredState | null =>
@@ -210,6 +220,11 @@ function TopicQuiz({ slug, onExit }: { slug: string; onExit: () => void }) {
 
   const q = questions[index];
   const answered = answerFor(q);
+  // A worked animation of this exact question, when a builder understands it
+  // (params only arrive after the attempt, so this is null until answered).
+  const animScript = answered?.anim
+    ? buildScriptForProblem(answered.anim.skillSlug, answered.anim.params)
+    : null;
 
   const submit = async () => {
     if (selected === null || answered || answerMut.isPending) return;
@@ -224,12 +239,14 @@ function TopicQuiz({ slug, onExit }: { slug: string; onExit: () => void }) {
         correct: res.correct,
         correctIndex: res.correctIndex,
         explanation: res.explanation,
+        anim: res.anim ?? null,
       },
     }));
   };
 
   const next = () => {
     setSelected(null);
+    setAnimOpen(null);
     if (index + 1 >= questions.length) setSummary(true);
     else setCursor(index + 1);
   };
@@ -332,6 +349,14 @@ function TopicQuiz({ slug, onExit }: { slug: string; onExit: () => void }) {
                 <MathText text={answered.explanation} size={14.5} />
               </YStack>
             )}
+            {animScript && (
+              <XStack>
+                <GhostButton onPress={() => setAnimOpen(animOpen === q.id ? null : q.id)}>
+                  🎬 {t('animatedExample')}
+                </GhostButton>
+              </XStack>
+            )}
+            {animOpen === q.id && animScript && <AnimatedEquation script={animScript} />}
           </YStack>
         )}
 

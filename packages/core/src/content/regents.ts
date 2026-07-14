@@ -19,6 +19,13 @@ export interface RegentsQuestion {
   correctIndex: number;
   explanationEn: string;
   explanationEs: string;
+  /**
+   * Optional stepanim hook: a skill slug + params understood by
+   * buildScriptForProblem, powering a "watch it worked" animation of this
+   * exact question. Because params can encode the solution, this is only
+   * ever revealed to the client AFTER the student's single attempt.
+   */
+  anim?: { skillSlug: string; params: Record<string, number | string | boolean> };
 }
 
 export interface RegentsTopic {
