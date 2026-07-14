@@ -244,6 +244,68 @@ An `adminProcedure` guard requires `role==='admin' && status==='active'`.
   institutional answer to both provisioning and enrollment; out of scope
   here but the classes/enrollment model is compatible with importing rosters
   later.
-- **Refresh token in httpOnly cookie** — the remaining item #3 from the
-  security review (web tokens live in `localStorage`); a separate,
-  web-focused change tracked independently of this feature.
+- **Refresh token in httpOnly cookie (security review item #3)** — see the
+  dedicated spec below.
+
+---
+
+## Spec — httpOnly refresh cookie (security review item #3)
+
+### Problem
+On web, both tokens sit in one `localStorage` blob (`packages/app/src/lib/
+auth.ts`). The access token is short-lived (20 min), but the **refresh token
+is valid 7 days**, so any XSS that reads `localStorage` gets a long-lived
+credential — "an XSS bug" becomes persistent account takeover. The only real
+fix is to put the refresh token **out of JavaScript's reach** (an `HttpOnly`
+cookie). Shorter TTLs / in-memory access tokens don't remove the exfiltration.
+
+### Constraints
+- **Shared web + native client.** `trpc.ts`/`auth.ts` build for both web and
+  Expo. Native has no browser cookies and AsyncStorage isn't XSS-exposed, so
+  the cookie path is **web-only** and the API must support both transports.
+- **tRPC sets no response headers today** (`apps/web/app/api/trpc/[trpc]/
+  route.ts`) — cookie emission has to be plumbed through the fetch adapter.
+- Startup currently reads tokens from storage; web must switch to a silent
+  refresh on boot.
+- A cookie-borne refresh token introduces a **CSRF** surface on `refresh`.
+
+### Design
+Web: refresh token → `HttpOnly; Secure(prod); SameSite=Strict; Path=/api/trpc`
+cookie; access token held **in memory only** (zustand, not persisted).
+Native: unchanged — refresh token in the response body + AsyncStorage.
+
+1. **Context cookie collector.** Add a mutable `cookies: string[]` to
+   `Context` (`packages/api/src/trpc.ts`). `login`/`register`/`refresh` push
+   `Set-Cookie` strings onto it.
+2. **Emit headers.** In `route.ts`, add `responseMeta({ ctx })` that returns
+   the collected cookies as `Set-Cookie` headers. The only streamed procedure
+   (`tutor.sendMessage`) sets no cookies, so this doesn't collide with
+   `httpBatchStreamLink`.
+3. **Dual transport.** The web client tags auth calls with a header
+   (`x-auth-transport: cookie`, gated on `Platform.OS === 'web'`). Server:
+   header present ⇒ read/write the refresh token via cookie and **omit it
+   from the response body**; absent ⇒ today's body behavior (native).
+4. **createContext** parses the refresh cookie from the `Cookie` header (it
+   already inspects headers for auth/IP).
+5. **Boot (web):** call `refresh` on load to get a fresh access token + user;
+   failure ⇒ logged out. Native keeps `hydrateAuth`.
+6. **`auth.logout` (new):** revoke the current refresh token server-side and
+   clear the cookie (`Max-Age=0`). Also fixes a today-bug: logout is
+   client-only, so the DB refresh token currently stays valid until expiry.
+7. **Secure flag** only when serving over https (localhost dev is http).
+
+**CSRF:** `SameSite=Strict` keeps the refresh cookie off cross-site requests,
+so a malicious page can't trigger a refresh; the access token stays a header
+(never auto-sent), so every other endpoint remains CSRF-immune.
+
+### Tests & verification
+- API: web mode sets the cookie + omits the body token; native mode returns
+  the body token; `logout` revokes + clears; cookie carries `HttpOnly` /
+  `SameSite`.
+- Browser drive (verify skill): after web login, assert `localStorage` holds
+  **no** refresh token and the cookie is `HttpOnly`; run login → reload →
+  still-authed → logout.
+
+### Effort
+~half a day; login-critical and touches both platforms — verify in-browser
+before merge. Independent of the teacher-dashboard feature; can ship anytime.
