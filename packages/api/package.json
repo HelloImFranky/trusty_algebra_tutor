@@ -10,7 +10,8 @@
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "create-admin": "tsx src/scripts/create-admin.ts"
   },
   "dependencies": {
     "@trpc/server": "^11.1.0",
@@ -25,6 +26,7 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.6",
     "@types/node": "^22.0.0",
+    "tsx": "^4.15.0",
     "typescript": "^5.7.0",
     "vitest": "^2.0.0"
   }

@@ -87,12 +87,28 @@ describe('auth (COPPA-aware)', () => {
     expect(row?.guardianConsent).toBe(false);
   });
 
-  it('refuses to self-register a privileged teacher account', async () => {
+  it('self-registers a teacher as pending, fail-closed until approved', async () => {
+    const t = await anon.auth.register({
+      role: 'teacher',
+      username: 'pending_teacher',
+      password: 'password123',
+      displayName: 'Pending Teacher',
+      email: 'pt@example.com',
+    });
+    expect(t.user.role).toBe('teacher');
+    expect(t.user.status).toBe('pending');
+    // A pending teacher can sign in but cannot use any teacher feature.
+    await expect(as(t.user).teacher.classes.list()).rejects.toMatchObject({ code: 'FORBIDDEN' });
     await expect(
-      // teacher is not a self-serve role; the enum rejects it
+      as(t.user).teacher.classes.create({ name: 'nope' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('never lets an admin be self-registered', async () => {
+    await expect(
       anon.auth.register({
-        role: 'teacher',
-        username: 'self_teacher',
+        role: 'admin',
+        username: 'sneaky_admin',
         password: 'password123',
         displayName: 'Sneaky',
       } as unknown as Parameters<typeof anon.auth.register>[0]),
@@ -506,45 +522,207 @@ describe('progress & FERPA scoping', () => {
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 
-  it('scopes teachers to linked students (no blanket access)', async () => {
-    // Teachers are provisioned out-of-band, not via public signup.
+  it('blocks an unaffiliated teacher from a student (class-scoped, see below)', async () => {
     const row = await prisma.user.create({
-      data: {
-        role: 'teacher',
-        username: 'teacher1',
-        passwordHash: 'x',
-        displayName: 'Teacher One',
-      },
+      data: { role: 'teacher', username: 'lonely_teacher', passwordHash: 'x', displayName: 'Nobody' },
       select: { id: true },
     });
     const teacher: AuthUser = {
       id: Number(row.id),
       role: 'teacher',
-      username: 'teacher1',
-      displayName: 'Teacher One',
+      username: 'lonely_teacher',
+      displayName: 'Nobody',
       locale: 'en',
+      status: 'active',
     };
-
-    // Unlinked: a teacher must NOT be able to read an arbitrary student.
+    // A teacher with no shared class sees nothing (full flow in 'teacher classes').
     await expect(
       as(teacher).progress.student({ studentId: student.id }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
-
-    // Linked via an active roster entry: access is granted, read-only.
-    await prisma.guardianLink.create({
-      data: {
-        guardianUserId: row.id,
-        studentUserId: BigInt(student.id),
-        status: 'active',
-      },
-    });
-    const res = await as(teacher).progress.student({ studentId: student.id });
-    expect(res.student.displayName).toBe('Student One');
   });
 
   it('exports the student data', async () => {
     const res = await as(student).progress.export();
     expect(res.attempts.length).toBeGreaterThan(0);
+  });
+});
+
+describe('teacher classes (roster + scoping)', () => {
+  const mkTeacher = async (username: string, displayName: string): Promise<AuthUser> => {
+    const row = await prisma.user.create({
+      data: { role: 'teacher', username, passwordHash: 'x', displayName },
+      select: { id: true },
+    });
+    return { id: Number(row.id), role: 'teacher', username, displayName, locale: 'en', status: 'active' };
+  };
+  let teacherA: AuthUser;
+  let teacherB: AuthUser;
+  let joinCode = '';
+  let classId = 0;
+
+  it('lets an out-of-band teacher create a class with a join code', async () => {
+    teacherA = await mkTeacher('teacher_a', 'Teacher A');
+    teacherB = await mkTeacher('teacher_b', 'Teacher B');
+    const cls = await as(teacherA).teacher.classes.create({ name: 'Period 1 Algebra' });
+    // Crockford base32, 8 chars, no ambiguous I/L/O/U.
+    expect(cls.joinCode).toMatch(/^[0-9A-HJKMNP-TV-Z]{8}$/);
+    expect(cls.studentCount).toBe(0);
+    joinCode = cls.joinCode;
+    classId = cls.id;
+  });
+
+  it('rejects a non-teacher creating a class and a non-student joining', async () => {
+    await expect(as(student).teacher.classes.create({ name: 'nope' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    await expect(as(guardian).teacher.classes.join({ code: joinCode })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+  });
+
+  it('rejects an unknown join code', async () => {
+    await expect(as(student).teacher.classes.join({ code: 'ZZZZZZZZ' })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
+  it('lets a student join (case-insensitive) and appear on the roster', async () => {
+    const joined = await as(student).teacher.classes.join({ code: joinCode.toLowerCase() });
+    expect(joined.classId).toBe(classId);
+
+    const roster = await as(teacherA).teacher.classes.roster({ classId });
+    expect(roster.students).toHaveLength(1);
+    const row = roster.students[0]!;
+    expect(row.id).toBe(student.id);
+    expect(row.displayName).toBe('Student One');
+    // lightweight summary fields are present
+    expect(row).toHaveProperty('streakDays');
+    expect(row).toHaveProperty('mastered');
+    expect(row).toHaveProperty('struggling');
+    expect(row).toHaveProperty('lastActiveAt');
+
+    const list = await as(teacherA).teacher.classes.list();
+    expect(list.classes.find((c) => c.id === classId)?.studentCount).toBe(1);
+  });
+
+  it('grants the owning teacher read access to the enrolled student', async () => {
+    const res = await as(teacherA).progress.student({ studentId: student.id });
+    expect(res.student.displayName).toBe('Student One');
+  });
+
+  it('isolates other teachers from the class and its students', async () => {
+    await expect(as(teacherB).teacher.classes.roster({ classId })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    await expect(as(teacherB).progress.student({ studentId: student.id })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+  });
+
+  it('rotating the join code invalidates the old one', async () => {
+    const { joinCode: rotated } = await as(teacherA).teacher.classes.regenerateCode({ classId });
+    expect(rotated).not.toBe(joinCode);
+
+    const s2 = await anon.auth.register({
+      role: 'student',
+      username: 'joiner2',
+      password: 'password123',
+      displayName: 'Joiner Two',
+    });
+    await expect(as(s2.user).teacher.classes.join({ code: joinCode })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    const ok = await as(s2.user).teacher.classes.join({ code: rotated });
+    expect(ok.classId).toBe(classId);
+    joinCode = rotated;
+  });
+
+  it('removing a student revokes their roster spot and the teacher’s access', async () => {
+    await as(teacherA).teacher.classes.removeStudent({ classId, studentId: student.id });
+    const roster = await as(teacherA).teacher.classes.roster({ classId });
+    expect(roster.students.find((r) => r.id === student.id)).toBeUndefined();
+    await expect(as(teacherA).progress.student({ studentId: student.id })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+  });
+});
+
+describe('admin approval (teacher provisioning)', () => {
+  let admin: AuthUser;
+  let pendingTeacher: AuthUser;
+  const creds = { username: 'approve_me', password: 'password123' };
+
+  it('bootstraps an admin out-of-band; a self-signup teacher lands pending', async () => {
+    const row = await prisma.user.create({
+      data: { role: 'admin', status: 'active', username: 'root_admin', passwordHash: 'x', displayName: 'Root' },
+      select: { id: true },
+    });
+    admin = {
+      id: Number(row.id),
+      role: 'admin',
+      username: 'root_admin',
+      displayName: 'Root',
+      locale: 'en',
+      status: 'active',
+    };
+    const t = await anon.auth.register({
+      role: 'teacher',
+      ...creds,
+      displayName: 'Approve Me',
+      email: 'am@example.com',
+    });
+    expect(t.user.status).toBe('pending');
+    pendingTeacher = t.user;
+    await expect(as(pendingTeacher).teacher.classes.list()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('lists the pending teacher for the admin but hides student data', async () => {
+    const pend = await as(admin).admin.teachers.listPending();
+    expect(pend.teachers.some((tt) => tt.username === creds.username)).toBe(true);
+    // Least privilege: an admin cannot read a student's records.
+    await expect(as(admin).progress.student({ studentId: student.id })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+  });
+
+  it('keeps non-admins out of the admin console', async () => {
+    await expect(as(student).admin.teachers.listPending()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(as(pendingTeacher).admin.teachers.listPending()).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+  });
+
+  it('approves a teacher, unlocking teacher features', async () => {
+    await as(admin).admin.teachers.approve({ userId: pendingTeacher.id });
+    // Re-login: the server reloads role/status from the DB each request.
+    const relog = await anon.auth.login(creds);
+    expect(relog.user.status).toBe('active');
+    const cls = await as(relog.user).teacher.classes.create({ name: 'Approved Class' });
+    expect(cls.joinCode).toBeTruthy();
+  });
+
+  it('disables a teacher, revoking access immediately', async () => {
+    await as(admin).admin.teachers.disable({ userId: pendingTeacher.id });
+    const relog = await anon.auth.login(creds);
+    expect(relog.user.status).toBe('disabled');
+    await expect(as(relog.user).teacher.classes.list()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    // reject only applies to pending accounts, not an active/disabled one
+    await expect(as(admin).admin.teachers.reject({ userId: pendingTeacher.id })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    });
+  });
+
+  it('rejects a pending teacher by removing the account', async () => {
+    const t = await anon.auth.register({
+      role: 'teacher',
+      username: 'reject_me',
+      password: 'password123',
+      displayName: 'Reject Me',
+      email: 'rm@example.com',
+    });
+    await as(admin).admin.teachers.reject({ userId: t.user.id });
+    const gone = await prisma.user.findUnique({ where: { id: BigInt(t.user.id) } });
+    expect(gone).toBeNull();
   });
 });
 

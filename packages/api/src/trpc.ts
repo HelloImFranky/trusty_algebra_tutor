@@ -36,6 +36,35 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
 });
 
 /**
+ * Only approved teachers. A self-registered teacher stays 'pending' — able to
+ * sign in and see the "awaiting approval" screen, but fail-closed everywhere
+ * else until an admin activates them. loadUser reads status fresh on every
+ * request, so a disable takes effect immediately.
+ */
+export const teacherProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (ctx.user.role !== 'teacher' || ctx.user.status !== 'active') {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'teachers only' });
+  }
+  return next();
+});
+
+/** Only active admins (governance only — no student-data access). */
+export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (ctx.user.role !== 'admin' || ctx.user.status !== 'active') {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'admins only' });
+  }
+  return next();
+});
+
+/** Only signed-in students (e.g. joining a class is a student action). */
+export const studentProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (ctx.user.role !== 'student') {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'students only' });
+  }
+  return next();
+});
+
+/**
  * Fixed-window counter. `consume(key)` returns false once a key exceeds
  * `maxPerMinute` within the current window. In-memory, so the budget is
  * per-instance — good enough to blunt brute-force/abuse; a shared store
