@@ -6,11 +6,13 @@ import {
   hashPassword,
   issueRefreshToken,
   loadUser,
+  revokeRefreshToken,
   rotateRefreshToken,
   signAccessToken,
   verifyPassword,
   type AuthUser,
 } from '../auth.js';
+import { clearRefreshCookie, setRefreshCookie } from '../cookies.js';
 import {
   fixedWindowLimiter,
   protectedProcedure,
@@ -57,12 +59,21 @@ const registerSchema = z.object({
   under13: z.boolean().default(false),
 });
 
-async function tokensFor(user: AuthUser) {
-  return {
-    user,
-    accessToken: signAccessToken(user),
-    refreshToken: await issueRefreshToken(user.id),
-  };
+/**
+ * Issue an access + refresh token for a freshly authenticated user, choosing
+ * the transport by `ctx.cookieTransport`:
+ *   - web (cookie): push the refresh token as an httpOnly `Set-Cookie` and omit
+ *     it from the body, so page script can never read it.
+ *   - native (default): return the refresh token in the body as before.
+ */
+async function issueSession(ctx: Context, user: AuthUser) {
+  const accessToken = signAccessToken(user);
+  const refreshToken = await issueRefreshToken(user.id);
+  if (ctx.cookieTransport) {
+    (ctx.cookies ??= []).push(setRefreshCookie(refreshToken, ctx.secure ?? false));
+    return { user, accessToken };
+  }
+  return { user, accessToken, refreshToken };
 }
 
 export const authRouter = router({
@@ -122,7 +133,7 @@ export const authRouter = router({
       }
     }
     const user = (await loadUser(Number(created.id))) as AuthUser;
-    return tokensFor(user);
+    return issueSession(ctx, user);
   }),
 
   login: publicProcedure
@@ -142,16 +153,37 @@ export const authRouter = router({
         throw new TRPCError({ code: 'UNAUTHORIZED', message: 'invalid credentials' });
       }
       const user = (await loadUser(Number(row.id))) as AuthUser;
-      return tokensFor(user);
+      return issueSession(ctx, user);
     }),
 
   refresh: publicProcedure
-    .input(z.object({ refreshToken: z.string() }))
+    // Native sends the refresh token in the body; web omits it and the server
+    // reads it from the httpOnly cookie instead (hence optional).
+    .input(z.object({ refreshToken: z.string().optional() }))
     .mutation(async ({ ctx, input }) => {
       throttle(refreshRate, ipKey(ctx));
-      const user = await rotateRefreshToken(input.refreshToken);
-      if (!user) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'invalid refresh token' });
-      return tokensFor(user);
+      const token = ctx.cookieTransport ? ctx.refreshCookie : input.refreshToken;
+      const user = token ? await rotateRefreshToken(token) : null;
+      if (!user) {
+        // Clear a stale/invalid web cookie so boot doesn't keep re-sending it.
+        if (ctx.cookieTransport) (ctx.cookies ??= []).push(clearRefreshCookie(ctx.secure ?? false));
+        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'invalid refresh token' });
+      }
+      return issueSession(ctx, user);
+    }),
+
+  /**
+   * Revoke the current refresh token server-side and (web) clear the cookie.
+   * Public: possession of the refresh token/cookie is the credential, and the
+   * access token may already be expired at logout time.
+   */
+  logout: publicProcedure
+    .input(z.object({ refreshToken: z.string().optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const token = ctx.cookieTransport ? ctx.refreshCookie : input.refreshToken;
+      if (token) await revokeRefreshToken(token);
+      if (ctx.cookieTransport) (ctx.cookies ??= []).push(clearRefreshCookie(ctx.secure ?? false));
+      return { ok: true };
     }),
 
   me: protectedProcedure.query(({ ctx }) => ({ user: ctx.user })),

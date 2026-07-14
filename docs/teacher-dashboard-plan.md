@@ -244,8 +244,9 @@ An `adminProcedure` guard requires `role==='admin' && status==='active'`.
   institutional answer to both provisioning and enrollment; out of scope
   here but the classes/enrollment model is compatible with importing rosters
   later.
-- **Refresh token in httpOnly cookie (security review item #3)** — see the
-  dedicated spec below.
+- ~~**Refresh token in httpOnly cookie (security review item #3)**~~ — ✅
+  shipped. See the dedicated spec below (with an implementation note on the
+  streaming correction).
 
 ---
 
@@ -309,3 +310,18 @@ so a malicious page can't trigger a refresh; the access token stays a header
 ### Effort
 ~half a day; login-critical and touches both platforms — verify in-browser
 before merge. Independent of the teacher-dashboard feature; can ship anytime.
+
+### Implementation note (shipped)
+One correction to design step 2: `httpBatchStreamLink` streams **every**
+response as jsonl, not just `tutor.sendMessage`, and the fetch adapter drops
+`responseMeta` headers on streamed responses — so the `Set-Cookie` never
+reached the browser. Fix: the client now uses a `splitLink` that routes only
+`tutor.sendMessage` through `httpBatchStreamLink` and everything else through
+the plain `httpBatchLink`, where `responseMeta` (and thus the cookie) works.
+`responseMeta` still emits the collected `ctx.cookies` in `route.ts`.
+
+Verified end-to-end in-browser: web register/login sets an `HttpOnly;
+SameSite=Strict; Path=/api/trpc` cookie, `localStorage` holds no refresh token,
+reload silently refreshes from the cookie, and logout revokes server-side +
+clears the cookie. Native still returns the refresh token in the body. Covered
+by the `httpOnly refresh cookie (web transport, security #3)` API tests.

@@ -46,6 +46,19 @@ export async function rotateRefreshToken(token: string): Promise<AuthUser | null
   return loadUser(Number(row.userId));
 }
 
+/**
+ * Revoke a refresh token server-side (logout). Idempotent: an unknown or
+ * already-revoked token is a no-op. Fixes the prior client-only logout, which
+ * left the DB token valid until it expired.
+ */
+export async function revokeRefreshToken(token: string): Promise<void> {
+  const hash = crypto.createHash('sha256').update(token).digest('hex');
+  await prisma.refreshToken.updateMany({
+    where: { tokenHash: hash, revoked: false },
+    data: { revoked: true },
+  });
+}
+
 export async function loadUser(id: number): Promise<AuthUser | null> {
   const u = await prisma.user.findUnique({
     where: { id: BigInt(id) },

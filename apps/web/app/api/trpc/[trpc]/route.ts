@@ -12,6 +12,16 @@ const handler = (req: Request) =>
     req,
     router: appRouter,
     createContext: () => createContext({ headers: req.headers }),
+    // Emit any Set-Cookie strings the auth mutations collected on the context
+    // (the httpOnly refresh cookie on web). `tutor.sendMessage` is the only
+    // streamed procedure and never sets cookies, so this can't collide with it.
+    responseMeta({ ctx }) {
+      const cookies = ctx?.cookies ?? [];
+      if (cookies.length === 0) return {};
+      const headers = new Headers();
+      for (const cookie of cookies) headers.append('set-cookie', cookie);
+      return { headers };
+    },
     onError({ error, path }) {
       if (error.code === 'INTERNAL_SERVER_ERROR') {
         console.error(`trpc error on ${path}:`, error);

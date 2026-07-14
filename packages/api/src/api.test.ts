@@ -149,6 +149,97 @@ describe('auth (COPPA-aware)', () => {
   });
 });
 
+describe('httpOnly refresh cookie (web transport, security #3)', () => {
+  const creds = { username: 'web_user', password: 'password123' };
+  const REFRESH = 'tutor_rt';
+
+  // A web-transport context: `x-auth-transport: cookie` (cookieTransport),
+  // https (secure), and a mutable collector the auth mutations push onto.
+  const webCtx = (refreshCookie: string | null = null) => ({
+    user: null,
+    ip: '198.51.100.7',
+    cookieTransport: true,
+    secure: true,
+    refreshCookie,
+    cookies: [] as string[],
+  });
+
+  // Pull the refresh token out of the emitted Set-Cookie string.
+  const cookieToken = (cookies: string[]) => {
+    const set = cookies.find((c) => c.startsWith(`${REFRESH}=`))!;
+    return set.split(';')[0]!.slice(REFRESH.length + 1);
+  };
+
+  it('registers on web with the token in an httpOnly cookie, not the body', async () => {
+    const ctx = webCtx();
+    const res = await appRouter.createCaller(ctx).auth.register({
+      role: 'student',
+      ...creds,
+      displayName: 'Web User',
+    });
+    expect(res.accessToken).toBeTruthy();
+    expect(res).not.toHaveProperty('refreshToken');
+    expect(ctx.cookies).toHaveLength(1);
+    const cookie = ctx.cookies[0]!;
+    expect(cookie).toContain('tutor_rt=');
+    expect(cookie).toContain('HttpOnly');
+    expect(cookie).toContain('SameSite=Strict');
+    expect(cookie).toContain('Path=/api/trpc');
+    expect(cookie).toContain('Secure'); // secure request
+  });
+
+  it('logs in then refreshes from the cookie, rotating it, no body token', async () => {
+    const loginCtx = webCtx();
+    const login = await appRouter.createCaller(loginCtx).auth.login(creds);
+    expect(login).not.toHaveProperty('refreshToken');
+    const rt = cookieToken(loginCtx.cookies);
+
+    const refreshCtx = webCtx(rt);
+    const refreshed = await appRouter.createCaller(refreshCtx).auth.refresh({});
+    expect(refreshed.accessToken).toBeTruthy();
+    expect(refreshed).not.toHaveProperty('refreshToken');
+    expect(cookieToken(refreshCtx.cookies)).not.toBe(rt); // rotated
+
+    // rotation: the old cookie token is now dead
+    await expect(
+      appRouter.createCaller(webCtx(rt)).auth.refresh({}),
+    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+  });
+
+  it('rejects a missing refresh cookie and clears it', async () => {
+    const ctx = webCtx(null);
+    await expect(appRouter.createCaller(ctx).auth.refresh({})).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    });
+    expect(ctx.cookies.some((c) => c.includes('Max-Age=0'))).toBe(true);
+  });
+
+  it('logout revokes the refresh token server-side and clears the cookie', async () => {
+    const loginCtx = webCtx();
+    await appRouter.createCaller(loginCtx).auth.login(creds);
+    const rt = cookieToken(loginCtx.cookies);
+
+    const logoutCtx = webCtx(rt);
+    const res = await appRouter.createCaller(logoutCtx).auth.logout({});
+    expect(res.ok).toBe(true);
+    expect(logoutCtx.cookies.some((c) => c.includes('Max-Age=0'))).toBe(true);
+    // the revoked token can no longer refresh
+    await expect(
+      appRouter.createCaller(webCtx(rt)).auth.refresh({}),
+    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+  });
+
+  it('native transport still returns the refresh token in the response body', async () => {
+    const res = await anon.auth.login(creds);
+    expect(res.refreshToken).toBeTruthy();
+    // and native logout revokes that body token
+    await anon.auth.logout({ refreshToken: res.refreshToken });
+    await expect(anon.auth.refresh({ refreshToken: res.refreshToken })).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    });
+  });
+});
+
 describe('curriculum', () => {
   it('returns 9 units with lessons and mastery overlay', async () => {
     const res = await as(student).curriculum.map();

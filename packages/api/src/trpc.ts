@@ -1,11 +1,28 @@
 import { TRPCError, initTRPC } from '@trpc/server';
 import superjson from 'superjson';
 import { userFromAuthHeader, type AuthUser, type Locale } from './auth.js';
+import { REFRESH_COOKIE, readCookie } from './cookies.js';
 
 export interface Context {
   user: AuthUser | null;
   /** Best-effort client IP, used to rate-limit unauthenticated endpoints. */
   ip?: string | null;
+  /**
+   * Web transport: the client asks for the refresh token to live in an
+   * httpOnly cookie rather than the response body (security review item #3).
+   * Native leaves this unset and keeps using the body token. Optional so
+   * `createCaller` unit tests can pass a bare `{ user }` context.
+   */
+  cookieTransport?: boolean;
+  /** Refresh token read from the httpOnly cookie, when the web client sent one. */
+  refreshCookie?: string | null;
+  /** Whether the request arrived over https, so the cookie can carry `Secure`. */
+  secure?: boolean;
+  /**
+   * `Set-Cookie` strings the auth mutations push here; the fetch adapter's
+   * `responseMeta` emits them as response headers.
+   */
+  cookies?: string[];
 }
 
 /** First hop of X-Forwarded-For (set by Vercel/most proxies), else X-Real-IP. */
@@ -15,11 +32,22 @@ function clientIp(headers: Headers): string | null {
   return headers.get('x-real-ip');
 }
 
+/** https behind a proxy sets X-Forwarded-Proto; plain localhost dev doesn't. */
+function isSecure(headers: Headers): boolean {
+  const proto = headers.get('x-forwarded-proto');
+  return proto ? proto.split(',')[0]!.trim() === 'https' : false;
+}
+
 /** Build the request context from the Authorization header (any adapter). */
 export async function createContext(opts: { headers: Headers }): Promise<Context> {
+  const { headers } = opts;
   return {
-    user: await userFromAuthHeader(opts.headers.get('authorization')),
-    ip: clientIp(opts.headers),
+    user: await userFromAuthHeader(headers.get('authorization')),
+    ip: clientIp(headers),
+    cookieTransport: headers.get('x-auth-transport') === 'cookie',
+    refreshCookie: readCookie(headers.get('cookie'), REFRESH_COOKIE),
+    secure: isSecure(headers),
+    cookies: [],
   };
 }
 
