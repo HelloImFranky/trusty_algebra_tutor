@@ -6,6 +6,7 @@ import {
   hashPassword,
   issueRefreshToken,
   loadUser,
+  revokeAllUserTokens,
   revokeRefreshToken,
   rotateRefreshToken,
   signAccessToken,
@@ -17,6 +18,7 @@ import {
   fixedWindowLimiter,
   protectedProcedure,
   publicProcedure,
+  rateLimited,
   router,
   type Context,
 } from '../trpc.js';
@@ -196,6 +198,70 @@ export const authRouter = router({
         data: { locale: input.locale },
       });
       return { ok: true, locale: input.locale };
+    }),
+
+  /**
+   * Self-service profile edit (display name and/or username). Protected +
+   * rate-limited. A username change re-checks the same rule and unique
+   * constraint as signup; the access token embeds the username, so we re-issue
+   * it (and return the fresh user) for the client to store.
+   */
+  updateProfile: rateLimited(20)
+    .input(
+      z.object({
+        displayName: z.string().min(1).max(64).optional(),
+        username: z.string().min(3).max(32).regex(/^[a-zA-Z0-9_.-]+$/).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (input.displayName === undefined && input.username === undefined) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'nothing to update' });
+      }
+      if (input.username && input.username !== ctx.user.username) {
+        const taken = await prisma.user.findUnique({
+          where: { username: input.username },
+          select: { id: true },
+        });
+        if (taken) throw new TRPCError({ code: 'CONFLICT', message: 'username taken' });
+      }
+      await prisma.user.update({
+        where: { id: BigInt(ctx.user.id) },
+        data: {
+          ...(input.displayName !== undefined ? { displayName: input.displayName } : {}),
+          ...(input.username !== undefined ? { username: input.username } : {}),
+        },
+      });
+      const user = (await loadUser(ctx.user.id)) as AuthUser;
+      return { user, accessToken: signAccessToken(user) };
+    }),
+
+  /**
+   * Change password: verify the current one, store the new hash, then revoke
+   * every refresh token so other sessions must re-authenticate — and issue a
+   * fresh session for THIS device (cookie on web, body on native) so the caller
+   * stays signed in.
+   */
+  changePassword: rateLimited(10)
+    .input(
+      z.object({
+        currentPassword: z.string(),
+        newPassword: z.string().min(8).max(128),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const row = await prisma.user.findUnique({
+        where: { id: BigInt(ctx.user.id) },
+        select: { passwordHash: true },
+      });
+      if (!row || !(await verifyPassword(input.currentPassword, row.passwordHash))) {
+        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'current password is incorrect' });
+      }
+      await prisma.user.update({
+        where: { id: BigInt(ctx.user.id) },
+        data: { passwordHash: await hashPassword(input.newPassword) },
+      });
+      await revokeAllUserTokens(ctx.user.id);
+      return issueSession(ctx, ctx.user);
     }),
 
   /** FERPA (§9): account + data deletion. */

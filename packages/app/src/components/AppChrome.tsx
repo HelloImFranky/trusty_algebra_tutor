@@ -82,6 +82,19 @@ export function AppChrome({ children }: { children: ReactNode }) {
         </XStack>
         <XStack gap={8} alignItems="center">
           {auth && <ReferenceSheetButton compact={!topNav} />}
+          {auth && (
+            <Link href="/settings">
+              <Button
+                size="$2"
+                backgroundColor="rgba(255,255,255,0.18)"
+                color="white"
+                borderRadius={999}
+                aria-label={t('settings')}
+              >
+                ⚙️
+              </Button>
+            </Link>
+          )}
           <Button
             size="$2"
             backgroundColor="rgba(255,255,255,0.18)"

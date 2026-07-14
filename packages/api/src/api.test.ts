@@ -240,6 +240,66 @@ describe('httpOnly refresh cookie (web transport, security #3)', () => {
   });
 });
 
+describe('account settings (self-service profile + password)', () => {
+  it('renames displayName and username, but rejects a taken username', async () => {
+    const reg = await anon.auth.register({
+      role: 'guardian',
+      username: 'settings_user',
+      password: 'password123',
+      displayName: 'Old Name',
+      email: 'settings@example.com',
+    });
+    const caller = as(reg.user);
+
+    const updated = await caller.auth.updateProfile({
+      displayName: 'New Name',
+      username: 'settings_renamed',
+    });
+    expect(updated.user.displayName).toBe('New Name');
+    expect(updated.user.username).toBe('settings_renamed');
+    expect(updated.accessToken).toBeTruthy();
+
+    // Colliding with an existing username is a CONFLICT.
+    await expect(caller.auth.updateProfile({ username: 'student1' })).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+  });
+
+  it('changes password only with the correct current one, and revokes other sessions', async () => {
+    const reg = await anon.auth.register({
+      role: 'guardian',
+      username: 'pw_user',
+      password: 'password123',
+      displayName: 'PW User',
+      email: 'pw@example.com',
+    });
+    const oldRefresh = reg.refreshToken;
+    const caller = as(reg.user);
+
+    // Wrong current password is rejected and leaves the password unchanged.
+    await expect(
+      caller.auth.changePassword({ currentPassword: 'wrongpass', newPassword: 'newpassword123' }),
+    ).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+
+    const res = await caller.auth.changePassword({
+      currentPassword: 'password123',
+      newPassword: 'newpassword123',
+    });
+    // A fresh session is issued for this device...
+    expect(res.refreshToken).toBeTruthy();
+    // ...while any previously-issued refresh token is revoked.
+    await expect(anon.auth.refresh({ refreshToken: oldRefresh })).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    });
+    // The old password no longer works; the new one does.
+    await expect(anon.auth.login({ username: 'pw_user', password: 'password123' })).rejects.toMatchObject(
+      { code: 'UNAUTHORIZED' },
+    );
+    const relogin = await anon.auth.login({ username: 'pw_user', password: 'newpassword123' });
+    expect(relogin.accessToken).toBeTruthy();
+  });
+});
+
 describe('curriculum', () => {
   it('returns 9 units with lessons and mastery overlay', async () => {
     const res = await as(student).curriculum.map();
