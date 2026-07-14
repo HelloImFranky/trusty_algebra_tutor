@@ -35,6 +35,22 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
   return next({ ctx: { ...ctx, user: ctx.user } });
 });
 
+/** Only signed-in teachers. (Stage 2 will also require an active status.) */
+export const teacherProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (ctx.user.role !== 'teacher') {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'teachers only' });
+  }
+  return next();
+});
+
+/** Only signed-in students (e.g. joining a class is a student action). */
+export const studentProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (ctx.user.role !== 'student') {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'students only' });
+  }
+  return next();
+});
+
 /**
  * Fixed-window counter. `consume(key)` returns false once a key exceeds
  * `maxPerMinute` within the current window. In-memory, so the budget is

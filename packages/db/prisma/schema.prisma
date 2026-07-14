@@ -38,8 +38,37 @@ model User {
   regentsAnswers   RegentsAnswer[]
   guardianOf       GuardianLink[] @relation("guardian")
   guardians        GuardianLink[] @relation("student")
+  classesTaught    Class[]           @relation("teacher")
+  enrollments      ClassEnrollment[] @relation("student")
 
   @@map("users")
+}
+
+model Class {
+  id            BigInt            @id @default(autoincrement())
+  teacherUserId BigInt            @map("teacher_user_id")
+  name          String
+  joinCode      String            @unique @map("join_code")
+  archived      Boolean           @default(false)
+  createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz()
+  teacher       User              @relation("teacher", fields: [teacherUserId], references: [id], onDelete: Cascade)
+  enrollments   ClassEnrollment[]
+
+  @@index([teacherUserId], map: "idx_classes_teacher")
+  @@map("classes")
+}
+
+model ClassEnrollment {
+  classId       BigInt   @map("class_id")
+  studentUserId BigInt   @map("student_user_id")
+  status        String   @default("active")
+  joinedAt      DateTime @default(now()) @map("joined_at") @db.Timestamptz()
+  class         Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student       User     @relation("student", fields: [studentUserId], references: [id], onDelete: Cascade)
+
+  @@id([classId, studentUserId])
+  @@index([studentUserId], map: "idx_enrollments_student")
+  @@map("class_enrollments")
 }
 
 model RefreshToken {

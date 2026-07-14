@@ -167,11 +167,23 @@ export const progressRouter = router({
         if (ctx.user.id !== input.studentId) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'forbidden' });
         }
+      } else if (ctx.user.role === 'teacher') {
+        // A teacher may view a student only through an active enrollment in a
+        // class they own (FERPA §9). Fail closed — no shared class, no access.
+        const enrolled = await prisma.classEnrollment.findFirst({
+          where: {
+            studentUserId: BigInt(input.studentId),
+            status: 'active',
+            class: { teacherUserId: BigInt(ctx.user.id), archived: false },
+          },
+          select: { classId: true },
+        });
+        if (!enrolled) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'not linked to this student' });
+        }
       } else {
-        // Guardians AND teachers may only view students they are explicitly
-        // linked to (FERPA §9). Fail closed: an unlinked adult — including a
-        // teacher — sees nothing. (Previously teachers bypassed this check and
-        // could read every student's records.)
+        // Guardians may only view students who opted them in (guardian email
+        // at signup). Fail closed.
         const link = await prisma.guardianLink.findUnique({
           where: {
             guardianUserId_studentUserId: {
