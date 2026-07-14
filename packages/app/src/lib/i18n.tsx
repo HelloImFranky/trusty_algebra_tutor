@@ -143,6 +143,10 @@ const dict = {
     statusActive: 'Active',
     statusPending: 'Pending',
     statusDisabled: 'Disabled',
+    signupAsStudent: 'Student',
+    signupAsTeacher: 'Teacher',
+    optionalEmail: 'Email (optional)',
+    teacherSignupNote: 'Teacher accounts need administrator approval before you can manage classes.',
   },
   es: {
     appName: 'Tutor de Álgebra',
@@ -282,6 +286,10 @@ const dict = {
     statusActive: 'Activo',
     statusPending: 'Pendiente',
     statusDisabled: 'Deshabilitado',
+    signupAsStudent: 'Estudiante',
+    signupAsTeacher: 'Maestro',
+    optionalEmail: 'Correo (opcional)',
+    teacherSignupNote: 'Las cuentas de maestro necesitan aprobación del administrador antes de gestionar clases.',
   },
 } as const;
 
