@@ -22,6 +22,7 @@ npm test && npm run typecheck
 
 # 4. Build + run the web app (serves the PWA AND the tRPC API on :3000;
 #    migrations + seed run automatically at startup via instrumentation.ts)
+./scripts/free-port.sh 3000          # kill any stale server holding :3000 first
 npx turbo build --filter=@tutor/web
 cd apps/web && npx next start        # or: npm run dev (hot reload)
 curl -s localhost:3000/              # 200 = up; watch stdout for "scaffolds synced"

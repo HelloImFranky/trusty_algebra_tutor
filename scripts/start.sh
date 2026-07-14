@@ -60,4 +60,9 @@ npx turbo build --filter=@tutor/web
 green "Starting the app. It sets up the curriculum on first run."
 echo  "When it says it's ready, open:  http://localhost:${PORT:-3000}"
 echo
+
+# Free the port first so a stale server from an earlier run can't hold it
+# (otherwise `next start` fails with EADDRINUSE and you keep hitting the old build).
+PORT="${PORT:-3000}" ./scripts/free-port.sh "${PORT:-3000}"
+
 cd apps/web && exec npx next start -p "${PORT:-3000}"
