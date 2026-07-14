@@ -752,3 +752,26 @@ export function stepToText(step: EqStep): string {
 export function sideToText(tokens: EqToken[]): string {
   return tokensToText(tokens);
 }
+
+const ANIM_MARKER = /\[\[anim:(\d+)\]\]/g;
+
+/**
+ * Extract the animation deep-link marker a tutor reply may carry
+ * (`[[anim:N]]`, N numbered from 1). Returns the reply with every marker
+ * stripped, plus the 0-based step index of the first valid marker, or null.
+ *
+ * Lives here (not in the tutor module) so the chat UI can import it without
+ * pulling the server-only LLM providers into the client bundle.
+ */
+export function parseAnimMarker(text: string): { text: string; animStep: number | null } {
+  let step: number | null = null;
+  const cleaned = text
+    .replace(ANIM_MARKER, (_, n: string) => {
+      const parsed = parseInt(n, 10) - 1;
+      if (step === null && parsed >= 0) step = parsed;
+      return '';
+    })
+    .replace(/[ \t]+$/gm, '')
+    .trim();
+  return { text: cleaned, animStep: step };
+}

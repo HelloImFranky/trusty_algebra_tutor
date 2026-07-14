@@ -84,26 +84,6 @@ export function buildSystemPrompt(ctx: TutorContext): string {
   return lines.join('\n');
 }
 
-const ANIM_MARKER = /\[\[anim:(\d+)\]\]/g;
-
-/**
- * Extract the animation deep-link marker a tutor reply may carry.
- * Returns the reply with markers stripped, plus the 0-based step index of
- * the first marker (the prompt numbers steps from 1), or null.
- */
-export function parseAnimMarker(text: string): { text: string; animStep: number | null } {
-  let step: number | null = null;
-  const cleaned = text
-    .replace(ANIM_MARKER, (_, n: string) => {
-      const parsed = parseInt(n, 10) - 1;
-      if (step === null && parsed >= 0) step = parsed;
-      return '';
-    })
-    .replace(/[ \t]+$/gm, '')
-    .trim();
-  return { text: cleaned, animStep: step };
-}
-
 /**
  * Strip likely PII before sending student text to the API (design doc §9):
  * emails, phone numbers, and the student's own display name.

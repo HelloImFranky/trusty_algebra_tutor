@@ -19,4 +19,5 @@ export {
   splitSides,
   stepToText,
   sideToText,
+  parseAnimMarker,
 } from '@tutor/core';

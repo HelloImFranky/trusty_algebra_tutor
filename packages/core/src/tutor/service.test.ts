@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildSystemPrompt, parseAnimMarker, type TutorContext } from './service.js';
+import { parseAnimMarker } from '../anim/model.js';
+import { buildSystemPrompt, type TutorContext } from './service.js';
 
 const baseCtx: TutorContext = { locale: 'en', lesson: null, problem: null };
 

@@ -6,10 +6,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { ScrollView } from 'react-native';
 import { Text, XStack, YStack } from 'tamagui';
-import { parseAnimMarker } from '@tutor/core/tutor';
 import { client } from '../lib/trpc';
 import { useI18n } from '../lib/i18n';
 import { MathText } from './MathText';
+import { parseAnimMarker } from './stepanim/model';
 import { AppCard, AppInput, GhostButton, PrimaryButton, SubTitle, COLORS } from './ui';
 
 interface Msg {
