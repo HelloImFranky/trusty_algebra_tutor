@@ -13,7 +13,10 @@ import {
 import { protectedProcedure, publicProcedure, router } from '../trpc.js';
 
 const registerSchema = z.object({
-  role: z.enum(['student', 'guardian', 'teacher']).default('student'),
+  // Public self-signup may only create students and guardians. Teacher
+  // accounts grant read access to linked students and are provisioned by an
+  // administrator/seed — never self-assigned, or anyone could claim the role.
+  role: z.enum(['student', 'guardian']).default('student'),
   username: z.string().min(3).max(32).regex(/^[a-zA-Z0-9_.-]+$/),
   password: z.string().min(8).max(128),
   displayName: z.string().min(1).max(64),
@@ -60,9 +63,12 @@ export const authRouter = router({
         locale: input.locale,
         grade: input.grade ?? null,
         email: input.role === 'student' ? null : input.email ?? null,
-        // guardian email supplied → consent flow initiated; real deployments
-        // verify by email before flipping this on.
-        guardianConsent: input.role !== 'student' || !input.under13 || Boolean(input.guardianEmail),
+        // COPPA (§9): consent is NEVER granted from an unverified email at
+        // signup. Guardians and 13+ students don't require it; an under-13
+        // student starts with consent PENDING (false) until a guardian
+        // actually verifies out-of-band. Supplying a guardianEmail only
+        // initiates that flow (link below) — it does not certify consent.
+        guardianConsent: input.role !== 'student' || !input.under13,
       },
     });
     if (input.role === 'student' && input.guardianEmail) {

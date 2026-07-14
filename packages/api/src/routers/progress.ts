@@ -167,7 +167,11 @@ export const progressRouter = router({
         if (ctx.user.id !== input.studentId) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'forbidden' });
         }
-      } else if (ctx.user.role !== 'teacher') {
+      } else {
+        // Guardians AND teachers may only view students they are explicitly
+        // linked to (FERPA §9). Fail closed: an unlinked adult — including a
+        // teacher — sees nothing. (Previously teachers bypassed this check and
+        // could read every student's records.)
         const link = await prisma.guardianLink.findUnique({
           where: {
             guardianUserId_studentUserId: {
