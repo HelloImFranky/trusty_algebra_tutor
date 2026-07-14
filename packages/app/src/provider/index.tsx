@@ -4,8 +4,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TamaguiProvider, type TamaguiProviderProps } from 'tamagui';
 import { config } from '../tamagui.config';
 import { I18nProvider } from '../lib/i18n';
-import { trpc, trpcClientOptions } from '../lib/trpc';
-import { hydrateAuth, useAuth } from '../lib/auth';
+import { trpc, trpcClientOptions, silentBootRefresh } from '../lib/trpc';
+import { hydrateAuth, isWeb, useAuth } from '../lib/auth';
 import { flushQueue } from '../lib/offline';
 import { Loading } from '../components/ui';
 
@@ -23,7 +23,10 @@ export function AppProvider({
   const hydrated = useAuth((s) => s.hydrated);
 
   useEffect(() => {
-    void hydrateAuth().then(() => flushQueue().catch(() => {}));
+    // Web restores the session from the httpOnly refresh cookie; native reads
+    // persisted tokens. Either way, flush the offline queue once ready.
+    const boot = isWeb ? silentBootRefresh() : hydrateAuth();
+    void boot.then(() => flushQueue().catch(() => {}));
   }, []);
 
   return (
