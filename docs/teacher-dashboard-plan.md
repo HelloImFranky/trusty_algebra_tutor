@@ -218,6 +218,26 @@ An `adminProcedure` guard requires `role==='admin' && status==='active'`.
 
 ## Open items / future
 
+- **Account settings screen (rename + change password)** — today an
+  account's display name, username, and password can only be changed with a
+  direct SQL `UPDATE` (there is no self-service endpoint or UI). Relevant to
+  everyone, but felt first by the bootstrapped admin, who is created via the
+  CLI/SQL and otherwise can never change their own credentials in-app.
+  Scope for a self-contained follow-up:
+    - `auth.updateProfile({ displayName?, username? })` — protected; username
+      re-checks the `^[a-zA-Z0-9_.-]{3,32}$` rule and the unique constraint
+      (surface a `CONFLICT` on collision).
+    - `auth.changePassword({ currentPassword, newPassword })` — protected;
+      verify the current password with `verifyPassword` before hashing and
+      storing the new one (min 8 chars), then revoke existing refresh tokens
+      so other sessions must re-authenticate.
+    - Rate-limit both (reuse `fixedWindowLimiter`); no new tables needed.
+    - A small `/settings` screen (all roles) wired into `AppChrome`; EN + ES.
+    - Tests: rename collision → `CONFLICT`; wrong current password →
+      `UNAUTHORIZED`; successful change invalidates old refresh tokens.
+  This also removes the "lost admin password ⇒ re-run the CLI" caveat noted
+  in the provisioning section, once a password-reset path exists.
+
 - **Multi-school scoping** — a single global admin is fine for one
   deployment; per-school admin scoping is a later concern.
 - **SSO / rostering (Google Classroom, Clever)** — the eventual
