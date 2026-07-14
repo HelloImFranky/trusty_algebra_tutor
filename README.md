@@ -1,289 +1,158 @@
 # ∑ Trusty Algebra Tutor
 
-A free, self-paced **Algebra 1 tutor** for middle school, built to match a real
-accelerated 8th grade classroom (the "Algebra 891" curriculum). It teaches the
-same way class does: short scaffolded lessons, lots of low-stakes practice,
-step-by-step help when you're stuck, and Regents-style review — in **English
-and Spanish**, on any phone, tablet, or Chromebook.
+A free, self-paced **Algebra 1 tutor** for middle school, modeled on a real
+accelerated 8th-grade classroom (the "Algebra 891" curriculum) and aligned to
+the NY Algebra I (NGLS) Regents standards. Scaffolded lessons, adaptive
+practice, step-by-step help, and Regents-style review — in **English and
+Spanish**, on any phone, tablet, or Chromebook. No install for students: it's a
+PWA you open from a link.
 
-It's aligned to the NY Algebra I (NGLS) Regents standards, and every lesson
-includes the **original scaffold notes from class** — the teacher's actual
-worked examples and anchor charts, exactly as they were made.
+## Features
 
----
+- **9-unit course** with per-lesson mastery tracking (Not started → Practicing → Proficient → Mastered).
+- **Lessons** with worked examples and the teacher's **original scaffold notes** rendered straight from the class document.
+- **Adaptive practice** in modified / standard / challenge tiers, picked from each student's live mastery.
+- **Step-by-step grading** — a CAS math engine accepts any equivalent form and, where it matters, insists on the taught final form. It never just says "incorrect"; it walks you through the fix one step at a time.
+- **Hints & AI tutor** — a deterministic hint ladder plus an optional chat tutor that teaches the method and never gives away answers.
+- **Sprint** 90-second speed rounds, **Regents Review** with freshly generated problem sets, and a built-in **graphing calculator** + **reference sheet**.
+- **Progress** tracking (streaks, minutes, mastery map) visible to students, and read-only to teachers and guardians.
+- **Bilingual (EN/ES)**, **offline-capable** (answers queue on-device and sync when back online), and privacy-first (no student email; COPPA/FERPA-aware; AI chat is PII-scrubbed).
 
-## 📱 For students
+## Tech stack
 
-Your teacher will give you a web address (something like
-`https://algebra-tutor.vercel.app`). Open it on your phone or Chromebook — that's
-it, there's nothing to install.
+**Turborepo** monorepo, **TypeScript** end-to-end. One Next.js server hosts the
+student PWA, the typed API, and the scaffold images on a single URL; the Expo
+app reuses the exact same screens.
 
-1. **Sign up with just a username.** No email needed. If you're under 13,
-   you'll be asked for a parent or guardian's email.
-2. **Tip:** in your browser menu, tap **"Add to Home Screen"** and the tutor
-   becomes an app icon on your phone.
-
-What's inside:
-
-| Tab | What it does |
+| Layer | Technology |
 |---|---|
-| 📘 **My Course** | All 9 units. Every lesson shows your level: Not started → Practicing → Proficient → Mastered |
-| 📄 **Lessons** | Step-by-step explanations, worked examples, and the **original scaffold notes from class** — tap a topic to open the real notes |
-| ✏️ **Practice** | Problems matched to your level. Wrong answer? The app walks you through it **one step at a time** — it never just says "incorrect" |
-| 💡 **Hints** | A hint button, a "Walk me through it" button, and an AI tutor you can ask "I don't get it" (it helps you think — it won't give away answers) |
-| ⚡ **Sprint** | 90-second speed rounds — how many can you get? |
-| 📚 **Regents Review** | Regents-style multiple choice by topic — finish a topic and hit "Practice again" for a freshly generated set with new numbers, as many times as you want |
-| 📈 **Progress** | Your streak 🔥, minutes practiced, and a mastery map of the whole course |
-| 🧮 **Calculator** | A built-in graphing calculator |
-| 📖 **Reference Sheet** | The Regents reference sheet, one tap away on every screen |
-| 🇪🇸 **Español** | Tap the flag in the top corner — everything switches, lessons included |
-
-Lost Wi-Fi mid-practice? Keep going — your answers save on your device and
-sync when you're back online.
-
----
-
-## 🍎 For teachers
-
-**What it is.** A practice companion for your class, not a replacement for it.
-Lessons follow your scaffolds document section by section, use your mnemonics
-(FOIL, PEMDAS, "standard form"), and show students the *original* scaffold
-pages inside every lesson. Grading is done by a math engine that accepts any
-equivalent form you'd accept — and, where it matters, insists on the taught
-final form ("your value is right, but it's not in standard form yet").
-
-**What you can see.** Each student's Progress page shows their streak,
-practice minutes, Regents Review progress, and a 🚩 "needs help" flag on any
-skill they're struggling with. Parents/guardians who sign up with the email a
-student listed get the same read-only view of just their child.
-
-**Student privacy.** Students never enter an email. Under-13 signups require
-a guardian email (COPPA). Anything typed to the AI tutor is scrubbed of names,
-emails, and phone numbers before it leaves the server, and students can export
-or delete their own data (FERPA).
-
-**Differentiation is automatic.** Problems come in modified / standard /
-challenge tiers, picked from each student's live mastery — strugglers get
-scaffolded-down problems, high-flyers get stretch work.
-
-**If your scaffolds document changes**, the app can re-import it — see
-[Updating the scaffold notes](#updating-the-scaffold-notes) below (it's one
-command; ask whoever hosts your app to run it).
-
----
-
-## 🚀 Getting it online (one-time setup)
-
-Someone — a teacher, a school IT person, a helpful parent — hosts the app
-once, then shares the web address. **There is nothing else to configure**:
-every deploy sets up the login key, brings the database schema up to date,
-and loads the full 9-unit curriculum by itself.
-
-### Option A — Put it on the internet (recommended for a class)
-
-Uses [Vercel](https://vercel.com) — the company behind Next.js, which this app
-is built on, so it deploys natively with no servers to manage (the free Hobby
-tier is enough for a class).
-
-1. Make a free account at [vercel.com](https://vercel.com/signup) and install
-   [Node.js 20+](https://nodejs.org) (the script fetches the Vercel CLI itself).
-2. In this folder (the repository root, not `scripts/`), run:
-
-   ```bash
-   npm run deploy
-   ```
-
-   (works the same in Windows PowerShell, macOS Terminal, and Linux)
-
-That single script links the app to your account, sets up its login secret,
-deploys everything, and prints your class's web address
-(`https://algebra-tutor.vercel.app`). Run the same script again any time to
-ship an update.
-
-The one thing the script can't create for you is the database: the first run
-will ask you to open your project on vercel.com → **Storage → Create
-Database** → **Postgres (Neon, free tier)**, connect it, and re-run the
-script. That's a one-time click — every deploy after that is just the script.
-(Until the database is connected, deploys stop with a "DATABASE_URL is not
-set" message — that's expected, not broken.)
-
-### Option B — Run it on one computer (a classroom laptop works)
-
-1. Install [Node.js 20+](https://nodejs.org) and
-   [PostgreSQL](https://www.postgresql.org/download/).
-2. In this folder, run:
-
-   ```bash
-   ./scripts/start.sh
-   ```
-
-3. When it settles, open **http://localhost:3000**. Students on the same
-   network can use your computer's address (e.g. `http://192.168.1.20:3000`).
-
-The script installs dependencies, creates the database, loads the curriculum,
-and starts the app — there's nothing to configure.
-
-### The phone app (optional)
-
-The website already installs to a home screen like an app. If you also want
-the **native iOS/Android app** (same screens, built with Expo):
-
-```bash
-cd apps/native
-cp .env.example .env      # set EXPO_PUBLIC_API_URL to your web address
-npm run dev               # scan the QR code with the Expo Go app
-```
-
-App-store builds: `npx eas build` ([EAS docs](https://docs.expo.dev/eas/)).
-
----
-
-## 🤖 Turning on the AI tutor chat (optional)
-
-The step-by-step hints work out of the box with **no AI setup at all**. The
-conversational "I don't get it" tutor is an optional extra layer. Whichever
-provider you pick, it gets the same rules — teach the classroom method, never
-give the final answer, age-appropriate tone, EN/ES — and it **never grades**
-(the math engine does).
-
-Pick ONE, put it in a `.env` file in this folder (for Vercel hosting, re-run
-`npm run deploy` — it copies these keys from `.env` — or add them under
-your project's **Settings → Environment Variables** on vercel.com):
-
-**Free — open model on Hugging Face.** Get a token at
-[huggingface.co/settings/tokens](https://huggingface.co/settings/tokens):
-
-```
-TUTOR_PROVIDER=openai
-HF_TOKEN=hf_xxx
-TUTOR_MODEL=Qwen/Qwen2.5-7B-Instruct
-```
-
-**Free & private — a model on your own computer.** With
-[Ollama](https://ollama.com) (`ollama pull qwen2.5`), student chat never
-leaves your machine:
-
-```
-TUTOR_PROVIDER=openai
-TUTOR_BASE_URL=http://localhost:11434/v1
-TUTOR_MODEL=qwen2.5
-```
-
-**Paid — Claude.** Strongest quality and guardrails:
-
-```
-ANTHROPIC_API_KEY=sk-ant-...
-```
-
-If nothing is set, the tutor button quietly falls back to the built-in hints.
-
-> **Tip:** prefer general instruct models (`Qwen2.5-7B-Instruct`,
-> `Llama-3.1-8B-Instruct`) over math-*solver* models (Qwen2.5-Math,
-> DeepSeek-Math). Solvers are trained to blurt full solutions — the opposite
-> of a good tutor.
-
----
-
-## 📄 Updating the scaffold notes
-
-The scaffold notes students see are rendered straight from the class's
-document (`scripts/Algebra Scaffolds__891.docx`) — nothing is re-typed, so
-students see each page exactly as the teacher made it. When the document
-changes, replace the file and run:
-
-```bash
-pip install pymupdf Pillow        # first time only; LibreOffice also required
-python3 scripts/ingest_scaffold_images.py "scripts/Algebra Scaffolds__891.docx"
-```
-
-The script finds each scaffold's title in the document, slices out that
-section (photos, tables, and hand-drawn math included), and saves it as the
-image students see. Redeploy (or restart) and the lessons pick up the new
-notes automatically.
-
----
-
-## ⚙️ Settings reference (all optional)
-
-| Setting | Default | What it does |
-|---|---|---|
-| `DATABASE_URL` | local `algebra_tutor` db | PostgreSQL connection |
-| `JWT_SECRET` | auto-generated & saved | login-token key; required on Vercel (no disk to save to — the deploy script sets it) |
-| `TUTOR_PROVIDER` | auto-detect | `openai` (HF / self-hosted), `anthropic`, or `none` |
-| `HF_TOKEN` / `TUTOR_API_KEY` | — | token for the OpenAI-compatible tutor endpoint |
-| `TUTOR_BASE_URL` | Hugging Face router | tutor endpoint (e.g. `http://localhost:11434/v1`) |
-| `TUTOR_MODEL` | `Qwen/Qwen2.5-7B-Instruct` | tutor model id |
-| `ANTHROPIC_API_KEY` | — | use Claude for the tutor (auto-detected) |
-| `PORT` | `3000` | port the web app listens on |
-| `DATA_DIR` | `.data` | where the login key is stored (local hosting only — Vercel uses `JWT_SECRET`) |
-| `EXPO_PUBLIC_API_URL` | — | phone app only: your web address |
-
----
-
-## 🧑‍💻 For developers
-
-A **Turborepo** monorepo, TypeScript end-to-end. One Next.js server hosts the
-student PWA, the typed tRPC API, and the scaffold images on a single URL; the
-Expo app reuses the exact same screens against that URL.
+| Web | Next.js 15 (App Router), React 19, react-native-web |
+| Native | Expo 54 / expo-router 6, React Native 0.81, Reanimated 4 |
+| Shared UI | Tamagui 1.12, Solito 4 (navigation), Zustand, TanStack Query, KaTeX |
+| API | tRPC v11, Zod, superjson, JWT (`jsonwebtoken`) + bcrypt auth |
+| Data | Prisma 6 + PostgreSQL (`pg`) |
+| Core logic | mathjs (CAS grading engine), problem generators, mastery model, curriculum content (EN/ES) |
+| AI tutor | Anthropic SDK, plus any OpenAI-compatible endpoint (Hugging Face / Ollama) |
+| Tooling | Turbo, Vitest, Prisma migrations, Vercel deploy |
 
 ```
 apps/
   web/       Next.js 15 (App Router) — student PWA + tRPC API on one port
   native/    Expo (expo-router) — iOS/Android app sharing the same screens
 packages/
-  app/       shared UI: Tamagui components + Solito navigation, i18n,
-             tRPC client (auto token refresh), offline attempt queue
-  api/       tRPC v11 routers (Zod-validated): auth, curriculum, practice,
-             progress, tutor (streaming chat)
-  db/        Prisma schema + client, idempotent SQL migrations, curriculum seed
-  core/      pure logic: CAS math engine (mathjs), problem generators,
-             mastery model, curriculum content (EN/ES), tutor providers
+  app/       shared UI: Tamagui + Solito, i18n, tRPC client, offline queue
+  api/       tRPC v11 routers (Zod): auth, curriculum, practice, progress, tutor
+  db/        Prisma schema + client, SQL migrations, curriculum seed
+  core/      CAS math engine, problem generators, mastery model, content, tutor providers
 ```
 
-```
-[Next.js PWA + Expo app] ──tRPC (superjson, streaming)──▶ [Next.js route handler]
-        │                                                     │
-        │                                                     ├── Prisma → PostgreSQL
-        │                                                     ├── Math engine (mathjs CAS)
-        └── KaTeX rendering, engine-driven graphing           └── LLM providers (HF / self-hosted / Claude)
-```
+## Install & run
+
+Requires **Node.js 20+** and **PostgreSQL**. Migrations and the full 9-unit
+curriculum seed run automatically on first boot — no manual DB steps.
+
+**Local (one command):**
 
 ```bash
-npm install          # also generates the Prisma client
-npm run dev          # Next.js web app (+ API) with hot reload on :3000
-npm run dev:native   # Expo dev server for the mobile app
-npm test             # math engine, generators, mastery, tRPC API integration
-npm run typecheck    # every workspace
-npm run build        # production build (turbo)
+./scripts/start.sh          # installs deps, creates DB, seeds, starts on :3000
 ```
 
-Dev needs a local PostgreSQL plus an `algebra_tutor_test` database for the
-API tests. Migrations and seeding run automatically when the server starts
-(`apps/web/instrumentation.ts`) — no manual db steps, ever. On Vercel, where
-functions cold-start concurrently instead of booting one server, the same
-migrate + seed run once at build time instead (`apps/web/vercel.json`).
+Then open **http://localhost:3000**. Students on the same network can use your
+machine's address (e.g. `http://192.168.1.20:3000`).
 
-Design notes worth knowing:
+**Dev mode:**
 
-- **Content is data, not code** — the curriculum lives in versioned Postgres
-  rows seeded from `packages/core/src/content/`; lessons are editable without
-  deploys. The attempts log is append-only.
-- **Grading** (`packages/core/src/math/engine.ts`) has 4 modes: `equivalent`,
-  `canonical_form` (enforces the *taught* final shape), `exact`, and
-  `numeric_tolerance`. Never string equality, never the LLM.
-- **One shared UI** — screens are written once in Tamagui primitives and run
-  on web (react-native-web under Next.js) and native (Expo). Web-only pieces
-  (KaTeX, the graph viewport's pointer pan/zoom) have `.web.tsx` variants
-  with native fallbacks (unicode math, WebView rendering the same SVG).
-- **Type-safety chain** — Prisma generates db types, tRPC + Zod carry them to
-  the client; a schema change that breaks a screen fails `npm run typecheck`
-  instead of failing in class.
-- **LLM cost control** — the deterministic hint ladder is free and always
-  first; tutor chat is rate-limited per user and capped at 12 turns/session,
-  and its system prompt (the lesson scaffold) is cache-friendly.
-- **Mastery model** — rolling accuracy with recency decay (hints discount
-  credit; inactivity decays toward uncertainty), which is what re-surfaces
-  stale skills in Regents review.
-- **react/react-dom are pinned** via root `overrides` to the Expo SDK pairing
-  so web and native share one React copy — keep them aligned when upgrading
-  Next or Expo.
+```bash
+npm install                 # also generates the Prisma client
+npm run dev                 # Next.js web app + API, hot reload on :3000
+npm run dev:native          # Expo dev server for the mobile app
+npm test                    # engine, generators, mastery, tRPC integration tests
+npm run typecheck           # every workspace
+npm run build               # production build (turbo)
+```
+
+Dev/tests need a local PostgreSQL plus an `algebra_tutor_test` database.
+
+**Deploy to the web (Vercel):**
+
+```bash
+npm run deploy              # links, sets the login secret, deploys, prints the URL
+```
+
+The first run asks you to create a Postgres database in the Vercel dashboard
+(**Storage → Create Database → Postgres**), connect it, and re-run — a one-time
+click. Every deploy after that is just the one command.
+
+**Native app (optional):**
+
+```bash
+cd apps/native
+cp .env.example .env        # set EXPO_PUBLIC_API_URL to your web address
+npm run dev                 # scan the QR code with Expo Go
+```
+
+App-store builds use `npx eas build` ([EAS docs](https://docs.expo.dev/eas/)).
+
+## AI tutor (optional)
+
+Step-by-step hints work with no AI setup. The conversational tutor is an extra
+layer — set **one** provider in a `.env` file at the repo root (never grades;
+that's the math engine's job):
+
+```bash
+# Free — open model on Hugging Face
+TUTOR_PROVIDER=openai
+HF_TOKEN=hf_xxx
+TUTOR_MODEL=Qwen/Qwen2.5-7B-Instruct
+
+# Free & private — local model via Ollama
+TUTOR_PROVIDER=openai
+TUTOR_BASE_URL=http://localhost:11434/v1
+TUTOR_MODEL=qwen2.5
+
+# Paid — Claude (strongest quality & guardrails)
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+If nothing is set, the tutor button falls back to the built-in hints. Prefer
+general instruct models over math-*solver* models — solvers blurt full
+solutions, the opposite of a good tutor.
+
+## Configuration
+
+All settings are optional.
+
+| Setting | Default | Purpose |
+|---|---|---|
+| `DATABASE_URL` | local `algebra_tutor` db | PostgreSQL connection |
+| `JWT_SECRET` | auto-generated & saved | login-token key; required on Vercel (deploy script sets it) |
+| `TUTOR_PROVIDER` | auto-detect | `openai`, `anthropic`, or `none` |
+| `HF_TOKEN` / `TUTOR_API_KEY` | — | token for the OpenAI-compatible tutor endpoint |
+| `TUTOR_BASE_URL` | Hugging Face router | tutor endpoint (e.g. `http://localhost:11434/v1`) |
+| `TUTOR_MODEL` | `Qwen/Qwen2.5-7B-Instruct` | tutor model id |
+| `ANTHROPIC_API_KEY` | — | use Claude for the tutor |
+| `PORT` | `3000` | web app port |
+| `DATA_DIR` | `.data` | where the login key is stored (local hosting only) |
+| `EXPO_PUBLIC_API_URL` | — | native app only: your web address |
+
+## Updating the scaffold notes
+
+Scaffold notes render straight from the class document
+(`scripts/Algebra Scaffolds__891.docx`). To refresh them, replace the file and
+run:
+
+```bash
+pip install pymupdf Pillow        # first time only; LibreOffice also required
+python3 scripts/ingest_scaffold_images.py "scripts/Algebra Scaffolds__891.docx"
+```
+
+Redeploy or restart, and lessons pick up the new notes automatically.
+
+## Design notes
+
+- **Content is data, not code** — the curriculum lives in versioned Postgres rows seeded from `packages/core/src/content/`; the attempts log is append-only.
+- **Grading** (`packages/core/src/math/engine.ts`) has 4 modes: `equivalent`, `canonical_form`, `exact`, `numeric_tolerance`. Never string equality, never the LLM.
+- **One shared UI** — screens written once in Tamagui run on web and native; web-only pieces (KaTeX, graph pan/zoom) have `.web.tsx` variants with native fallbacks.
+- **Type-safety chain** — Prisma → tRPC + Zod → client; a schema change that breaks a screen fails `npm run typecheck`, not class.
+- **Mastery model** — rolling accuracy with recency decay, which re-surfaces stale skills in Regents review.
+- **react/react-dom are pinned** via root `overrides` to the Expo SDK pairing so web and native share one React copy.
