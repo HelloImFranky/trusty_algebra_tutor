@@ -8,4 +8,5 @@ export {
   buildSlopeFromPoints,
   buildSlopeInterceptRewrite,
   buildAddPolynomials,
+  buildFoil,
 } from '@tutor/core';

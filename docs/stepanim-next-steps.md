@@ -100,6 +100,16 @@ start` → Playwright at `/opt/pw-browsers/chromium`; native via
     questions gained an optional `anim` payload (skill slug + params)
     revealed **only after the attempt** (params can encode the answer),
     on the five archetypes a builder covers.
+14. ~~C. FOIL script~~ — `buildFoil(p, q)` for the `foil` template
+    `(x + p)(x + q)` (params `{p, q}`, previously the null branch under the
+    `polynomial-operations` skill). Walks First · Outer · Inner · Last,
+    reveals the four products (`x² + qx + px + pq`), then combines the two
+    middle like terms into `x² + (p+q)x + pq`; the middle term cancels when
+    `p + q = 0` (difference of squares). Single row, reuses existing emph
+    colors, 8 steps, EN + ES. Hand-authored `foilScript` ((x + 5)(x − 6),
+    the 2.3 worked example) registered in `demoScripts` and under lesson
+    2.3. `mono_times_poly` (`{m, a, b}`) stays unanimated. Tests in
+    `builders.test.ts`.
 
 ## Remaining
 
@@ -121,9 +131,12 @@ NOT for web — keep the current web path.
 
 ### C. More scripts (future)
 
-- **2.4+ FOIL / factoring** — would reuse the two-row layout and could
-  pair with the polynomial builders. Keep scripts ≤ 8 steps, EN + ES,
-  reuse existing emph colors.
+- ~~**FOIL** — multiply two binomials~~ — shipped (see Done #14).
+- **Factoring** (`x² + bx + c → (x + m)(x + n)`) — the reverse of FOIL;
+  would show finding the pair that multiplies to `c` and adds to `b`. Pairs
+  naturally with `buildFoil`. Keep ≤ 8 steps, EN + ES, reuse emph colors.
+- **Binomial × trinomial** — needs the two-row layout (distribute 6 times);
+  a larger follow-up.
 
 ### H. Small nits
 
