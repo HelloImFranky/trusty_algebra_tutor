@@ -5,6 +5,11 @@ Scheduled follow-up to the branch `claude/repo-security-review-stw5sn`
 COPPA issues; this doc plans the teacher-facing feature those fixes cleared
 the way for. Written so a fresh session can pick it up phase by phase.
 
+**Status (2026-07-14):** Stage 1 **and** Stage 2 are implemented on branch
+`admin-teacher-dash` (classes/join-codes/roster + admin-approval provisioning,
+with `npm run create-admin` as the bootstrap). This doc is kept as the design
+record; the sections below describe what was built.
+
 ## Why this exists
 
 The security review found that teachers had **blanket read access to every

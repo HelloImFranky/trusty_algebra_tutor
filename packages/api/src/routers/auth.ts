@@ -41,10 +41,10 @@ function throttle(consume: (key: string) => boolean, key: string) {
 const ipKey = (ctx: Context) => ctx.ip ?? 'unknown';
 
 const registerSchema = z.object({
-  // Public self-signup may only create students and guardians. Teacher
-  // accounts grant read access to linked students and are provisioned by an
-  // administrator/seed — never self-assigned, or anyone could claim the role.
-  role: z.enum(['student', 'guardian']).default('student'),
+  // Public self-signup may create students, guardians, and teachers — but a
+  // self-registered teacher is created 'pending' and stays fail-closed until
+  // an admin approves them (see below). Admins are never self-registerable.
+  role: z.enum(['student', 'guardian', 'teacher']).default('student'),
   username: z.string().min(3).max(32).regex(/^[a-zA-Z0-9_.-]+$/),
   password: z.string().min(8).max(128),
   displayName: z.string().min(1).max(64),
@@ -92,6 +92,9 @@ export const authRouter = router({
         locale: input.locale,
         grade: input.grade ?? null,
         email: input.role === 'student' ? null : input.email ?? null,
+        // Teachers must be approved by an admin before they can do anything;
+        // students and guardians are active immediately.
+        status: input.role === 'teacher' ? 'pending' : 'active',
         // COPPA (§9): consent is NEVER granted from an unverified email at
         // signup. Guardians and 13+ students don't require it; an under-13
         // student starts with consent PENDING (false) until a guardian

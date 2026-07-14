@@ -35,10 +35,23 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
   return next({ ctx: { ...ctx, user: ctx.user } });
 });
 
-/** Only signed-in teachers. (Stage 2 will also require an active status.) */
+/**
+ * Only approved teachers. A self-registered teacher stays 'pending' — able to
+ * sign in and see the "awaiting approval" screen, but fail-closed everywhere
+ * else until an admin activates them. loadUser reads status fresh on every
+ * request, so a disable takes effect immediately.
+ */
 export const teacherProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== 'teacher') {
+  if (ctx.user.role !== 'teacher' || ctx.user.status !== 'active') {
     throw new TRPCError({ code: 'FORBIDDEN', message: 'teachers only' });
+  }
+  return next();
+});
+
+/** Only active admins (governance only — no student-data access). */
+export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (ctx.user.role !== 'admin' || ctx.user.status !== 'active') {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'admins only' });
   }
   return next();
 });

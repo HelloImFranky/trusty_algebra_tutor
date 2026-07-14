@@ -1,4 +1,5 @@
 import { router } from './trpc.js';
+import { adminRouter } from './routers/admin.js';
 import { authRouter } from './routers/auth.js';
 import { calculatorRouter } from './routers/calculator.js';
 import { curriculumRouter } from './routers/curriculum.js';
@@ -9,6 +10,7 @@ import { teacherRouter } from './routers/teacher.js';
 import { tutorRouter } from './routers/tutor.js';
 
 export const appRouter = router({
+  admin: adminRouter,
   auth: authRouter,
   calculator: calculatorRouter,
   curriculum: curriculumRouter,
@@ -22,4 +24,4 @@ export const appRouter = router({
 export type AppRouter = typeof appRouter;
 
 export { createContext, type Context } from './trpc.js';
-export type { AuthUser, Role, Locale } from './auth.js';
+export type { AuthUser, Role, Locale, AccountStatus } from './auth.js';

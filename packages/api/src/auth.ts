@@ -4,8 +4,9 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '@tutor/db';
 import { authConfig, jwtSecret } from './config.js';
 
-export type Role = 'student' | 'guardian' | 'teacher';
+export type Role = 'student' | 'guardian' | 'teacher' | 'admin';
 export type Locale = 'en' | 'es';
+export type AccountStatus = 'active' | 'pending' | 'disabled';
 
 export interface AuthUser {
   id: number;
@@ -13,6 +14,7 @@ export interface AuthUser {
   username: string;
   displayName: string;
   locale: Locale;
+  status: AccountStatus;
 }
 
 export function signAccessToken(user: AuthUser): string {
@@ -47,7 +49,7 @@ export async function rotateRefreshToken(token: string): Promise<AuthUser | null
 export async function loadUser(id: number): Promise<AuthUser | null> {
   const u = await prisma.user.findUnique({
     where: { id: BigInt(id) },
-    select: { id: true, role: true, username: true, displayName: true, locale: true },
+    select: { id: true, role: true, username: true, displayName: true, locale: true, status: true },
   });
   if (!u) return null;
   return {
@@ -56,6 +58,7 @@ export async function loadUser(id: number): Promise<AuthUser | null> {
     username: u.username,
     displayName: u.displayName,
     locale: u.locale as Locale,
+    status: u.status as AccountStatus,
   };
 }
 
