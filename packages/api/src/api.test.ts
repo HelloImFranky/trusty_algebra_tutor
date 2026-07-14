@@ -77,6 +77,26 @@ describe('auth (COPPA-aware)', () => {
     expect(s.user.role).toBe('student');
     expect(s.accessToken).toBeTruthy();
     student = s.user;
+
+    // COPPA: an unverified guardian email must NOT grant consent — the
+    // under-13 account is created with consent pending until verified.
+    const row = await prisma.user.findUnique({
+      where: { id: BigInt(student.id) },
+      select: { guardianConsent: true },
+    });
+    expect(row?.guardianConsent).toBe(false);
+  });
+
+  it('refuses to self-register a privileged teacher account', async () => {
+    await expect(
+      // teacher is not a self-serve role; the enum rejects it
+      anon.auth.register({
+        role: 'teacher',
+        username: 'self_teacher',
+        password: 'password123',
+        displayName: 'Sneaky',
+      } as unknown as Parameters<typeof anon.auth.register>[0]),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 
   it('logs in and refreshes tokens (with rotation)', async () => {
@@ -92,6 +112,24 @@ describe('auth (COPPA-aware)', () => {
 
   it('rejects unauthenticated protected calls', async () => {
     await expect(anon.curriculum.map()).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+  });
+
+  it('rate-limits repeated login attempts against one account from an IP', async () => {
+    // Dedicated IP + username so this bucket is isolated from other tests.
+    const attacker = appRouter.createCaller({ user: null, ip: '203.0.113.42' });
+    let limited = false;
+    for (let i = 0; i < 12; i++) {
+      try {
+        await attacker.auth.login({ username: 'brute_target', password: `guess-${i}` });
+      } catch (err) {
+        if (err instanceof TRPCError && err.code === 'TOO_MANY_REQUESTS') {
+          limited = true;
+          break;
+        }
+        // otherwise it's the expected UNAUTHORIZED — keep guessing
+      }
+    }
+    expect(limited).toBe(true);
   });
 });
 
@@ -466,6 +504,42 @@ describe('progress & FERPA scoping', () => {
     await expect(
       as(student).progress.student({ studentId: student.id + 9999 }),
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('scopes teachers to linked students (no blanket access)', async () => {
+    // Teachers are provisioned out-of-band, not via public signup.
+    const row = await prisma.user.create({
+      data: {
+        role: 'teacher',
+        username: 'teacher1',
+        passwordHash: 'x',
+        displayName: 'Teacher One',
+      },
+      select: { id: true },
+    });
+    const teacher: AuthUser = {
+      id: Number(row.id),
+      role: 'teacher',
+      username: 'teacher1',
+      displayName: 'Teacher One',
+      locale: 'en',
+    };
+
+    // Unlinked: a teacher must NOT be able to read an arbitrary student.
+    await expect(
+      as(teacher).progress.student({ studentId: student.id }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    // Linked via an active roster entry: access is granted, read-only.
+    await prisma.guardianLink.create({
+      data: {
+        guardianUserId: row.id,
+        studentUserId: BigInt(student.id),
+        status: 'active',
+      },
+    });
+    const res = await as(teacher).progress.student({ studentId: student.id });
+    expect(res.student.displayName).toBe('Student One');
   });
 
   it('exports the student data', async () => {

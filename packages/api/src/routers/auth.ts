@@ -2,6 +2,7 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { prisma } from '@tutor/db';
 import {
+  equalizeLoginTiming,
   hashPassword,
   issueRefreshToken,
   loadUser,
@@ -10,10 +11,40 @@ import {
   verifyPassword,
   type AuthUser,
 } from '../auth.js';
-import { protectedProcedure, publicProcedure, router } from '../trpc.js';
+import {
+  fixedWindowLimiter,
+  protectedProcedure,
+  publicProcedure,
+  router,
+  type Context,
+} from '../trpc.js';
+
+// Per-IP throttles for the unauthenticated endpoints (design doc §8). These
+// are the only routes reachable without a token, so they're the brute-force /
+// abuse surface. Limits are lenient enough for a whole classroom behind one
+// school NAT while still bounding automated attacks.
+//   - login keys on IP+username, so guessing one account is capped without
+//     penalising the 30 other students signing in from the same IP.
+//   - register/refresh key on IP alone.
+const loginRate = fixedWindowLimiter(10);
+const registerRate = fixedWindowLimiter(20);
+const refreshRate = fixedWindowLimiter(60);
+
+const TOO_MANY = 'Too many attempts. Please wait a minute and try again.';
+
+function throttle(consume: (key: string) => boolean, key: string) {
+  if (!consume(key)) {
+    throw new TRPCError({ code: 'TOO_MANY_REQUESTS', message: TOO_MANY });
+  }
+}
+
+const ipKey = (ctx: Context) => ctx.ip ?? 'unknown';
 
 const registerSchema = z.object({
-  role: z.enum(['student', 'guardian', 'teacher']).default('student'),
+  // Public self-signup may only create students and guardians. Teacher
+  // accounts grant read access to linked students and are provisioned by an
+  // administrator/seed — never self-assigned, or anyone could claim the role.
+  role: z.enum(['student', 'guardian']).default('student'),
   username: z.string().min(3).max(32).regex(/^[a-zA-Z0-9_.-]+$/),
   password: z.string().min(8).max(128),
   displayName: z.string().min(1).max(64),
@@ -35,7 +66,8 @@ async function tokensFor(user: AuthUser) {
 }
 
 export const authRouter = router({
-  register: publicProcedure.input(registerSchema).mutation(async ({ input }) => {
+  register: publicProcedure.input(registerSchema).mutation(async ({ ctx, input }) => {
+    throttle(registerRate, ipKey(ctx));
     if (input.role === 'student' && input.email) {
       throw new TRPCError({
         code: 'BAD_REQUEST',
@@ -60,9 +92,12 @@ export const authRouter = router({
         locale: input.locale,
         grade: input.grade ?? null,
         email: input.role === 'student' ? null : input.email ?? null,
-        // guardian email supplied → consent flow initiated; real deployments
-        // verify by email before flipping this on.
-        guardianConsent: input.role !== 'student' || !input.under13 || Boolean(input.guardianEmail),
+        // COPPA (§9): consent is NEVER granted from an unverified email at
+        // signup. Guardians and 13+ students don't require it; an under-13
+        // student starts with consent PENDING (false) until a guardian
+        // actually verifies out-of-band. Supplying a guardianEmail only
+        // initiates that flow (link below) — it does not certify consent.
+        guardianConsent: input.role !== 'student' || !input.under13,
       },
     });
     if (input.role === 'student' && input.guardianEmail) {
@@ -89,12 +124,18 @@ export const authRouter = router({
 
   login: publicProcedure
     .input(z.object({ username: z.string(), password: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      throttle(loginRate, `${ipKey(ctx)}|${input.username.toLowerCase()}`);
       const row = await prisma.user.findUnique({
         where: { username: input.username },
         select: { id: true, passwordHash: true },
       });
-      if (!row || !(await verifyPassword(input.password, row.passwordHash))) {
+      if (!row) {
+        // Spend the same time as a real bcrypt compare (no user enumeration).
+        await equalizeLoginTiming(input.password);
+        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'invalid credentials' });
+      }
+      if (!(await verifyPassword(input.password, row.passwordHash))) {
         throw new TRPCError({ code: 'UNAUTHORIZED', message: 'invalid credentials' });
       }
       const user = (await loadUser(Number(row.id))) as AuthUser;
@@ -103,7 +144,8 @@ export const authRouter = router({
 
   refresh: publicProcedure
     .input(z.object({ refreshToken: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      throttle(refreshRate, ipKey(ctx));
       const user = await rotateRefreshToken(input.refreshToken);
       if (!user) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'invalid refresh token' });
       return tokensFor(user);
