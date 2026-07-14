@@ -8,7 +8,9 @@ import { useState } from 'react';
 import { Text, XStack, YStack } from 'tamagui';
 import { trpc } from '../lib/trpc';
 import { useI18n, type I18nKey } from '../lib/i18n';
+import { useAuth } from '../lib/auth';
 import { useRequireAuth } from '../components/AppChrome';
+import { JoinClassCard } from '../components/JoinClassCard';
 import {
   AppCard, Badge, Feedback, Loading, Muted, ProgressBar, Screen, SubTitle, Title, BRAND, COLORS,
 } from '../components/ui';
@@ -85,6 +87,7 @@ function Medal({ a }: { a: AchievementView }) {
 export function ProgressScreen({ studentId }: { studentId?: number }) {
   const { t, locale } = useI18n();
   const authed = useRequireAuth();
+  const role = useAuth((s) => s.auth?.user.role);
   // Which Regents topic's detail dropdown is open (one at a time keeps the
   // scoreboard tidy).
   const [openTopic, setOpenTopic] = useState<string | null>(null);
@@ -136,6 +139,8 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
         📈 {t('progress')}
         {data.student ? ` — ${data.student.displayName}` : ''}
       </Title>
+
+      {!studentId && role === 'student' && <JoinClassCard />}
 
       <XStack gap={12} flexWrap="wrap">
         <Stat icon="🔥" value={data.streakDays} label={t('streak')} />
