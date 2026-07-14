@@ -113,6 +113,24 @@ describe('auth (COPPA-aware)', () => {
   it('rejects unauthenticated protected calls', async () => {
     await expect(anon.curriculum.map()).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
   });
+
+  it('rate-limits repeated login attempts against one account from an IP', async () => {
+    // Dedicated IP + username so this bucket is isolated from other tests.
+    const attacker = appRouter.createCaller({ user: null, ip: '203.0.113.42' });
+    let limited = false;
+    for (let i = 0; i < 12; i++) {
+      try {
+        await attacker.auth.login({ username: 'brute_target', password: `guess-${i}` });
+      } catch (err) {
+        if (err instanceof TRPCError && err.code === 'TOO_MANY_REQUESTS') {
+          limited = true;
+          break;
+        }
+        // otherwise it's the expected UNAUTHORIZED — keep guessing
+      }
+    }
+    expect(limited).toBe(true);
+  });
 });
 
 describe('curriculum', () => {

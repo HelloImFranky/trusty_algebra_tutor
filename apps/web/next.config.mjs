@@ -29,6 +29,31 @@ const config = {
   env: {
     TAMAGUI_TARGET: 'web',
   },
+  // Baseline security headers. These reduce the blast radius of any XSS
+  // (auth tokens live in web storage) and stop MIME/clickjacking tricks. A
+  // full Content-Security-Policy is intentionally omitted here: Tamagui/RN-web
+  // inject inline <style>/<script>, so a strict CSP needs nonce plumbing —
+  // tracked as follow-up.
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=63072000; includeSubDomains',
+          },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=()',
+          },
+        ],
+      },
+    ];
+  },
   webpack: (webpackConfig) => {
     webpackConfig.resolve.alias = {
       ...webpackConfig.resolve.alias,

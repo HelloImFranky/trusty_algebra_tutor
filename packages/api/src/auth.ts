@@ -19,7 +19,7 @@ export function signAccessToken(user: AuthUser): string {
   return jwt.sign(
     { sub: String(user.id), role: user.role, username: user.username },
     jwtSecret(),
-    { expiresIn: authConfig.accessTokenTtl } as jwt.SignOptions,
+    { expiresIn: authConfig.accessTokenTtl, algorithm: 'HS256' } as jwt.SignOptions,
   );
 }
 
@@ -62,7 +62,11 @@ export async function loadUser(id: number): Promise<AuthUser | null> {
 export async function userFromAuthHeader(header: string | null | undefined): Promise<AuthUser | null> {
   if (!header?.startsWith('Bearer ')) return null;
   try {
-    const payload = jwt.verify(header.slice(7), jwtSecret()) as jwt.JwtPayload;
+    // Pin the algorithm: never let a token's own header pick it (defends
+    // against alg-confusion / "alg: none" forgeries).
+    const payload = jwt.verify(header.slice(7), jwtSecret(), {
+      algorithms: ['HS256'],
+    }) as jwt.JwtPayload;
     return await loadUser(Number(payload.sub));
   } catch {
     return null;
@@ -75,4 +79,13 @@ export async function hashPassword(pw: string): Promise<string> {
 
 export async function verifyPassword(pw: string, hash: string): Promise<boolean> {
   return bcrypt.compare(pw, hash);
+}
+
+// A bcrypt compare against a throwaway hash, used when a login names an
+// unknown user so the response takes the same time as a wrong password —
+// otherwise the timing difference reveals which usernames exist.
+let dummyHash: string | null = null;
+export async function equalizeLoginTiming(pw: string): Promise<void> {
+  dummyHash ??= await hashPassword('unused-timing-equalizer');
+  await verifyPassword(pw, dummyHash);
 }
