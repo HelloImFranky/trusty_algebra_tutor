@@ -9,7 +9,7 @@
  * canceling pairs being struck out) instead of just swapping lines.
  */
 
-export type TokenKind = 'num' | 'var' | 'op' | 'rel';
+export type TokenKind = 'num' | 'var' | 'op' | 'rel' | 'frac';
 
 /** Visual emphasis for a token within one step. */
 export type Emph =
@@ -27,6 +27,13 @@ export interface EqToken {
   emph?: Emph;
   /** Render flush against the previous token (e.g. the "x" in "2x"). */
   tight?: boolean;
+  /** Stacked fraction parts, for kind 'frac'. `text` stays the plain
+   * rendering (e.g. "3/4") for history lines and screen readers. */
+  num?: string;
+  den?: string;
+  /** Second-line placement for vertical layouts (polynomial addition).
+   * Default 0 = the main line. */
+  row?: 0 | 1;
 }
 
 export interface EqStep {
@@ -49,8 +56,20 @@ const t = (
   id: string,
   text: string,
   kind: TokenKind,
-  extra?: Partial<Pick<EqToken, 'emph' | 'tight'>>,
+  extra?: Partial<Pick<EqToken, 'emph' | 'tight' | 'row'>>,
 ): EqToken => ({ id, text, kind, ...extra });
+
+/** Stacked-fraction token. Multi-term parts get parenthesized in the
+ * plain-text fallback so "8 − 2/5 − 1" can't be misread. */
+const f = (
+  id: string,
+  num: string,
+  den: string,
+  extra?: Partial<Pick<EqToken, 'emph' | 'tight'>>,
+): EqToken => {
+  const wrap = (s: string) => (s.includes(' ') ? `(${s})` : s);
+  return { id, text: `${wrap(num)}/${wrap(den)}`, kind: 'frac', num, den, ...extra };
+};
 
 /** Two-step equation: 2x + 3 = 11 (Unit 2 style). */
 export const twoStepScript: EqScript = {
@@ -485,6 +504,204 @@ export const evaluateScript: EqScript = {
   ],
 };
 
+/** Adding polynomials vertically: (3x² + 2x + 4) + (2x² + 5x + 1) (Unit 2). */
+export const polyAddScript: EqScript = {
+  id: 'poly-add',
+  titleEn: 'Add polynomials',
+  titleEs: 'Suma de polinomios',
+  steps: [
+    {
+      tokens: [
+        t('lp', '(', 'op'),
+        t('a2', '3x²', 'var', { tight: true }),
+        t('ao1', '+', 'op'),
+        t('a1', '2x', 'var'),
+        t('ao2', '+', 'op'),
+        t('a0', '4', 'num'),
+        t('rp', ')', 'op', { tight: true }),
+        t('mid', '+', 'op'),
+        t('lq', '(', 'op'),
+        t('b2', '2x²', 'var', { tight: true }),
+        t('bo1', '+', 'op'),
+        t('b1', '5x', 'var'),
+        t('bo2', '+', 'op'),
+        t('b0', '1', 'num'),
+        t('rq', ')', 'op', { tight: true }),
+      ],
+      explainEn: 'To ADD polynomials, combine like terms. Stack them so the like terms line up.',
+      explainEs: 'Para SUMAR polinomios, combina los términos semejantes. Apílalos para que queden alineados.',
+    },
+    {
+      tokens: [
+        t('a2', '3x²', 'var'),
+        t('ao1', '+', 'op'),
+        t('a1', '2x', 'var'),
+        t('ao2', '+', 'op'),
+        t('a0', '4', 'num'),
+        t('mid', '+', 'op', { row: 1 }),
+        t('b2', '2x²', 'var', { row: 1 }),
+        t('bo1', '+', 'op', { row: 1 }),
+        t('b1', '5x', 'var', { row: 1 }),
+        t('bo2', '+', 'op', { row: 1 }),
+        t('b0', '1', 'num', { row: 1 }),
+      ],
+      explainEn: 'Each column holds like terms: x² over x², x over x, numbers over numbers.',
+      explainEs: 'Cada columna tiene términos semejantes: x² sobre x², x sobre x, números sobre números.',
+    },
+    {
+      tokens: [
+        t('a2', '3x²', 'var', { emph: 'focus' }),
+        t('ao1', '+', 'op'),
+        t('a1', '2x', 'var'),
+        t('ao2', '+', 'op'),
+        t('a0', '4', 'num'),
+        t('mid', '+', 'op', { row: 1 }),
+        t('b2', '2x²', 'var', { emph: 'focus', row: 1 }),
+        t('bo1', '+', 'op', { row: 1 }),
+        t('b1', '5x', 'var', { row: 1 }),
+        t('bo2', '+', 'op', { row: 1 }),
+        t('b0', '1', 'num', { row: 1 }),
+      ],
+      explainEn: 'The x² column: 3x² + 2x² = 5x².',
+      explainEs: 'La columna de x²: 3x² + 2x² = 5x².',
+    },
+    {
+      tokens: [
+        t('a2', '3x²', 'var'),
+        t('ao1', '+', 'op'),
+        t('a1', '2x', 'var', { emph: 'focus' }),
+        t('ao2', '+', 'op'),
+        t('a0', '4', 'num'),
+        t('mid', '+', 'op', { row: 1 }),
+        t('b2', '2x²', 'var', { row: 1 }),
+        t('bo1', '+', 'op', { row: 1 }),
+        t('b1', '5x', 'var', { emph: 'focus', row: 1 }),
+        t('bo2', '+', 'op', { row: 1 }),
+        t('b0', '1', 'num', { row: 1 }),
+      ],
+      explainEn: 'The x column: 2x + 5x = 7x.',
+      explainEs: 'La columna de x: 2x + 5x = 7x.',
+    },
+    {
+      tokens: [
+        t('a2', '3x²', 'var'),
+        t('ao1', '+', 'op'),
+        t('a1', '2x', 'var'),
+        t('ao2', '+', 'op'),
+        t('a0', '4', 'num', { emph: 'focus' }),
+        t('mid', '+', 'op', { row: 1 }),
+        t('b2', '2x²', 'var', { row: 1 }),
+        t('bo1', '+', 'op', { row: 1 }),
+        t('b1', '5x', 'var', { row: 1 }),
+        t('bo2', '+', 'op', { row: 1 }),
+        t('b0', '1', 'num', { emph: 'focus', row: 1 }),
+      ],
+      explainEn: 'The number column: 4 + 1 = 5.',
+      explainEs: 'La columna de números: 4 + 1 = 5.',
+    },
+    {
+      tokens: [
+        t('s2', '5x²', 'var', { emph: 'result' }),
+        t('so1', '+', 'op'),
+        t('s1', '7x', 'var', { emph: 'result' }),
+        t('so2', '+', 'op'),
+        t('s0', '5', 'num', { emph: 'result' }),
+      ],
+      explainEn: 'Put the columns together: 5x² + 7x + 5. Already in standard form — highest power first!',
+      explainEs: 'Junta las columnas: 5x² + 7x + 5. ¡Ya está en forma estándar — la potencia mayor primero!',
+      holdMs: 3000,
+    },
+  ],
+};
+
+/** Slope from two points: (1, 2) and (5, 8) (Unit 5). */
+export const slopeTwoPointsScript: EqScript = {
+  id: 'slope-two-points',
+  titleEn: 'Slope from two points',
+  titleEs: 'Pendiente con dos puntos',
+  steps: [
+    {
+      tokens: [t('m', 'm', 'var'), t('eq', '=', 'rel'), f('fr', 'y₂ − y₁', 'x₂ − x₁')],
+      explainEn: 'Find the slope through (1, 2) and (5, 8). Slope m is RISE (y-change) over RUN (x-change).',
+      explainEs: 'Encuentra la pendiente por (1, 2) y (5, 8). La pendiente m es ELEVACIÓN (cambio en y) sobre AVANCE (cambio en x).',
+    },
+    {
+      tokens: [t('m', 'm', 'var'), t('eq', '=', 'rel'), f('fr', '8 − 2', '5 − 1', { emph: 'focus' })],
+      explainEn: 'Substitute the points. Subtract in the SAME order on top and bottom.',
+      explainEs: 'Sustituye los puntos. Resta en el MISMO orden arriba y abajo.',
+    },
+    {
+      tokens: [t('m', 'm', 'var'), t('eq', '=', 'rel'), f('fr', '6', '4', { emph: 'result' })],
+      explainEn: '8 − 2 = 6 (the rise) and 5 − 1 = 4 (the run).',
+      explainEs: '8 − 2 = 6 (la elevación) y 5 − 1 = 4 (el avance).',
+    },
+    {
+      tokens: [t('m', 'm', 'var'), t('eq', '=', 'rel'), f('fr', '3', '2', { emph: 'result' })],
+      explainEn: 'Simplify: divide top and bottom by 2. The slope is 3/2 — up 3 for every 2 right.',
+      explainEs: 'Simplifica: divide arriba y abajo entre 2. La pendiente es 3/2 — sube 3 por cada 2 a la derecha.',
+      holdMs: 3000,
+    },
+  ],
+};
+
+/** Rewrite in slope-intercept form: −2x + y = 5 (Unit 5). */
+export const slopeInterceptScript: EqScript = {
+  id: 'slope-intercept',
+  titleEn: 'Slope-intercept form',
+  titleEs: 'Forma pendiente-intercepto',
+  steps: [
+    {
+      tokens: [
+        t('a', '−2x', 'var'),
+        t('plus', '+', 'op'),
+        t('y', 'y', 'var'),
+        t('eq', '=', 'rel'),
+        t('n5', '5', 'num'),
+      ],
+      explainEn: 'We want y ALONE on the left — that is slope-intercept form, y = mx + b.',
+      explainEs: 'Queremos la y SOLA a la izquierda — esa es la forma pendiente-intercepto, y = mx + b.',
+    },
+    {
+      tokens: [
+        t('a', '−2x', 'var'),
+        t('plus', '+', 'op'),
+        t('y', 'y', 'var'),
+        t('gL', '+ 2x', 'op', { emph: 'apply' }),
+        t('eq', '=', 'rel'),
+        t('n5', '5', 'num'),
+        t('gR', '+ 2x', 'op', { emph: 'apply' }),
+      ],
+      explainEn: 'y has −2x next to it. Add 2x to BOTH sides to remove it.',
+      explainEs: 'La y tiene −2x al lado. Suma 2x a AMBOS lados para quitarlo.',
+    },
+    {
+      tokens: [
+        t('a', '−2x', 'var', { emph: 'cancel' }),
+        t('plus', '+', 'op'),
+        t('y', 'y', 'var'),
+        t('gL', '+ 2x', 'op', { emph: 'cancel' }),
+        t('eq', '=', 'rel'),
+        t('n5', '5', 'num', { emph: 'focus' }),
+        t('gR', '+ 2x', 'op', { emph: 'focus' }),
+      ],
+      explainEn: '−2x + 2x cancels — they add to zero. Only y is left on the left side.',
+      explainEs: '−2x + 2x se cancela — suman cero. Solo queda y en el lado izquierdo.',
+      holdMs: 3000,
+    },
+    {
+      tokens: [
+        t('y', 'y', 'var'),
+        t('eq', '=', 'rel'),
+        t('mx', '2x', 'var', { emph: 'result' }),
+        t('bop', '+', 'op'),
+        t('bb', '5', 'num', { emph: 'result' }),
+      ],
+      explainEn: 'Write the x-term first: y = 2x + 5. Slope m = 2, y-intercept b = 5!',
+      explainEs: 'Escribe primero el término con x: y = 2x + 5. ¡Pendiente m = 2, intercepto en y b = 5!',
+    },
+  ],
+};
+
 export const demoScripts: EqScript[] = [
   twoStepScript,
   likeTermsScript,
@@ -492,6 +709,9 @@ export const demoScripts: EqScript[] = [
   bothSidesScript,
   inequalityScript,
   evaluateScript,
+  polyAddScript,
+  slopeTwoPointsScript,
+  slopeInterceptScript,
 ];
 
 /**
@@ -501,9 +721,12 @@ export const demoScripts: EqScript[] = [
 export const scriptsByLessonCode: Record<string, EqScript[]> = {
   '2.1': [evaluateScript],
   '2.2': [likeTermsScript],
+  '2.3': [polyAddScript],
   '3.1': [twoStepScript, distributeScript],
   '3.2': [bothSidesScript],
   '3.3': [inequalityScript],
+  '5.2': [slopeTwoPointsScript],
+  '5.3': [slopeInterceptScript],
 };
 
 /** Split a step at its relation token (=, ≤, …) for the balance scale. */
@@ -517,12 +740,38 @@ function tokensToText(tokens: EqToken[]): string {
   return tokens.map((tok, i) => (i === 0 || tok.tight ? tok.text : ` ${tok.text}`)).join('');
 }
 
-/** Plain-text rendering of a step, for the history stack / accessibility. */
+/** Plain-text rendering of a step, for the history stack / accessibility.
+ * Two-row steps (vertical polynomial addition) join with a newline. */
 export function stepToText(step: EqStep): string {
-  return tokensToText(step.tokens);
+  const top = step.tokens.filter((tok) => !tok.row);
+  const bottom = step.tokens.filter((tok) => tok.row === 1);
+  return bottom.length ? `${tokensToText(top)}\n${tokensToText(bottom)}` : tokensToText(top);
 }
 
 /** Plain-text rendering of one side, for the balance-scale pans. */
 export function sideToText(tokens: EqToken[]): string {
   return tokensToText(tokens);
+}
+
+const ANIM_MARKER = /\[\[anim:(\d+)\]\]/g;
+
+/**
+ * Extract the animation deep-link marker a tutor reply may carry
+ * (`[[anim:N]]`, N numbered from 1). Returns the reply with every marker
+ * stripped, plus the 0-based step index of the first valid marker, or null.
+ *
+ * Lives here (not in the tutor module) so the chat UI can import it without
+ * pulling the server-only LLM providers into the client bundle.
+ */
+export function parseAnimMarker(text: string): { text: string; animStep: number | null } {
+  let step: number | null = null;
+  const cleaned = text
+    .replace(ANIM_MARKER, (_, n: string) => {
+      const parsed = parseInt(n, 10) - 1;
+      if (step === null && parsed >= 0) step = parsed;
+      return '';
+    })
+    .replace(/[ \t]+$/gm, '')
+    .trim();
+  return { text: cleaned, animStep: step };
 }

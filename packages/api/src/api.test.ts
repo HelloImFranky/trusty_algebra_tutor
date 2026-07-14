@@ -161,6 +161,22 @@ describe('practice loop', () => {
     expect(res.correct).toBe(true);
   });
 
+  it('records animation views on the attempt row', async () => {
+    const key = await prisma.problem.findUnique({ where: { id: BigInt(problem.id) } });
+    await as(student).practice.attempt({
+      problemId: problem.id,
+      submittedLatex: key!.answerLatex,
+      hintsUsed: 2,
+      animViews: 2,
+    });
+    const attempt = await prisma.attempt.findFirst({
+      where: { problemId: BigInt(problem.id) },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(attempt?.animViews).toBe(2);
+    expect(attempt?.hintsUsed).toBe(2);
+  });
+
   it('checks an individual step', async () => {
     const step = await prisma.problemStep.findFirst({
       where: { problem: { skillId: BigInt(skillId) } },
@@ -212,9 +228,13 @@ describe('practice loop', () => {
     expect(res.tier).toBe('modified');
   });
 
-  it('serves sprint problems', async () => {
+  it('serves sprint problems with params + slug for post-round walkthroughs', async () => {
     const res = await as(student).practice.sprint({ count: 5 });
     expect(res.problems.length).toBe(5);
+    for (const p of res.problems) {
+      expect(p).toHaveProperty('params');
+      expect(p).toHaveProperty('skillSlug');
+    }
   });
 
   it('assembles a review session from practiced skills', async () => {
@@ -241,6 +261,8 @@ describe('regents review', () => {
       expect(q.answered).toBeNull();
       expect(q).not.toHaveProperty('correctIndex');
       expect(q).not.toHaveProperty('explanation');
+      // animation params can encode the answer — never before the attempt
+      expect(q).not.toHaveProperty('anim');
     }
     // Round 0 = the four handwritten questions topped up with generated ones.
     expect(en.questions.slice(0, 4).map((q) => q.id)).toEqual([
@@ -283,6 +305,8 @@ describe('regents review', () => {
     expect(wrong.correct).toBe(false);
     expect(wrong.correctIndex).toBe(3);
     expect(wrong.explanation.length).toBeGreaterThan(10);
+    // handwritten bank questions have no animation params
+    expect(wrong).toHaveProperty('anim', null);
   });
 
   it('gives exactly one try per question', async () => {
@@ -360,6 +384,9 @@ describe('regents review', () => {
     expect(res.alreadyAnswered).toBe(false);
     expect(res.correct).toBe(res.correctIndex === 2);
     expect(res.explanation.length).toBeGreaterThan(10);
+    // r1:q1 is the two-step archetype: its params drive a replay animation.
+    expect(res.anim?.skillSlug).toBe('multi-step-equations');
+    expect(res.anim?.params).toMatchObject({ a: expect.any(Number), x: expect.any(Number) });
 
     const retry = await as(student).regents.answer({ questionId: q.id, choiceIndex: 0 });
     expect(retry.alreadyAnswered).toBe(true);

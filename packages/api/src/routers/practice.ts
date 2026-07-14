@@ -52,6 +52,9 @@ const attemptInput = z.object({
   problemId: z.number().int(),
   submittedLatex: z.string().max(2000),
   hintsUsed: z.number().int().min(0).max(20).default(0),
+  // animated-walkthrough opens for this problem (subset of hintsUsed during
+  // guided practice; tracked separately to measure impact on mastery)
+  animViews: z.number().int().min(0).max(20).default(0),
   stepReached: z.number().int().min(0).default(0),
   durationMs: z.number().int().nonnegative().optional(),
   context: z.enum(['practice', 'sprint', 'review']).default('practice'),
@@ -132,6 +135,7 @@ export const practiceRouter = router({
         correct: result.correct,
         misconceptionId: misconception?.id ?? null,
         hintsUsed: input.hintsUsed,
+        animViews: input.animViews,
         stepReached: input.stepReached,
         durationMs: input.durationMs ?? null,
         context: input.context,
@@ -208,17 +212,25 @@ export const practiceRouter = router({
     .input(localeInput.extend({ count: z.number().int().min(1).max(20).default(10) }))
     .query(async ({ ctx, input }) => {
       const locale = loc(ctx, input.locale);
-      const rows = await prisma.$queryRaw<ProblemRow[]>`
-        SELECT id, skill_id AS "skillId", tier,
-               prompt_en AS "promptEn", prompt_es AS "promptEs",
-               grading_mode AS "gradingMode"
-        FROM problems WHERE is_sprint ORDER BY random() LIMIT ${input.count}`;
+      // params + skill slug ride along so the post-round review can offer an
+      // animated walkthrough of any miss a stepanim builder understands.
+      const rows = await prisma.$queryRaw<
+        (ProblemRow & { paramsJson: unknown; skillSlug: string })[]
+      >`
+        SELECT p.id, p.skill_id AS "skillId", p.tier,
+               p.prompt_en AS "promptEn", p.prompt_es AS "promptEs",
+               p.grading_mode AS "gradingMode",
+               p.params_json AS "paramsJson", s.slug AS "skillSlug"
+        FROM problems p JOIN skills s ON s.id = p.skill_id
+        WHERE p.is_sprint ORDER BY random() LIMIT ${input.count}`;
       return {
         problems: rows.map((p) => ({
           id: Number(p.id),
           skillId: Number(p.skillId),
           prompt: locale === 'es' ? p.promptEs : p.promptEn,
           gradingMode: p.gradingMode,
+          params: p.paramsJson ?? null,
+          skillSlug: p.skillSlug ?? null,
         })),
       };
     }),

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { buildScriptForProblem } from '../anim/builders.js';
 import { regentsTopics } from './regents.js';
 import {
   REGENTS_BANK_SIZE,
@@ -95,6 +96,27 @@ describe('regents slot generators', () => {
         expect(seen.size, `${topic.slug} q${slot}`).toBeGreaterThan(1);
       }
     }
+  });
+
+  it('emits animation params that build a valid script wherever present', () => {
+    // The mappable archetypes (linear-equations q1/q3, inequalities q1,
+    // linear-functions q1, polynomials q1) attach anim params; every one of
+    // them must drive a real stepanim script across many seeds.
+    const withAnim = { 'linear-equations': [1, 3], inequalities: [1], 'linear-functions': [1], polynomials: [1] };
+    let checked = 0;
+    for (const [slug, animSlots] of Object.entries(withAnim)) {
+      for (const slot of animSlots) {
+        for (let seed = 1; seed <= 25; seed++) {
+          const q = generateRegentsQuestion(slug, slot, seed * 40503);
+          expect(q.anim, `${slug} q${slot} seed ${seed}`).toBeDefined();
+          const script = buildScriptForProblem(q.anim!.skillSlug, q.anim!.params);
+          expect(script, `${slug} q${slot} seed ${seed}`).not.toBeNull();
+          expect(script!.steps.length).toBeGreaterThan(1);
+          checked++;
+        }
+      }
+    }
+    expect(checked).toBe(125);
   });
 
   it('throws on unknown topics or slots', () => {

@@ -23,6 +23,9 @@ const GAP = 10;
 const TIGHT_GAP = 1;
 const LINE_H = 48;
 const CHIP_PAD = 7;
+// stacked fractions: numerator/denominator font + padding around the rule
+const FRAC_FONT = 16;
+const FRAC_PAD = 4;
 
 interface TokenAnim {
   x: Animated.Value;
@@ -31,7 +34,8 @@ interface TokenAnim {
 }
 
 function tokenStyle(tok: EqToken) {
-  let color: string = tok.kind === 'var' ? BRAND : tok.kind === 'num' ? '#111827' : '#6b7280';
+  let color: string =
+    tok.kind === 'var' ? BRAND : tok.kind === 'num' || tok.kind === 'frac' ? '#111827' : '#6b7280';
   let bg: string | undefined;
   let strike = false;
   switch (tok.emph) {
@@ -59,29 +63,51 @@ function tokenStyle(tok: EqToken) {
   return { color, bg, strike };
 }
 
+/** Width of one token: measured text, or the widest fraction part. */
+function tokenWidth(tok: EqToken, textW: Map<string, number>): number {
+  if (tok.kind === 'frac') {
+    const nw = textW.get(`frac:${tok.num ?? ''}`) ?? 0;
+    const dw = textW.get(`frac:${tok.den ?? ''}`) ?? 0;
+    return Math.max(nw, dw) + FRAC_PAD * 2;
+  }
+  return textW.get(tok.text) ?? 0;
+}
+
 /**
- * x-position of every token in a step, centered on containerW/2. A line
- * wider than the container keeps its center (negative start x) so the
- * whole-line scale transform shrinks it symmetrically into view.
+ * Position of every token in a step. Each row (vertical polynomial layouts
+ * use `row: 1` for the second line) is centered on containerW/2, and the
+ * row block is centered vertically in containerH. A line wider than the
+ * container keeps its center (negative start x) so the whole-line scale
+ * transform shrinks it symmetrically into view.
  */
 function layoutStep(
   tokens: EqToken[],
   textW: Map<string, number>,
   containerW: number,
-): { pos: Map<string, number>; total: number } {
-  const widths = tokens.map(
-    (tok) => (textW.get(tok.text) ?? 0) + (tokenStyle(tok).bg ? CHIP_PAD * 2 : 0),
+  containerH: number,
+): { pos: Map<string, { x: number; y: number }>; total: number } {
+  const rows = [tokens.filter((tok) => !tok.row), tokens.filter((tok) => tok.row === 1)].filter(
+    (r) => r.length > 0,
   );
+  const pos = new Map<string, { x: number; y: number }>();
+  const yPad = (containerH - rows.length * LINE_H) / 2;
   let total = 0;
-  tokens.forEach((tok, i) => {
-    total += widths[i] + (i === 0 ? 0 : tok.tight ? TIGHT_GAP : GAP);
-  });
-  let x = (containerW - total) / 2;
-  const pos = new Map<string, number>();
-  tokens.forEach((tok, i) => {
-    if (i > 0) x += tok.tight ? TIGHT_GAP : GAP;
-    pos.set(tok.id, x);
-    x += widths[i];
+  rows.forEach((rowTokens, r) => {
+    const widths = rowTokens.map(
+      (tok) => tokenWidth(tok, textW) + (tokenStyle(tok).bg ? CHIP_PAD * 2 : 0),
+    );
+    let rowTotal = 0;
+    rowTokens.forEach((tok, i) => {
+      rowTotal += widths[i] + (i === 0 ? 0 : tok.tight ? TIGHT_GAP : GAP);
+    });
+    let x = (containerW - rowTotal) / 2;
+    const y = yPad + r * LINE_H;
+    rowTokens.forEach((tok, i) => {
+      if (i > 0) x += tok.tight ? TIGHT_GAP : GAP;
+      pos.set(tok.id, { x, y });
+      x += widths[i];
+    });
+    total = Math.max(total, rowTotal);
   });
   return { pos, total };
 }
@@ -130,12 +156,36 @@ export function AnimatedEquation({
   const anims = useRef(new Map<string, TokenAnim>());
   const widths = useRef(new Map<string, number>());
   const prevTokens = useRef<EqToken[] | null>(null);
+  const prevPos = useRef(new Map<string, { x: number; y: number }>());
   const lineScale = useRef(new Animated.Value(1)).current;
 
-  const texts = useMemo(
-    () => Array.from(new Set(script.steps.flatMap((s) => s.tokens.map((tok) => tok.text)))),
+  // Scripts with a second row (vertical polynomial addition) get a taller
+  // stage for the whole run so the card doesn't jump between steps.
+  const stageH = useMemo(
+    () => (script.steps.some((s) => s.tokens.some((tok) => tok.row)) ? LINE_H * 2 : LINE_H),
     [script],
   );
+
+  // One measurement entry per unique plain text, plus every fraction part
+  // (measured at the smaller fraction font, keyed with a "frac:" prefix).
+  const measures = useMemo(() => {
+    const plain = new Set<string>();
+    const parts = new Set<string>();
+    for (const s of script.steps) {
+      for (const tok of s.tokens) {
+        if (tok.kind === 'frac') {
+          parts.add(tok.num ?? '');
+          parts.add(tok.den ?? '');
+        } else {
+          plain.add(tok.text);
+        }
+      }
+    }
+    return [
+      ...Array.from(plain, (text) => ({ key: text, text, frac: false })),
+      ...Array.from(parts, (text) => ({ key: `frac:${text}`, text, frac: true })),
+    ];
+  }, [script]);
   const step = script.steps[index];
   const atEnd = index >= script.steps.length - 1;
 
@@ -166,7 +216,7 @@ export function AnimatedEquation({
     // reduced motion: zero-duration timings — steps swap instead of animating
     const dur = (ms: number) => (reduceMotion ? 0 : ms);
     const tokens = script.steps[index].tokens;
-    const { pos, total } = layoutStep(tokens, widths.current, containerW);
+    const { pos, total } = layoutStep(tokens, widths.current, containerW, stageH);
     const prev = prevTokens.current;
     const prevIds = new Set((prev ?? []).map((tok) => tok.id));
     const curIds = new Set(tokens.map((tok) => tok.id));
@@ -186,10 +236,11 @@ export function AnimatedEquation({
     for (const tok of exits) {
       const a = anims.current.get(tok.id);
       if (!a) continue;
+      const fromY = prevPos.current.get(tok.id)?.y ?? 0;
       parts.push(
         Animated.parallel([
           Animated.timing(a.o, { toValue: 0, duration: dur(260), useNativeDriver: NATIVE }),
-          Animated.timing(a.y, { toValue: 14, duration: dur(260), useNativeDriver: NATIVE }),
+          Animated.timing(a.y, { toValue: fromY + 14, duration: dur(260), useNativeDriver: NATIVE }),
         ]),
       );
     }
@@ -201,17 +252,22 @@ export function AnimatedEquation({
       if (prevIds.has(tok.id)) {
         parts.push(
           Animated.timing(a.x, {
-            toValue: target,
+            toValue: target.x,
             duration: dur(420),
             easing: Easing.out(Easing.cubic),
             useNativeDriver: NATIVE,
           }),
           Animated.timing(a.o, { toValue: 1, duration: dur(200), useNativeDriver: NATIVE }),
-          Animated.timing(a.y, { toValue: 0, duration: dur(200), useNativeDriver: NATIVE }),
+          Animated.timing(a.y, {
+            toValue: target.y,
+            duration: dur(420),
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: NATIVE,
+          }),
         );
       } else {
-        a.x.setValue(target);
-        a.y.setValue(-18);
+        a.x.setValue(target.x);
+        a.y.setValue(target.y - 18);
         a.o.setValue(0);
         parts.push(
           Animated.parallel([
@@ -222,7 +278,7 @@ export function AnimatedEquation({
               useNativeDriver: NATIVE,
             }),
             Animated.timing(a.y, {
-              toValue: 0,
+              toValue: target.y,
               duration: dur(320),
               delay: dur(enterDelay),
               easing: Easing.out(Easing.back(1.6)),
@@ -236,6 +292,7 @@ export function AnimatedEquation({
 
     setExiting(exits);
     prevTokens.current = tokens;
+    prevPos.current = pos;
     const handle = Animated.parallel(parts);
     handle.start(({ finished }) => {
       if (!finished) return;
@@ -243,7 +300,7 @@ export function AnimatedEquation({
       for (const tok of exits) anims.current.delete(tok.id);
     });
     return () => handle.stop();
-  }, [index, ready, containerW, script, reduceMotion]);
+  }, [index, ready, containerW, script, reduceMotion, stageH]);
 
   const next = () => {
     if (atEnd) return;
@@ -287,16 +344,16 @@ export function AnimatedEquation({
         pointerEvents="none"
         style={{ position: 'absolute', left: 0, top: 0, opacity: 0, flexDirection: 'row' }}
       >
-        {texts.map((txt) => (
+        {measures.map((m) => (
           <RNText
-            key={txt}
-            style={{ fontSize: FONT, fontWeight: WEIGHT }}
+            key={m.key}
+            style={{ fontSize: m.frac ? FRAC_FONT : FONT, fontWeight: WEIGHT }}
             onLayout={(e) => {
-              widths.current.set(txt, e.nativeEvent.layout.width);
-              if (widths.current.size >= texts.length) setReady(true);
+              widths.current.set(m.key, e.nativeEvent.layout.width);
+              if (widths.current.size >= measures.length) setReady(true);
             }}
           >
-            {txt}
+            {m.text}
           </RNText>
         ))}
       </View>
@@ -324,10 +381,10 @@ export function AnimatedEquation({
       {/* Active animated line */}
       <View
         onLayout={(e) => setContainerW(e.nativeEvent.layout.width)}
-        style={{ height: LINE_H, width: '100%' }}
+        style={{ height: stageH, width: '100%' }}
       >
         <Animated.View
-          style={{ width: '100%', height: LINE_H, transform: [{ scale: lineScale }] }}
+          style={{ width: '100%', height: stageH, transform: [{ scale: lineScale }] }}
         >
         {[...exiting, ...step.tokens].map((tok) => {
           const st = tokenStyle(tok);
@@ -354,16 +411,50 @@ export function AnimatedEquation({
                   paddingVertical: 2,
                 }}
               >
-                <RNText
-                  style={{
-                    fontSize: FONT,
-                    fontWeight: WEIGHT,
-                    color: st.color,
-                    textDecorationLine: st.strike ? 'line-through' : 'none',
-                  }}
-                >
-                  {tok.text}
-                </RNText>
+                {tok.kind === 'frac' ? (
+                  <View style={{ alignItems: 'center', paddingHorizontal: FRAC_PAD }}>
+                    <RNText
+                      style={{
+                        fontSize: FRAC_FONT,
+                        fontWeight: WEIGHT,
+                        color: st.color,
+                        textDecorationLine: st.strike ? 'line-through' : 'none',
+                      }}
+                    >
+                      {tok.num}
+                    </RNText>
+                    <View
+                      style={{
+                        alignSelf: 'stretch',
+                        height: 1.5,
+                        borderRadius: 1,
+                        backgroundColor: st.color,
+                        marginVertical: 1.5,
+                      }}
+                    />
+                    <RNText
+                      style={{
+                        fontSize: FRAC_FONT,
+                        fontWeight: WEIGHT,
+                        color: st.color,
+                        textDecorationLine: st.strike ? 'line-through' : 'none',
+                      }}
+                    >
+                      {tok.den}
+                    </RNText>
+                  </View>
+                ) : (
+                  <RNText
+                    style={{
+                      fontSize: FONT,
+                      fontWeight: WEIGHT,
+                      color: st.color,
+                      textDecorationLine: st.strike ? 'line-through' : 'none',
+                    }}
+                  >
+                    {tok.text}
+                  </RNText>
+                )}
               </View>
             </Animated.View>
           );

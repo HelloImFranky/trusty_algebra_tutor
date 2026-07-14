@@ -60,6 +60,7 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
   const [showTutor, setShowTutor] = useState(false);
   const [showAnim, setShowAnim] = useState(false);
   const [animStart, setAnimStart] = useState(0);
+  const [animViews, setAnimViews] = useState(0);
   const [solved, setSolved] = useState(0);
   const [startedAt, setStartedAt] = useState(Date.now());
 
@@ -73,6 +74,7 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
     setAnimStart(atStep);
     setShowAnim(true);
     setHintsUsed((h) => h + 1); // watching the solve counts as a hint
+    setAnimViews((v) => v + 1); // tracked separately for the analytics column
   };
 
   const loadNext = useCallback(async () => {
@@ -88,6 +90,7 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
     setShowTutor(false);
     setShowAnim(false);
     setAnimStart(0);
+    setAnimViews(0);
     setStartedAt(Date.now());
     try {
       const r = await client.practice.next.query({ skillId, locale });
@@ -110,6 +113,7 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
       problemId: problem.id,
       submittedLatex: answer,
       hintsUsed,
+      animViews,
       stepReached: stepIndex,
       durationMs: Date.now() - startedAt,
       locale,
@@ -299,7 +303,15 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
       )}
 
       {showTutor && (
-        <TutorChat problemId={problem.id} stepReached={phase === 'steps' ? stepIndex : undefined} />
+        <TutorChat
+          problemId={problem.id}
+          stepReached={phase === 'steps' ? stepIndex : undefined}
+          onOpenAnim={
+            animScript
+              ? (step) => openAnim(Math.min(Math.max(0, step), animScript.steps.length - 1))
+              : undefined
+          }
+        />
       )}
     </Screen>
   );

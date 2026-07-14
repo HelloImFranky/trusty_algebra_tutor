@@ -28,11 +28,16 @@ const localeInput = z.object({ locale: z.enum(['en', 'es']).optional() });
 
 type Locale = 'en' | 'es';
 
-/** The part of an answered question it is safe to reveal. */
+/**
+ * The part of an answered question it is safe to reveal. Only called after
+ * the student's single attempt, so it may include the animation params
+ * (which can encode the solution).
+ */
 function reveal(q: RegentsQuestionContent, locale: Locale) {
   return {
     correctIndex: q.correctIndex,
     explanation: locale === 'es' ? q.explanationEs : q.explanationEn,
+    anim: q.anim ?? null,
   };
 }
 

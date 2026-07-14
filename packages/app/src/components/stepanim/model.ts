@@ -11,9 +11,13 @@ export {
   bothSidesScript,
   inequalityScript,
   evaluateScript,
+  polyAddScript,
+  slopeTwoPointsScript,
+  slopeInterceptScript,
   demoScripts,
   scriptsByLessonCode,
   splitSides,
   stepToText,
   sideToText,
+  parseAnimMarker,
 } from '@tutor/core';

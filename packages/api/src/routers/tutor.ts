@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { prisma } from '@tutor/db';
+import { buildScriptForProblem, stepToText } from '@tutor/core';
 import {
   scrubPii,
   streamTutorReply,
@@ -50,13 +51,24 @@ async function loadTutorContext(
   if (problemId) {
     const p = await prisma.problem.findUnique({
       where: { id: BigInt(problemId) },
-      include: { steps: { orderBy: { position: 'asc' } } },
+      include: {
+        steps: { orderBy: { position: 'asc' } },
+        skill: { select: { slug: true } },
+      },
     });
     if (p) {
       ctx.problem = {
         prompt: locale === 'es' ? p.promptEs : p.promptEn,
         stepPrompts: p.steps.map((s) => (locale === 'es' ? s.promptEs : s.promptEn)),
       };
+      // Same builder the client uses for the 🎬 walkthrough: when it matches,
+      // tell the tutor about the animation so it can deep-link steps.
+      const script = buildScriptForProblem(p.skill.slug, p.paramsJson);
+      if (script) {
+        ctx.animSteps = script.steps.map(
+          (s) => `${stepToText(s).replace('\n', ' / ')} — ${locale === 'es' ? s.explainEs : s.explainEn}`,
+        );
+      }
     }
   }
   return ctx;

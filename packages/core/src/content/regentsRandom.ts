@@ -241,6 +241,7 @@ const linearEquations: SlotGenerator[] = [
       ...withChoices(rng, `$x = ${x}$`, d.map((v) => `$x = ${fmt(v)}$`)),
       explanationEn: `Undo operations in reverse order. Subtract ${b} from both sides: $${a}x = ${c - b}$. Then divide both sides by ${a}: $x = ${x}$. Check: $${a}(${x}) + ${b} = ${c}$ ✓`,
       explanationEs: `Deshaz las operaciones en orden inverso. Resta ${b} en ambos lados: $${a}x = ${c - b}$. Luego divide ambos lados entre ${a}: $x = ${x}$. Comprueba: $${a}(${x}) + ${b} = ${c}$ ✓`,
+      anim: { skillSlug: 'multi-step-equations', params: { a, b, x } },
     };
   },
   // q2: distribute k(x − m) = c
@@ -276,6 +277,7 @@ const linearEquations: SlotGenerator[] = [
       ...withChoices(rng, `$x = ${x}$`, dis.map((v) => `$x = ${fmt(v)}$`)),
       explanationEn: `Collect the variables on one side: subtract $${coeff(c, 'x')}$ from both sides to get $${g}x + ${b} = ${d}$. Subtract ${b}: $${g}x = ${d - b}$. Divide by ${g}: $x = ${x}$. Check: $${a}(${x}) + ${b} = ${a * x + b}$ and $${c}(${x}) + ${d} = ${c * x + d}$ ✓`,
       explanationEs: `Agrupa las variables en un lado: resta $${coeff(c, 'x')}$ en ambos lados para obtener $${g}x + ${b} = ${d}$. Resta ${b}: $${g}x = ${d - b}$. Divide entre ${g}: $x = ${x}$. Comprueba: $${a}(${x}) + ${b} = ${a * x + b}$ y $${c}(${x}) + ${d} = ${c * x + d}$ ✓`,
+      anim: { skillSlug: 'var-both-sides', params: { a, b, c, x } },
     };
   },
   // q4: x/k − b = c
@@ -319,6 +321,7 @@ const inequalities: SlotGenerator[] = [
       ]),
       explanationEn: `Subtract ${b}: $-${a}x ${baseOp} ${c - b}$. Now divide by $-${a}$ — dividing by a **negative flips the inequality sign**: $x ${finalOp} ${v}$. Forgetting the flip gives $x ${baseOp} ${v}$, the trap answer.`,
       explanationEs: `Resta ${b}: $-${a}x ${baseOp} ${c - b}$. Ahora divide entre $-${a}$ — dividir entre un **negativo invierte el signo de la desigualdad**: $x ${finalOp} ${v}$. Olvidar el cambio da $x ${baseOp} ${v}$, la respuesta trampa.`,
+      anim: { skillSlug: 'inequalities', params: { a: -a, b, x: v, baseOp } },
     };
   },
   // q2: which value is in the solution set
@@ -412,6 +415,7 @@ const linearFunctions: SlotGenerator[] = [
       ...withChoices(rng, `$${m}$`, [`$${m * d}$`, `$${-m}$`, recip]),
       explanationEn: `Slope is **rise over run**: $m = \\frac{y_2 - y_1}{x_2 - x_1} = \\frac{${y2} - ${y1}}{${x2} - ${x1}} = \\frac{${m * d}}{${d}} = ${m}$. Getting ${recip} means the fraction was flipped (run over rise).`,
       explanationEs: `La pendiente es **cambio en y sobre cambio en x**: $m = \\frac{y_2 - y_1}{x_2 - x_1} = \\frac{${y2} - ${y1}}{${x2} - ${x1}} = \\frac{${m * d}}{${d}} = ${m}$. Obtener ${recip} significa que la fracción se invirtió.`,
+      anim: { skillSlug: 'slope-intercepts', params: { x1, y1, x2, y2 } },
     };
   },
   // q2: read slope and y-intercept from y = mx + b
@@ -593,6 +597,7 @@ const polynomials: SlotGenerator[] = [
       ]),
       explanationEn: `${sub ? 'Subtracting flips the sign of EVERY term in the second polynomial. Then combine' : 'Combine'} **like terms** by degree: $x^2$ terms give ${A}, $x$ terms give ${B}, constants give ${C}. Result: $${quad(A, B, C)}$.`,
       explanationEs: `${sub ? 'Restar cambia el signo de TODOS los términos del segundo polinomio. Luego combina' : 'Combina'} **términos semejantes** por grado: los términos $x^2$ dan ${A}, los términos $x$ dan ${B}, las constantes dan ${C}. Resultado: $${quad(A, B, C)}$.`,
+      anim: { skillSlug: 'polynomial-operations', params: { a1, b1, c1, a2, b2, c2, sub } },
     };
   },
   // q2: FOIL (x + p)(x + q)
