@@ -25,11 +25,12 @@ export function ClassesScreen() {
   const { t } = useI18n();
   const authed = useRequireAuth();
   const role = useAuth((s) => s.auth?.user.role);
+  const status = useAuth((s) => s.auth?.user.status);
   const utils = trpc.useUtils();
   const [name, setName] = useState('');
 
   const list = trpc.teacher.classes.list.useQuery(undefined, {
-    enabled: authed && role === 'teacher',
+    enabled: authed && role === 'teacher' && status === 'active',
   });
   const create = trpc.teacher.classes.create.useMutation({
     onSuccess: () => {
@@ -44,6 +45,19 @@ export function ClassesScreen() {
       <Screen>
         <Title>{t('classes')}</Title>
         <JoinClassCard />
+      </Screen>
+    );
+  }
+
+  // A teacher who isn't approved yet (or was disabled) is fail-closed here.
+  if (authed && role === 'teacher' && status !== 'active') {
+    return (
+      <Screen>
+        <Title>🏫 {t('myClasses')}</Title>
+        <AppCard gap={6}>
+          <SubTitle>{status === 'disabled' ? t('statusDisabled') : t('awaitingApproval')}</SubTitle>
+          <Muted>{status === 'disabled' ? t('accountDisabled') : t('awaitingApprovalBody')}</Muted>
+        </AppCard>
       </Screen>
     );
   }

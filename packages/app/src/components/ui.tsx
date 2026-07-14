@@ -138,6 +138,9 @@ const BADGE_COLORS: Record<string, { bg: Hex; fg: Hex }> = {
   standard: { bg: '#fff9db', fg: '#997404' },
   modified: { bg: '#fff5f5', fg: '#e03131' },
   challenge: { bg: '#e6fcf5', fg: '#0ca678' },
+  active: { bg: '#e6fcf5', fg: '#0ca678' },
+  pending: { bg: '#fff9db', fg: '#997404' },
+  disabled: { bg: '#fff5f5', fg: '#e03131' },
 };
 
 export function Badge({ label, text }: { label: string; text?: string }) {

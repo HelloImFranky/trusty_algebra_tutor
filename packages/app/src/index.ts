@@ -14,6 +14,7 @@ export { ReviewScreen } from './screens/review';
 export { ProgressScreen } from './screens/progress';
 export { ClassesScreen } from './screens/classes';
 export { ClassRosterScreen } from './screens/classRoster';
+export { AdminScreen } from './screens/admin';
 export { CalculatorScreen } from './screens/calculator';
 export { ExamplesScreen } from './screens/examples';
 export { AnimatedEquation } from './components/stepanim/AnimatedEquation';

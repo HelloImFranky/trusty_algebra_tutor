@@ -23,17 +23,20 @@ export function AppChrome({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname() ?? '/';
 
-  // Teachers get the class dashboard; students/guardians get the learner tabs.
+  // Admins get the governance console; teachers get the class dashboard;
+  // students/guardians get the learner tabs.
   const tabs =
-    auth?.user.role === 'teacher'
-      ? [{ href: '/classes', icon: '🏫', label: t('classes') }]
-      : [
-          { href: '/', icon: '📘', label: t('curriculum') },
-          { href: '/sprint', icon: '⚡', label: t('sprint') },
-          { href: '/review', icon: '📚', label: t('review') },
-          { href: '/progress', icon: '📈', label: t('progress') },
-          { href: '/calculator', icon: '🧮', label: t('calculator') },
-        ];
+    auth?.user.role === 'admin'
+      ? [{ href: '/admin', icon: '🛡️', label: t('admin') }]
+      : auth?.user.role === 'teacher'
+        ? [{ href: '/classes', icon: '🏫', label: t('classes') }]
+        : [
+            { href: '/', icon: '📘', label: t('curriculum') },
+            { href: '/sprint', icon: '⚡', label: t('sprint') },
+            { href: '/review', icon: '📚', label: t('review') },
+            { href: '/progress', icon: '📈', label: t('progress') },
+            { href: '/calculator', icon: '🧮', label: t('calculator') },
+          ];
 
   const { width } = useWindowDimensions();
   const topNav = Platform.OS === 'web' && width >= 768;
