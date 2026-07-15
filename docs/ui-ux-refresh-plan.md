@@ -265,6 +265,122 @@ is the only path into the color picker.
 
 ---
 
+## Phase 2.1 — Finish the dark-mode migration for inner surfaces
+
+**Goal.** Phase 2 flipped the load-bearing chrome (page bg, top bar,
+tab bar, cards) but every screen still had per-component literals
+(`INK` text, `NEUTRAL[100/200/300]` hover/press states, `#ffffff`
+scaffold bgs, the `backgroundColor={INK}` "CONTINUE" hero card).
+Playwright screenshots after Phase 2 showed Curriculum, Progress,
+Review, Sprint, and Lesson with dark-on-dark text and invisible
+list items in dark mode. Phase 2.1 makes every student-visible
+screen actually usable in dark mode.
+
+**Where the problem lives (from the dark-mode audit).**
+- `curriculum.tsx`: unit titles ("Number Sense", …), `IconCircle`
+  unit numbers, lesson-row hover/press states, and the CONTINUE
+  hero card all consume `INK` / `NEUTRAL[100/200]` directly.
+- `progress.tsx`: Regents Review topic titles, Mastery-map heading,
+  achievement labels, and StatChip subtitles (`COLORS.muted` is a
+  fixed light-mode gray).
+- `review.tsx`: topic titles inside AppCards, the CONTINUE hero
+  card, answer-choice card backgrounds.
+- `sprint.tsx`: intro card text uses `INK`.
+- `lesson.tsx`: back arrow, step titles, worked-example bg, scaffold
+  image container (`#fff`), mnemonic panel accent (`#ae1800`),
+  scaffold list items (`NEUTRAL[100/200]`).
+- `practice.tsx`: step dots (INK completed / NEUTRAL[300] pending),
+  locked/collapsed step pills, primary step text color.
+- `auth.tsx`: field `Label` uses hard-coded `#374151`; input
+  backgrounds forced to `#fff` are readable but out of place on a
+  dark card.
+- `settings.tsx`: already migrated `AppInput` backgrounds in Phase 5;
+  the SegmentedOption helper reads correctly.
+
+**Deliberately out of scope for this pass** (future decision):
+- Calculator button chassis (`CalcView.tsx` — sci/util/digit/op
+  buttons with baked-in light greys and an orange operator column).
+  This reads like a physical calculator; either keep as a chassis
+  or design a dedicated dark-mode variant.
+- Animated equation token colors (`AnimatedEquation.tsx` — `apply`
+  yellow, `focus` blue-tint, cancel gray). These are step-animation
+  emphasis tokens; if they change, the whole animation storyboard
+  needs re-testing.
+- Tutor chat bubble tints and balance-scale illustration colors —
+  low-traffic, self-contained widgets.
+
+**Tasks.**
+1. **Semantic token additions in `components/ui.tsx`:**
+   - Add `tokens.muted` (mid-neutral text that reads correctly in
+     both modes) so `COLORS.muted` — a fixed light-mode gray — is no
+     longer the go-to for secondary text.
+   - Add a `HeroCard` component (or a mode-aware "poster" surface
+     token) so `backgroundColor={INK}` panels don't collapse into
+     the page background in dark mode. In light mode it stays INK;
+     in dark mode it renders on `DARK_NEUTRAL[200]` (`#3a3737`)
+     with a subtle border so it still reads as a raised feature
+     panel.
+   - Point `Muted` at `tokens.muted` (its current
+     `tokens.mode === 'dark' ? DARK_NEUTRAL[700] : NEUTRAL[700]`
+     conditional migrates into the token).
+2. **Curriculum (`screens/curriculum.tsx`):**
+   - Swap every `INK` (title/text/icon) for `tokens.ink`;
+     `NEUTRAL[100/200]` (hover/press) for `tokens.subtle` / `tokens.border`;
+     `NEUTRAL[700]` (uppercase caption) for `tokens.muted`.
+   - Replace the CONTINUE hero card with `HeroCard`; use `tokens.ink`
+     for its title / progress fill readable-inverse.
+3. **Progress (`screens/progress.tsx`):** same swap pattern; the
+   Mastery-map "Unit N" headings and Regents-review topic titles
+   become `tokens.ink`; StatChip subtitles pick up `tokens.muted`.
+4. **Review (`screens/review.tsx`):** topic titles → `tokens.ink`;
+   CONTINUE hero → `HeroCard`; answer-choice card default surface →
+   `tokens.surface` (was `#ffffff`); border/hover neutrals →
+   `tokens.border` / `tokens.subtle`.
+5. **Sprint (`screens/sprint.tsx`):** intro card text and timer
+   surface consume tokens.
+6. **Lesson (`screens/lesson.tsx`):**
+   - Text/icon `INK` → `tokens.ink`.
+   - Scaffold thumbnail container `#fff` → `tokens.surface`.
+   - Worked-example and mnemonic panels → mode-aware surface tint
+     (a subtle accent-tinted bg in both modes; the current
+     `NEUTRAL[200]` reads as white in dark).
+   - Scaffold list-row hover/press → `tokens.subtle`.
+7. **Practice (`screens/practice.tsx`):**
+   - Step-progress dots: completed uses `tokens.ink`, pending uses
+     `tokens.border`, current stays accent.
+   - Locked / crossed-out step rows use `tokens.subtle` and
+     `tokens.muted`.
+   - The "step done" chip (`backgroundColor={INK}`) becomes a
+     mode-aware surface.
+8. **Auth (`screens/auth.tsx`):** `Label` color → `tokens.ink`;
+   `AppInput` backgroundColor → `tokens.surface`; borderColor →
+   `tokens.border` — same treatment already applied to Settings in
+   Phase 5.
+9. **Classes / JoinClassCard (`screens/classes.tsx`,
+   `components/JoinClassCard.tsx`):** teacher-side surface literals
+   (`#fff` join card bg) migrate to `tokens.surface`. Same treatment
+   applied inline where it appears.
+10. **Sanity re-audit.** Re-run the Playwright dark-mode audit
+    (`scratchpad/audit-dark.mjs`) after every migrated screen; add a
+    light-mode pass to confirm no regression there.
+
+**Done when.** Toggle the OS to dark mode and every signed-in
+student route (Curriculum, Sprint, Review, Progress, Lesson,
+Practice) reads with legible text and visible list items. Yellow
+hints from Phase 1 still read as yellow. Light mode is
+pixel-identical to pre-Phase-2.1 (no regression).
+
+**Sequencing.** Ship as one branch stack of small commits (one
+screen per commit) so review can catch any per-screen contrast
+regression. Suggested order — same as the "impact per commit" order:
+Curriculum → Progress → Review → Sprint → Lesson → Practice →
+Auth → Classes → HeroCard/Muted refactor pulled up front so the
+per-screen commits reference the finished helpers. Merge into
+`main` as a single squashed commit under "Phase 2.1: finish dark
+mode."
+
+---
+
 ## Sequencing & branch hygiene
 
 - Each phase is a single commit (or a small stack) pushed to
@@ -272,7 +388,9 @@ is the only path into the color picker.
   scoped.
 - Phases 1 → 2 → 5 have a soft dependency chain (Phase 5's
   appearance-mode toggle needs Phase 2's `setMode`). Phases 3 and 4
-  are independent and can be worked in parallel.
-- Suggested merge order into `main`: 1, 4, 2, 3, 5 — ships the
+  are independent and can be worked in parallel. Phase 2.1 depends
+  on Phase 2's `useTokens()` hook.
+- Suggested merge order into `main`: 1, 4, 2, 3, 5, 2.1 — ships the
   smallest visible wins first (yellow-safe hints, calculator moved
-  where students want it), then the deeper theming work.
+  where students want it), then the deeper theming work, then the
+  dark-mode polish pass.
