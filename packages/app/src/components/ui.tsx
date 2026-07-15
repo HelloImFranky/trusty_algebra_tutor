@@ -7,9 +7,9 @@
 import type { ReactNode } from 'react';
 import { ScrollView } from 'react-native';
 import { Button, Card, Input, Spinner, Text, XStack, YStack, styled } from 'tamagui';
-import { DEFAULT_ACCENT, useAccent, type Hex } from '../lib/theme';
+import { DEFAULT_ACCENT, useAccent, useResolvedMode, type Hex } from '../lib/theme';
 
-export { useAccent, type Hex };
+export { useAccent, useResolvedMode, type Hex };
 
 /** Static default accent — for the rare non-reactive context (e.g. native
  * splash/meta config). Prefer useAccent() inside components so the
@@ -34,6 +34,63 @@ export const ACCENT_TINT = {
   800: '#7c1405',
 } as const;
 
+/** Warm-neutral dark palette — mirrors the light NEUTRAL scale but inverted
+ * around the same "warm gray" hue, so accent colors and the yellow HINT
+ * still read correctly against it. Used by useTokens() when the resolved
+ * theme mode is 'dark'. */
+export const DARK_INK: Hex = '#f3f2f2';
+export const DARK_NEUTRAL = {
+  100: '#2d2b2b',
+  200: '#3a3737',
+  300: '#4a4646',
+  400: '#605d5d',
+  500: '#7d7979',
+  600: '#9b9797',
+  700: '#bab6b6',
+  800: '#d7d3d3',
+  900: '#eae7e7',
+} as const;
+
+/** Semantic surface tokens: the load-bearing colors for page background, card
+ * surface, primary text, borders. Read via useTokens() — components that
+ * consume these flip cleanly when the theme mode changes. Interior colors
+ * (individual chip tints, per-icon colors, etc.) can migrate incrementally. */
+export interface ThemeTokens {
+  mode: 'light' | 'dark';
+  bg: Hex;           // page background
+  surface: Hex;      // card / raised surface
+  ink: Hex;          // primary text
+  border: Hex;       // dividers, input outlines
+  subtle: Hex;       // chip / input background
+  /** Top-bar / bottom-tab separator. 8-digit hex encodes ~12% alpha
+   * (`1f` = 31/255) so the divider reads as a subtle line in either mode. */
+  chromeBorder: Hex;
+}
+
+const LIGHT_TOKENS: ThemeTokens = {
+  mode: 'light',
+  bg: '#f3f2f2',
+  surface: '#ffffff',
+  ink: INK,
+  border: NEUTRAL[300],
+  subtle: NEUTRAL[200],
+  chromeBorder: '#201e1d1f',
+};
+
+const DARK_TOKENS: ThemeTokens = {
+  mode: 'dark',
+  bg: '#141313',
+  surface: '#232121',
+  ink: DARK_INK,
+  border: DARK_NEUTRAL[300],
+  subtle: DARK_NEUTRAL[200],
+  chromeBorder: '#f3f2f224',
+};
+
+export function useTokens(): ThemeTokens {
+  return useResolvedMode() === 'dark' ? DARK_TOKENS : LIGHT_TOKENS;
+}
+
 export const COLORS = {
   good: '#0ca678',
   goodBg: '#e6fcf5',
@@ -48,23 +105,41 @@ export const COLORS = {
 /**
  * Hint tokens are deliberately theme-invariant — they never derive from the
  * live accent (see ../lib/theme.tsx) and must stay warm yellow through every
- * appearance change (dark mode included). Hints only work if students notice
- * them; letting the picked accent recolor them destroys that signal. Keep
- * these values pinned; only shift HINT.bg in a future dark theme to preserve
- * contrast, never HINT.fg.
+ * appearance change. `HINT.fg` (the yellow) is identical in light and dark;
+ * only `HINT.bg` shifts to a dark-yellow-tinted surface in dark mode so
+ * contrast stays comfortable. The Feedback component reads HINT.fg directly
+ * and picks the mode-correct bg via useHintBg().
  */
-export const HINT = {
+export const HINT: {
+  fg: Hex;
+  bg: Hex;
+  bgDark: Hex;
+  border: Hex;
+} = {
   fg: '#c98a00',
-  bg: '#fff9db',
+  bg: '#fff9db',       // light mode
+  bgDark: '#3a2f10',   // dark mode
   border: '#f4dfa8',
-} as const;
+};
+
+/** Mode-correct hint background. Kept a hook (not a plain lookup) so switching
+ * theme mode re-renders every consumer. */
+export function useHintBg(): Hex {
+  return useResolvedMode() === 'dark' ? HINT.bgDark : HINT.bg;
+}
 
 export const RADIUS = { card: 20, control: 14, pill: 999 } as const;
 
-/** Scrollable page container, phone-first max width. */
+/** Scrollable page container, phone-first max width. Background follows the
+ * resolved theme mode so a full-screen scroll (past the sticky top bar) still
+ * reads correctly in dark mode. */
 export function Screen({ children, maxWidth = 760 }: { children: ReactNode; maxWidth?: number }) {
+  const tokens = useTokens();
   return (
-    <ScrollView contentContainerStyle={{ flexGrow: 1, alignItems: 'center' }}>
+    <ScrollView
+      style={{ backgroundColor: tokens.bg }}
+      contentContainerStyle={{ flexGrow: 1, alignItems: 'center', backgroundColor: tokens.bg }}
+    >
       <YStack width="100%" maxWidth={maxWidth} padding={14} paddingBottom={90} gap={12}>
         {children}
       </YStack>
@@ -75,7 +150,8 @@ export function Screen({ children, maxWidth = 760 }: { children: ReactNode; maxW
 /**
  * Text input with a 16px floor: mobile Safari auto-zooms the page when a
  * focused field's text is smaller than 16px, so every free-text input should
- * use this (or set fontSize >= 16 explicitly).
+ * use this (or set fontSize >= 16 explicitly). Callers that want a light-on-
+ * dark input in a card override backgroundColor/color explicitly.
  */
 export const AppInput = styled(Input, {
   fontSize: 16,
@@ -84,37 +160,56 @@ export const AppInput = styled(Input, {
   borderRadius: RADIUS.control,
 });
 
-export const AppCard = styled(Card, {
-  backgroundColor: '#ffffff',
-  borderRadius: RADIUS.card,
-  padding: 16,
-  gap: 8,
-  shadowColor: '#2d2b2b',
-  shadowOpacity: 0.16,
-  shadowRadius: 10,
-  shadowOffset: { width: 0, height: 3 },
-  elevation: 2,
-});
+/** Raised card surface. Background/shadow adapt to light/dark; the card
+ * itself owns its shape and elevation but not its children's colors. */
+export function AppCard({
+  children,
+  ...rest
+}: React.ComponentProps<typeof Card>) {
+  const tokens = useTokens();
+  return (
+    <Card
+      backgroundColor={tokens.surface}
+      borderRadius={RADIUS.card}
+      padding={16}
+      gap={8}
+      shadowColor={tokens.mode === 'dark' ? '#000' : '#2d2b2b'}
+      shadowOpacity={tokens.mode === 'dark' ? 0.5 : 0.16}
+      shadowRadius={10}
+      shadowOffset={{ width: 0, height: 3 }}
+      elevation={2}
+      {...rest}
+    >
+      {children}
+    </Card>
+  );
+}
 
 export function Title({ children }: { children: ReactNode }) {
+  const tokens = useTokens();
   return (
-    <Text fontSize={24} fontWeight="800" color={INK} marginVertical={4}>
+    <Text fontSize={24} fontWeight="800" color={tokens.ink} marginVertical={4}>
       {children}
     </Text>
   );
 }
 
 export function SubTitle({ children }: { children: ReactNode }) {
+  const tokens = useTokens();
   return (
-    <Text fontSize={18} fontWeight="700" color={INK}>
+    <Text fontSize={18} fontWeight="700" color={tokens.ink}>
       {children}
     </Text>
   );
 }
 
 export function Muted({ children, size = 13 }: { children: ReactNode; size?: number }) {
+  const tokens = useTokens();
+  // NEUTRAL[700] in light == same visual as DARK_NEUTRAL[700] in dark
+  // (mirrored scale keeps the muted-ness legible in both).
+  const color = tokens.mode === 'dark' ? DARK_NEUTRAL[700] : NEUTRAL[700];
   return (
-    <Text fontSize={size} color={COLORS.muted}>
+    <Text fontSize={size} color={color}>
       {children}
     </Text>
   );
@@ -135,13 +230,14 @@ export function PrimaryButton(props: React.ComponentProps<typeof Button>) {
 }
 
 export function SecondaryButton(props: React.ComponentProps<typeof Button>) {
+  const tokens = useTokens();
   return (
     <Button
-      backgroundColor={NEUTRAL[200]}
-      color={INK}
+      backgroundColor={tokens.subtle}
+      color={tokens.ink}
       fontWeight="800"
       borderRadius={RADIUS.control}
-      pressStyle={{ backgroundColor: NEUTRAL[300] }}
+      pressStyle={{ backgroundColor: tokens.border }}
       {...props}
     />
   );
@@ -149,6 +245,7 @@ export function SecondaryButton(props: React.ComponentProps<typeof Button>) {
 
 export function GhostButton(props: React.ComponentProps<typeof Button>) {
   const accent = useAccent();
+  const tokens = useTokens();
   return (
     <Button
       backgroundColor="transparent"
@@ -157,7 +254,7 @@ export function GhostButton(props: React.ComponentProps<typeof Button>) {
       borderRadius={RADIUS.control}
       borderWidth={1.5}
       borderColor={accent}
-      pressStyle={{ backgroundColor: NEUTRAL[100] }}
+      pressStyle={{ backgroundColor: tokens.subtle }}
       {...props}
     />
   );
@@ -176,11 +273,12 @@ export function Feedback({
   icon?: ReactNode;
   children: ReactNode;
 }) {
+  const hintBg = useHintBg();
   const color = kind === 'hint' ? HINT.fg : COLORS[kind];
   const bg =
     kind === 'good' ? COLORS.goodBg
     : kind === 'bad' ? COLORS.badBg
-    : kind === 'hint' ? HINT.bg
+    : kind === 'hint' ? hintBg
     : COLORS.warnBg;
   return (
     <XStack backgroundColor={bg} borderRadius={RADIUS.control} padding={12} marginTop={8} gap={6} alignItems="center">
@@ -235,11 +333,12 @@ export function StatChip({
   label: string;
   flex?: number;
 }) {
+  const tokens = useTokens();
   return (
     <YStack
       flex={flex}
       minWidth={76}
-      backgroundColor={NEUTRAL[200]}
+      backgroundColor={tokens.subtle}
       borderRadius={18}
       alignItems="center"
       gap={2}
@@ -247,7 +346,7 @@ export function StatChip({
       paddingHorizontal={6}
     >
       {icon}
-      <Text fontSize={20} fontWeight="800" color={INK}>
+      <Text fontSize={20} fontWeight="800" color={tokens.ink}>
         {value}
       </Text>
       <Text fontSize={10} color={COLORS.muted} textAlign="center">
@@ -283,13 +382,15 @@ interface TierStyle {
 
 export function Badge({ label, text }: { label: string; text?: string }) {
   const accent = useAccent();
+  const tokens = useTokens();
+  const hintBg = useHintBg();
   const tier = TIER_BY_LABEL[label] ?? 'neutral';
   const styles: Record<MasteryTier, TierStyle> = {
-    accent: { bg: NEUTRAL[100], fg: accent, border: 'transparent' },
+    accent: { bg: tokens.subtle, fg: accent, border: 'transparent' },
     outline: { bg: 'transparent', fg: accent, border: accent },
-    warn: { bg: HINT.bg, fg: HINT.fg, border: 'transparent' },
+    warn: { bg: hintBg, fg: HINT.fg, border: 'transparent' },
     bad: { bg: COLORS.badBg, fg: COLORS.bad, border: 'transparent' },
-    neutral: { bg: NEUTRAL[100], fg: NEUTRAL[800], border: 'transparent' },
+    neutral: { bg: tokens.subtle, fg: tokens.ink, border: 'transparent' },
   };
   const style = styles[tier];
   return (
@@ -311,8 +412,9 @@ export function Badge({ label, text }: { label: string; text?: string }) {
 /** Thin progress bar used for mastery and review scores. */
 export function ProgressBar({ ratio }: { ratio: number }) {
   const accent = useAccent();
+  const tokens = useTokens();
   return (
-    <YStack flex={1} height={10} backgroundColor={NEUTRAL[200]} borderRadius={RADIUS.pill} overflow="hidden">
+    <YStack flex={1} height={10} backgroundColor={tokens.subtle} borderRadius={RADIUS.pill} overflow="hidden">
       <YStack
         height="100%"
         width={`${Math.max(0, Math.min(1, ratio)) * 100}%`}

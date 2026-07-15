@@ -28,20 +28,20 @@ import { useAuth } from '../lib/auth';
 import { logout } from '../lib/trpc';
 import { useI18n } from '../lib/i18n';
 import { ReferenceSheetButton } from './ReferenceSheet';
-import { INK, NEUTRAL, useAccent, type Hex } from './ui';
-
-const CHROME_BTN = { backgroundColor: NEUTRAL[200], color: INK, borderRadius: 999 } as const;
+import { NEUTRAL, useAccent, useTokens, type Hex } from './ui';
 
 function TabIcon({
   icon: Icon,
   active,
   accent,
+  inactive,
 }: {
   icon: ComponentType<IconProps>;
   active: boolean;
   accent: Hex;
+  inactive: Hex;
 }) {
-  return <Icon size={20} color={active ? accent : NEUTRAL[700]} />;
+  return <Icon size={20} color={active ? accent : inactive} />;
 }
 
 export function AppChrome({ children }: { children: ReactNode }) {
@@ -50,6 +50,10 @@ export function AppChrome({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname() ?? '/';
   const accent = useAccent();
+  const tokens = useTokens();
+  const CHROME_BTN = { backgroundColor: tokens.subtle, color: tokens.ink, borderRadius: 999 } as const;
+  // Mid-neutral for inactive tab items — same visual weight in either mode.
+  const inactive: Hex = tokens.mode === 'dark' ? '#bab6b6' : NEUTRAL[700];
 
   // Admins get the governance console; teachers get the class dashboard;
   // students/guardians get the learner tabs.
@@ -74,19 +78,19 @@ export function AppChrome({ children }: { children: ReactNode }) {
     // place with plain CSS — #top-bar is sticky and #bottom-tabs is fixed
     // (see the web layout's global style) — so they behave from the first
     // paint, before hydration. Native pins them via the flex column.
-    <YStack flex={1} backgroundColor="#f3f2f2">
+    <YStack flex={1} backgroundColor={tokens.bg}>
       <XStack
         id="top-bar"
-        backgroundColor="#f3f2f2"
+        backgroundColor={tokens.bg}
         borderBottomWidth={2}
-        borderBottomColor="rgba(32,30,29,0.12)"
+        borderBottomColor={tokens.chromeBorder}
         paddingHorizontal={16}
         paddingVertical={12}
         alignItems="center"
         justifyContent="space-between"
       >
         <XStack gap={26} alignItems="center" flexShrink={1}>
-          <Text color={INK} fontWeight="800" fontSize={18}>
+          <Text color={tokens.ink} fontWeight="800" fontSize={18}>
             ∑ {t('appName')}
           </Text>
           {topNav &&
@@ -96,9 +100,9 @@ export function AppChrome({ children }: { children: ReactNode }) {
               return (
                 <Link key={tab.href} href={tab.href}>
                   <XStack gap={6} alignItems="center">
-                    <TabIcon icon={tab.icon} active={active} accent={accent} />
+                    <TabIcon icon={tab.icon} active={active} accent={accent} inactive={inactive} />
                     <Text
-                      color={active ? accent : NEUTRAL[700]}
+                      color={active ? accent : inactive}
                       fontSize={14}
                       fontWeight={active ? '800' : '600'}
                     >
@@ -114,14 +118,14 @@ export function AppChrome({ children }: { children: ReactNode }) {
           {auth && (
             <Link href="/appearance">
               <Button size="$2" {...CHROME_BTN} aria-label={t('appearance')}>
-                <Palette size={15} color={INK} />
+                <Palette size={15} color={tokens.ink} />
               </Button>
             </Link>
           )}
           {auth && (
             <Link href="/settings">
               <Button size="$2" {...CHROME_BTN} aria-label={t('settings')}>
-                <Settings size={15} color={INK} />
+                <Settings size={15} color={tokens.ink} />
               </Button>
             </Link>
           )}
@@ -142,7 +146,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
                 router.replace('/login');
               }}
             >
-              <LogOut size={15} color={INK} />
+              <LogOut size={15} color={tokens.ink} />
             </Button>
           )}
         </XStack>
@@ -153,9 +157,9 @@ export function AppChrome({ children }: { children: ReactNode }) {
       {auth && !topNav && (
         <XStack
           id="bottom-tabs"
-          backgroundColor="#ffffff"
+          backgroundColor={tokens.surface}
           borderTopWidth={2}
-          borderTopColor="rgba(32,30,29,0.12)"
+          borderTopColor={tokens.chromeBorder}
           paddingVertical={6}
           paddingBottom={10}
           justifyContent="space-around"
@@ -166,8 +170,8 @@ export function AppChrome({ children }: { children: ReactNode }) {
             return (
               <Link key={tab.href} href={tab.href}>
                 <YStack alignItems="center" gap={3} paddingHorizontal={6}>
-                  <TabIcon icon={tab.icon} active={active} accent={accent} />
-                  <Text fontSize={10} fontWeight="700" color={active ? accent : NEUTRAL[700]}>
+                  <TabIcon icon={tab.icon} active={active} accent={accent} inactive={inactive} />
+                  <Text fontSize={10} fontWeight="700" color={active ? accent : inactive}>
                     {tab.label}
                   </Text>
                 </YStack>
