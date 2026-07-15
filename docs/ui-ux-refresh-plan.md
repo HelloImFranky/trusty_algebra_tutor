@@ -170,50 +170,61 @@ Settings lives today) and move Options to the bottom tab bar
    for a `Calculator` icon-button linking to `/calculator`. Keep the
    existing `CHROME_BTN` styling. Update the `aria-label` to
    `t('calculator')`.
-2. Remove the `/calculator` entry from the `tabs` array so it no
+2. Also remove the `Appearance` (palette) icon-button from the top
+   chrome cluster (`AppChrome.tsx:114–120`); Phase 5 relocates it
+   into the Options screen alongside the other preferences. Drop
+   the `Palette` import if nothing else in `AppChrome` uses it.
+3. Remove the `/calculator` entry from the `tabs` array so it no
    longer appears in the bottom tab bar.
-3. Add a new `{ href: '/settings', icon: Settings, label: t('settings') }`
+4. Add a new `{ href: '/settings', icon: Settings, label: t('settings') }`
    entry to the `tabs` array in place of Calculator, so Settings
    becomes the fifth tab on phones and the fifth top-nav item on
    desktop. (Admins/teachers keep their existing role-scoped tabs
    untouched.)
-4. Because Calculator now lives in chrome and is available from
+5. Because Calculator now lives in chrome and is available from
    every route, verify it doesn't obstruct the practice/lesson
    flows — the button just links to a route today, so state is
    preserved by normal router history; nothing to persist. Confirm
    by starting a practice set, opening Calculator, hitting the
    back arrow, and landing back on the same question.
-5. `apps/web/app/settings/page.tsx` and `apps/native/app/settings.tsx`
+6. `apps/web/app/settings/page.tsx` and `apps/native/app/settings.tsx`
    already exist — no route changes needed.
-6. Update the redesign README/plan blurb in `docs/` if any doc
+7. Update the redesign README/plan blurb in `docs/` if any doc
    references the old bottom-tab order.
 
 **Done when.** On phone width, the bottom bar shows
 Curriculum / Sprint / Review / Progress / Settings; the top-right
-button row shows Reference / Appearance / Calculator / Language /
-Logout. On desktop, the same swap is reflected.
+button row shows Reference / Calculator / Logout (Appearance and
+Language now live inside Options; see Phase 5). On desktop, the
+same swap is reflected.
 
 ---
 
-## Phase 5 — Consolidate Options: profile, password, language, appearance-mode
+## Phase 5 — Consolidate Options: profile, password, language, appearance
 
 **Goal.** The Settings ("Options") screen becomes the single home
-for account & preference toggles. Language moves out of the chrome.
-Each concern gets its own titled section so nothing is buried.
+for account & preference toggles. Language *and* the appearance
+entry-point move out of the chrome (chrome removals are done in
+Phase 4). Each concern gets its own titled section so nothing is
+buried.
 
 **Current state.**
 - `packages/app/src/screens/settings.tsx` has two `AppCard`
   sections: *Profile* (displayName + username) and *Change
   password*.
-- `AppChrome.tsx:128–135` renders the 🇪🇸/🇺🇸 toggle button in the
-  top chrome cluster.
+- `AppChrome.tsx:114–120` renders the `Palette` (Appearance)
+  icon-button; `AppChrome.tsx:128–135` renders the 🇪🇸/🇺🇸 toggle
+  button. Both live in the top chrome cluster today.
 
 **Tasks.**
-1. In `AppChrome.tsx`, delete the top-bar language toggle button
-   (lines 128–135). Keep the `useI18n` import only if still used
-   elsewhere in the file (it is — `t(...)` labels).
+1. Chrome cleanup happens in Phase 4 (`Palette` button removed) and
+   here (delete the top-bar language toggle at
+   `AppChrome.tsx:128–135`). Keep the `useI18n` import only if
+   still used elsewhere in the file (it is — `t(...)` labels).
 2. Extend `screens/settings.tsx` with three new `AppCard` sections
-   *below* the existing Profile card, in this order:
+   *below* the existing Profile card, in this order — mirroring
+   the "each concern its own card" pattern that already applies to
+   Profile and Change password:
    - **Change password.** (Move the existing password `AppCard`
      into a dedicated section with a `SubTitle` — already
      effectively separate, but title it `t('changePasswordTitle')`
@@ -221,31 +232,36 @@ Each concern gets its own titled section so nothing is buried.
    - **Language.** `SubTitle` + a segmented `Row` of two buttons
      (English / Español) driven by `useI18n().setLocale`. Highlight
      the active locale with the accent.
-   - **Appearance mode.** `SubTitle` + a segmented control
-     (Auto / Light / Dark) that calls the Phase 2 `setMode(...)`.
-     Include a small `Muted` explainer under the label:
-     *"Auto follows your device setting."*
+   - **Appearance.** `SubTitle` + two rows:
+     - A segmented control (Auto / Light / Dark) that calls the
+       Phase 2 `setMode(...)`, with a small `Muted` explainer:
+       *"Auto follows your device setting."*
+     - A tappable "Change accent color →" row that navigates to
+       `/appearance` (the full picker screen from Phase 3 — kept on
+       its own route because it's too tall for the settings stack).
+       This row is the sole replacement for the removed chrome
+       palette icon, so it must be visually prominent — full-width,
+       chevron on the right, generous vertical padding.
 3. Wrap each section in its own `AppCard` (matching the existing
    pattern) so the screen reads as a stack of cards, each with a
    `SubTitle`. Add generous `gap` so tapping on phone is
-   comfortable.
+   comfortable. Final card order in Options: **Profile → Change
+   password → Language → Appearance.**
 4. New i18n strings (add to both `en` and `es`):
    `languageSectionTitle`, `english`, `spanish`,
-   `appearanceModeTitle`, `modeAuto`, `modeLight`, `modeDark`,
-   `modeAutoNote`.
-5. If Phase 3 already added a link *from* `/settings` *to*
-   `/appearance`, keep it — the color picker stays on its own
-   screen (it's too tall for the settings stack). Add a small
-   "Change accent color →" row inside the Appearance-mode card
-   that navigates to `/appearance`.
-6. Manual QA on phone + desktop: switching language reflows
+   `appearanceSectionTitle`, `modeAuto`, `modeLight`, `modeDark`,
+   `modeAutoNote`, `changeAccentColor`.
+5. Manual QA on phone + desktop: verify the Appearance chrome
+   button is gone from every route; opening Options → "Change
+   accent color →" lands on the picker; switching language reflows
    immediately without a reload; changing mode repaints;
    password/profile flows unchanged.
 
-**Done when.** The chrome no longer has a language button. Opening
-Options shows four cards — Profile, Change password, Language,
-Appearance mode — each with its own `SubTitle` and its own
-action(s).
+**Done when.** The top chrome shows no Appearance or Language
+button (verified across every route). Opening Options shows four
+cards — Profile, Change password, Language, Appearance — each with
+its own `SubTitle` and its own action(s); Appearance's second row
+is the only path into the color picker.
 
 ---
 
