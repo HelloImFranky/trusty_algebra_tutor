@@ -5,7 +5,7 @@
  * Guardians/teachers land here via /progress/[studentId].
  */
 import { useState } from 'react';
-import { Brain, Clock, Flame, Lock, Medal as MedalIcon, TrendingUp } from '@tamagui/lucide-icons';
+import { Brain, Check, Clock, Flame, Lock, Medal as MedalIcon, TrendingUp } from '@tamagui/lucide-icons';
 import { Text, XStack, YStack } from 'tamagui';
 import { trpc } from '../lib/trpc';
 import { useI18n, type I18nKey } from '../lib/i18n';
@@ -156,7 +156,7 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
           label={t('mastered')}
         />
         <StatChip icon={<MedalIcon size={20} color={accent} />} value={`${earned.length}/${achievements.length}`} label={t('badgesEarned')} />
-        <StatChip icon={<Text fontSize={18}>🎯</Text>} value={data.regents.questionsCorrect} label={t('regentsCorrectLabel')} />
+        <StatChip icon={<Check size={20} color={accent} />} value={data.regents.questionsCorrect} label={t('regentsCorrectLabel')} />
       </XStack>
 
       <AppCard gap={4}>

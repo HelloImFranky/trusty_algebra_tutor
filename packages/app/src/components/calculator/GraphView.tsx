@@ -14,7 +14,7 @@ import {
   type Point,
 } from '@tutor/core';
 import { useI18n } from '../../lib/i18n';
-import { AppInput, GhostButton, Muted, SecondaryButton, COLORS } from '../ui';
+import { AppInput, GhostButton, Muted, SecondaryButton, useTokens, COLORS } from '../ui';
 import { GraphPlot } from './GraphPlot';
 import { MAX_EXPRESSIONS, useCalculatorStore } from './store';
 import { useCompiledFns } from './useCompiledFns';
@@ -37,6 +37,7 @@ const QUICK_KEYS: { label: string; insert: string; aria: string }[] = [
 
 export function GraphView() {
   const { t } = useI18n();
+  const tokens = useTokens();
   const window = useCalculatorStore((s) => s.window);
   const { setExpression, addExpression, removeExpression, setWindow, resetWindow } =
     useCalculatorStore();
@@ -119,7 +120,7 @@ export function GraphView() {
         <YStack key={i} gap={2}>
           <XStack alignItems="center" gap={8}>
             <YStack width={10} height={10} borderRadius={5} backgroundColor={row.color} />
-            <Text fontWeight="700" width={34} color="#111827">
+            <Text fontWeight="700" width={34} color={tokens.ink}>
               y{i + 1} =
             </Text>
             <AppInput
@@ -137,8 +138,9 @@ export function GraphView() {
               autoCapitalize="none"
               autoCorrect={false}
               spellCheck={false}
-              backgroundColor="#fff"
-              borderColor={row.fn && !row.fn.ok ? COLORS.bad : COLORS.border}
+              color={tokens.ink}
+              backgroundColor={tokens.surface}
+              borderColor={row.fn && !row.fn.ok ? COLORS.bad : tokens.border}
               aria-label={`y${i + 1}`}
             />
             {rows.length > 1 && (
@@ -220,7 +222,7 @@ export function GraphView() {
             <YStack key={i} gap={4}>
               <XStack gap={6} alignItems="center" flexWrap="wrap">
                 <YStack width={8} height={8} borderRadius={4} backgroundColor={r.color} />
-                <Text fontSize={13} color={COLORS.muted}>
+                <Text fontSize={13} color={tokens.muted}>
                   {t('xIntercepts')}:{' '}
                   {r.xs.length
                     ? r.xs.map((x) => `x = ${formatNumber(Number(x.toPrecision(6)))}`).join(',  ')
@@ -229,7 +231,7 @@ export function GraphView() {
               </XStack>
               <XStack gap={6} alignItems="center" flexWrap="wrap">
                 <YStack width={8} height={8} borderRadius={4} backgroundColor={r.color} />
-                <Text fontSize={13} color={COLORS.muted}>
+                <Text fontSize={13} color={tokens.muted}>
                   {t('yIntercept')}:{' '}
                   {Number.isFinite(r.yIntercept)
                     ? `y = ${formatNumber(Number(r.yIntercept.toPrecision(6)))}`
@@ -239,7 +241,7 @@ export function GraphView() {
             </YStack>
           ))}
           {plotted.length > 1 && (
-            <Text fontSize={13} color={COLORS.muted}>
+            <Text fontSize={13} color={tokens.muted}>
               {t('intersections')}:{' '}
               {analysis.intersections.length
                 ? analysis.intersections

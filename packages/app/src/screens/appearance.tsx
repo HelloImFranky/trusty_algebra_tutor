@@ -33,6 +33,26 @@ import {
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
+/** Extract the hue channel (degrees 0..360) from a hex color. Used to build
+ * the live gradient behind the Saturation slider — the track needs to be
+ * "gray → full color at the current hue" so the eye reads it as "how much
+ * of this color is on." Returns 0 for perfectly neutral input. */
+function hueFromHex(hex: string): number {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return 0;
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const d = max - min;
+  if (d === 0) return 0;
+  let h: number;
+  if (max === r) h = ((g - b) / d) % 6;
+  else if (max === g) h = (b - r) / d + 2;
+  else h = (r - g) / d + 4;
+  return ((h * 60) + 360) % 360;
+}
+
 /** Section header — same "uppercase caption" treatment across all three
  * slider blocks so the eye picks up the H/S/L axes without re-reading. */
 function SliderLabel({ text }: { text: string }) {
@@ -177,11 +197,41 @@ export function AppearanceScreen() {
           </YStack>
           <YStack gap={6}>
             <SliderLabel text={t('saturationLabel')} />
-            <SaturationSlider style={{ height: 22, borderRadius: 11 }} thumbSize={26} />
+            {/* Track goes from mid-gray (0% saturation) to a fully-saturated
+                slice of the CURRENT hue (100%). Recomputes every drag frame
+                because liveColor is a state dep — that's cheap; just a
+                template string, no allocation-heavy work. */}
+            <SaturationSlider
+              style={{
+                height: 22,
+                borderRadius: 11,
+                ...(Platform.OS === 'web'
+                  ? {
+                      backgroundImage: `linear-gradient(to right, hsl(${hueFromHex(liveColor)}, 0%, 50%), hsl(${hueFromHex(liveColor)}, 100%, 50%))`,
+                    }
+                  : null),
+              }}
+              thumbSize={26}
+            />
           </YStack>
           <YStack gap={6}>
             <SliderLabel text={t('brightnessLabel')} />
-            <BrightnessSlider style={{ height: 22, borderRadius: 11 }} thumbSize={26} />
+            {/* Track goes from pure black (darkest) through the current
+                hue at full saturation (middle) to pure white (brightest) —
+                natural HSL "lightness" scale, which is the mental model
+                students already have for a brightness axis. */}
+            <BrightnessSlider
+              style={{
+                height: 22,
+                borderRadius: 11,
+                ...(Platform.OS === 'web'
+                  ? {
+                      backgroundImage: `linear-gradient(to right, #000000, hsl(${hueFromHex(liveColor)}, 100%, 50%), #ffffff)`,
+                    }
+                  : null),
+              }}
+              thumbSize={26}
+            />
           </YStack>
 
           {/* Optional hex input for power users pasting brand colors from a

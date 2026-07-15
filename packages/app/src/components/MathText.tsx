@@ -1,15 +1,22 @@
 /**
  * Render mixed prompt text: markdown-lite (**bold**, *italic*) with $...$
  * math segments, matching how prompts are authored in the content package.
+ * Color explicitly follows tokens.ink so quiz / practice / lesson prompts
+ * are legible in dark mode — Tamagui's Text default falls through to its
+ * built-in light-theme text color, which reads as unreadable dark-gray on
+ * a dark surface. Katex output uses CSS `color: inherit` so setting the
+ * color on the wrapping Text carries into the rendered math.
  */
 import { Fragment } from 'react';
 import { Text } from 'tamagui';
 import { Katex } from './Katex';
+import { useTokens } from './ui';
 
 export function MathText({ text, size = 15 }: { text: string; size?: number }) {
+  const tokens = useTokens();
   const parts = text.split(/(\$[^$]+\$)/g);
   return (
-    <Text fontSize={size} whiteSpace="pre-wrap">
+    <Text fontSize={size} color={tokens.ink} whiteSpace="pre-wrap">
       {parts.map((part, i) =>
         part.startsWith('$') && part.endsWith('$') ? (
           <Katex key={i} tex={part.slice(1, -1)} />

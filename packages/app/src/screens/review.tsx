@@ -304,14 +304,25 @@ function TopicQuiz({ slug, onExit }: { slug: string; onExit: () => void }) {
         </GhostButton>
       </XStack>
 
+      {/* Question meta lives above the answer card so the card itself is
+          just the prompt + choices + submit. Two aligned columns: left
+          shows question number and round, right shows the "one try" tip
+          (only while the question is unanswered). paddingHorizontal
+          matches the card's padding so the columns line up with the
+          card's inner edges. */}
+      <XStack
+        justifyContent="space-between"
+        alignItems="center"
+        paddingHorizontal={16}
+      >
+        <Muted>
+          {t('question')} {index + 1} {t('of')} {questions.length}
+          {servedRound > 0 ? ` · 🔄 ${t('roundLabel')} ${servedRound + 1}` : ''}
+        </Muted>
+        {!answered && <Muted>{t('oneTryHint')}</Muted>}
+      </XStack>
+
       <AppCard gap={14} borderRadius={22}>
-        <XStack justifyContent="space-between" alignItems="center">
-          <Muted>
-            {t('question')} {index + 1} {t('of')} {questions.length}
-            {servedRound > 0 ? ` · 🔄 ${t('roundLabel')} ${servedRound + 1}` : ''}
-          </Muted>
-          {!answered && <Muted>{t('oneTryHint')}</Muted>}
-        </XStack>
         <MathText text={q.prompt} size={17} />
 
         <YStack gap={8}>
