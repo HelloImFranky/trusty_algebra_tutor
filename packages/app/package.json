@@ -23,6 +23,7 @@
     "@tutor/api": "*",
     "@tutor/core": "*",
     "katex": "^0.16.11",
+    "reanimated-color-picker": "^5.1.2",
     "solito": "^4.4.0",
     "superjson": "^2.2.2",
     "tamagui": "^1.121.0",
@@ -31,6 +32,9 @@
   "peerDependencies": {
     "react": "*",
     "react-native": "*",
+    "react-native-gesture-handler": "*",
+    "react-native-reanimated": "*",
+    "react-native-svg": "*",
     "react-native-web": "*"
   },
   "devDependencies": {

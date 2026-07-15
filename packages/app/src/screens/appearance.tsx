@@ -1,12 +1,23 @@
-/** Color-theme picker (design doc mockup 3g): 4 hues x 4 shades, instant-apply + persisted. */
-import { ArrowLeft, Check, Flame } from '@tamagui/lucide-icons';
+/**
+ * Color picker (Appearance): a free-form saturation/brightness + hue picker
+ * (reanimated-color-picker — works natively on iOS/Android/Expo and on web)
+ * with a short "recently used" history, persisted client-side (see
+ * ../lib/theme.tsx). Swatch taps and native drag-release apply instantly;
+ * on web, dragging the panel/slider previews live but commits via the Save
+ * button (the library's onComplete callback isn't reliable on web drags —
+ * https://alabsi91.github.io/reanimated-color-picker/api/color-picker-wrapper/).
+ */
+import { useState } from 'react';
+import { ArrowLeft, Flame } from '@tamagui/lucide-icons';
 import { useRouter } from 'solito/navigation';
 import { Text, XStack, YStack } from 'tamagui';
-import { useI18n, type I18nKey } from '../lib/i18n';
-import { THEMES, useTheme, type ThemeHue } from '../lib/theme';
+import ColorPicker, { HueSlider, Panel1, Preview, Swatches, type ColorFormatsObject } from 'reanimated-color-picker';
+import { useI18n } from '../lib/i18n';
+import { useTheme, type Hex } from '../lib/theme';
 import { useRequireAuth } from '../components/AppChrome';
 import {
   Badge,
+  INK,
   NEUTRAL,
   PrimaryButton,
   ProgressBar,
@@ -15,61 +26,25 @@ import {
   Title,
 } from '../components/ui';
 
-const HUE_LABEL_KEY: Record<ThemeHue, I18nKey> = {
-  classicRed: 'themeClassicRed',
-  oceanBlue: 'themeOceanBlue',
-  forestGreen: 'themeForestGreen',
-  grapePurple: 'themeGrapePurple',
-};
-
-function ShadeRow({ hueKey, selected, onPick }: { hueKey: ThemeHue; selected: number | null; onPick: (shade: number) => void }) {
-  const { t } = useI18n();
-  return (
-    <YStack gap={6}>
-      <Text fontSize={13} fontWeight="700">
-        {t(HUE_LABEL_KEY[hueKey])}
-      </Text>
-      <XStack gap={8}>
-        {THEMES[hueKey].shades.map((hex, i) => {
-          const isSelected = selected === i;
-          return (
-            <XStack
-              key={hex}
-              width={40}
-              height={40}
-              borderRadius={10}
-              backgroundColor={hex}
-              alignItems="center"
-              justifyContent="center"
-              borderWidth={isSelected ? 2 : 0}
-              borderColor="#201e1d"
-              cursor="pointer"
-              pressStyle={{ opacity: 0.85 }}
-              onPress={() => onPick(i)}
-              accessibilityRole="button"
-              aria-label={`${hueKey} ${i + 1}`}
-            >
-              {isSelected && <Check size={16} color="#ffffff" />}
-            </XStack>
-          );
-        })}
-      </XStack>
-    </YStack>
-  );
-}
+const HEX_RE = /^#[0-9a-fA-F]{3,8}$/;
 
 export function AppearanceScreen() {
   const { t } = useI18n();
   const authed = useRequireAuth();
   const router = useRouter();
-  const { accent, hue, shade, setTheme } = useTheme();
+  const { accent, recentColors, setAccent } = useTheme();
+  const [liveColor, setLiveColor] = useState<Hex>(accent);
   if (!authed) return null;
+
+  const commit = (hex: string) => {
+    if (HEX_RE.test(hex)) setAccent(hex as Hex);
+  };
 
   return (
     <Screen maxWidth={560}>
       <XStack alignItems="center" gap={8}>
         <XStack onPress={() => router.back()} cursor="pointer" pressStyle={{ opacity: 0.6 }}>
-          <ArrowLeft size={20} color="#201e1d" />
+          <ArrowLeft size={20} color={INK} />
         </XStack>
         <Title>{t('appearance')}</Title>
       </XStack>
@@ -78,18 +53,37 @@ export function AppearanceScreen() {
         {t('colorTheme')}
       </Text>
 
-      {(Object.keys(THEMES) as ThemeHue[]).map((hueKey) => (
-        <ShadeRow
-          key={hueKey}
-          hueKey={hueKey}
-          selected={hue === hueKey ? shade : null}
-          onPick={(i) => setTheme(hueKey, i)}
-        />
-      ))}
+      <ColorPicker
+        value={accent}
+        onChangeJS={(colors: ColorFormatsObject) => setLiveColor(colors.hex as Hex)}
+        onCompleteJS={(colors: ColorFormatsObject) => commit(colors.hex)}
+      >
+        <YStack gap={14}>
+          <Panel1 style={{ height: 180, borderRadius: 14 }} thumbSize={26} />
+          <HueSlider style={{ height: 18, borderRadius: 9 }} thumbSize={22} />
+          <Preview style={{ height: 40, borderRadius: 12 }} hideInitialColor />
+
+          {recentColors.length > 0 ? (
+            <YStack gap={6}>
+              <Text fontSize={12} fontWeight="800" textTransform="uppercase" letterSpacing={0.6} color={NEUTRAL[700]}>
+                {t('recentColors')}
+              </Text>
+              <Swatches colors={recentColors} swatchStyle={{ width: 34, height: 34, borderRadius: 10 }} />
+            </YStack>
+          ) : (
+            <Text fontSize={12} color={NEUTRAL[600]}>
+              {t('noRecentColors')}
+            </Text>
+          )}
+        </YStack>
+      </ColorPicker>
+
+      <PrimaryButton justifyContent="center" onPress={() => commit(liveColor)}>
+        {t('saveColor')}
+      </PrimaryButton>
 
       <Text fontSize={12} fontWeight="800" textTransform="uppercase" letterSpacing={0.6} color={NEUTRAL[700]} marginTop={6}>
         {t('previewLabel')}
-        {hue ? ` — ${t(HUE_LABEL_KEY[hue])}` : ''}
       </Text>
       <YStack backgroundColor="#ffffff" borderRadius={20} padding={16} gap={10}>
         <XStack gap={10} alignItems="center" flexWrap="wrap">
@@ -100,10 +94,6 @@ export function AppearanceScreen() {
         <ProgressBar ratio={0.7} />
         <PrimaryButton justifyContent="center">Continue →</PrimaryButton>
       </YStack>
-
-      <PrimaryButton justifyContent="center" onPress={() => router.back()}>
-        {t('applyTheme')}
-      </PrimaryButton>
     </Screen>
   );
 }
