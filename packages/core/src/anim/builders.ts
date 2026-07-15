@@ -452,6 +452,127 @@ export function buildAddPolynomials(
   };
 }
 
+/**
+ * foil template: (x + p)(x + q) → x² + (p+q)x + pq, params {p, q}.
+ * Walks First · Outer · Inner · Last, shows the four products, then
+ * combines the middle two like terms. Single row — both factors are
+ * binomials in x. p, q are nonzero, so the constant term never vanishes;
+ * the middle term can (p + q === 0), in which case it cancels away.
+ */
+export function buildFoil(p: number, q: number): EqScript {
+  const B = p + q; // middle coefficient
+  const C = p * q; // constant term (nonzero: p, q are nonzero)
+  const op = (v: number) => (v >= 0 ? '+' : '−');
+  const par = (v: number) => (v < 0 ? `(${M(v)})` : M(v));
+
+  type Slot = 'x1' | 'p' | 'x2' | 'q';
+  // (x + p)(x + q); pass a focus set to spotlight one FOIL pair.
+  const factored = (focus: Slot[] = []): EqToken[] => {
+    const f = (s: Slot) => (focus.includes(s) ? { emph: 'focus' as Emph } : {});
+    return [
+      tok('lp1', '(', 'op'),
+      tok('x1', 'x', 'var', { tight: true, ...f('x1') }),
+      tok('s1', op(p), 'op'),
+      tok('p', M(Math.abs(p)), 'num', f('p')),
+      tok('rp1', ')', 'op', { tight: true }),
+      tok('lp2', '(', 'op'),
+      tok('x2', 'x', 'var', { tight: true, ...f('x2') }),
+      tok('s2', op(q), 'op'),
+      tok('q', M(Math.abs(q)), 'num', f('q')),
+      tok('rp2', ')', 'op', { tight: true }),
+    ];
+  };
+
+  // x² + qx + px + pq — the four products. 'reveal' greens them all;
+  // 'combine' spotlights the two middle (Outer + Inner) like terms.
+  const products = (mode: 'reveal' | 'combine'): EqToken[] => {
+    const res: Emph | undefined = mode === 'reveal' ? 'result' : undefined;
+    const mid: Emph = mode === 'reveal' ? 'result' : 'focus';
+    return [
+      tok('F', 'x²', 'var', res ? { emph: res } : undefined),
+      tok('opO', op(q), 'op'),
+      tok('O', cf(Math.abs(q), 'x'), 'var', { emph: mid }),
+      tok('opI', op(p), 'op'),
+      tok('I', cf(Math.abs(p), 'x'), 'var', { emph: mid }),
+      tok('opL', op(C), 'op'),
+      tok('L', M(Math.abs(C)), 'num', res ? { emph: res } : undefined),
+    ];
+  };
+
+  // final answer in standard form; drop the middle term when it cancels
+  const finalTokens: EqToken[] =
+    B === 0
+      ? [tok('F', 'x²', 'var'), tok('opL', op(C), 'op'), tok('L', M(Math.abs(C)), 'num', { emph: 'result' })]
+      : [
+          tok('F', 'x²', 'var'),
+          tok('opM', op(B), 'op'),
+          tok('M', cf(Math.abs(B), 'x'), 'var', { emph: 'result' }),
+          tok('opL', op(C), 'op'),
+          tok('L', M(Math.abs(C)), 'num'),
+        ];
+
+  const fourProducts = `x² ${op(q)} ${cf(Math.abs(q), 'x')} ${op(p)} ${cf(Math.abs(p), 'x')} ${op(C)} ${M(Math.abs(C))}`;
+  const mids = `${cf(q, 'x')} ${op(p)} ${cf(Math.abs(p), 'x')}`;
+  const answer = B === 0 ? `x² ${op(C)} ${M(Math.abs(C))}` : `x² ${op(B)} ${cf(Math.abs(B), 'x')} ${op(C)} ${M(Math.abs(C))}`;
+
+  const steps: EqStep[] = [
+    {
+      tokens: factored(),
+      explainEn: 'Multiply two binomials with FOIL: First, Outer, Inner, Last — distribute 4 times, then combine like terms.',
+      explainEs: 'Multiplica dos binomios con FOIL: Primeros, Externos, Internos, Últimos — distribuye 4 veces y luego combina términos semejantes.',
+    },
+    {
+      tokens: factored(['x1', 'x2']),
+      explainEn: 'First: multiply the first terms. x · x = x².',
+      explainEs: 'Primeros: multiplica los primeros términos. x · x = x².',
+    },
+    {
+      tokens: factored(['x1', 'q']),
+      explainEn: `Outer: the outer pair. x · ${par(q)} = ${cf(q, 'x')}.`,
+      explainEs: `Externos: el par de afuera. x · ${par(q)} = ${cf(q, 'x')}.`,
+    },
+    {
+      tokens: factored(['p', 'x2']),
+      explainEn: `Inner: the inner pair. ${par(p)} · x = ${cf(p, 'x')}.`,
+      explainEs: `Internos: el par de adentro. ${par(p)} · x = ${cf(p, 'x')}.`,
+    },
+    {
+      tokens: factored(['p', 'q']),
+      explainEn: `Last: the last terms. ${par(p)} · ${par(q)} = ${M(C)}.`,
+      explainEs: `Últimos: los últimos términos. ${par(p)} · ${par(q)} = ${M(C)}.`,
+    },
+    {
+      tokens: products('reveal'),
+      explainEn: `All four products: ${fourProducts}. Now combine like terms.`,
+      explainEs: `Los cuatro productos: ${fourProducts}. Ahora combina los términos semejantes.`,
+    },
+    {
+      tokens: products('combine'),
+      explainEn:
+        B === 0
+          ? `The two middle terms are LIKE terms: ${mids} = 0 — they cancel.`
+          : `The two middle terms are LIKE terms: ${mids} = ${cf(B, 'x')}.`,
+      explainEs:
+        B === 0
+          ? `Los dos términos del medio son SEMEJANTES: ${mids} = 0 — se cancelan.`
+          : `Los dos términos del medio son SEMEJANTES: ${mids} = ${cf(B, 'x')}.`,
+      holdMs: 3000,
+    },
+    {
+      tokens: finalTokens,
+      explainEn: `The answer is ${answer}. Standard form lists the highest power first!`,
+      explainEs: `La respuesta es ${answer}. La forma estándar pone primero la potencia mayor.`,
+    },
+  ];
+
+  return {
+    id: `gen-foil-${p}-${q}`,
+    titleEn: 'Your problem, step by step',
+    titleEs: 'Tu problema, paso a paso',
+    steps,
+  };
+}
+
 /** slope_two_points template: line through (x1, y1) and (x2, y2). */
 export function buildSlopeFromPoints(
   x1: number,
@@ -595,10 +716,14 @@ export function buildScriptForProblem(
   const num = (k: string): number | null => (typeof p[k] === 'number' ? (p[k] as number) : null);
 
   // add_polynomials params: two coefficient triples + the add/subtract flag.
-  // foil / mono_times_poly (same skill) have different shapes → null below.
+  // foil ({p, q}) and mono_times_poly ({m, a, b}) share this skill.
   if (skillSlug === 'polynomial-operations') {
     const [a1, b1, c1, a2, b2, c2] = ['a1', 'b1', 'c1', 'a2', 'b2', 'c2'].map(num);
     if (a1 === null || b1 === null || c1 === null || a2 === null || b2 === null || c2 === null) {
+      // foil: (x + p)(x + q). mono_times_poly has no p/q → stays unanimated.
+      const fp = num('p');
+      const fq = num('q');
+      if (fp !== null && fq !== null) return buildFoil(fp, fq);
       return null;
     }
     return buildAddPolynomials(a1, b1, c1, a2, b2, c2, p.sub === true);

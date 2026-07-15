@@ -614,6 +614,136 @@ export const polyAddScript: EqScript = {
   ],
 };
 
+/** Multiplying two binomials with FOIL: (x + 5)(x − 6) (Unit 2, the 2.3
+ * classroom worked example). Same token ids as the `buildFoil` generator. */
+export const foilScript: EqScript = {
+  id: 'foil',
+  titleEn: 'Multiply binomials (FOIL)',
+  titleEs: 'Multiplica binomios (FOIL)',
+  steps: [
+    {
+      tokens: [
+        t('lp1', '(', 'op'),
+        t('x1', 'x', 'var', { tight: true }),
+        t('s1', '+', 'op'),
+        t('p', '5', 'num'),
+        t('rp1', ')', 'op', { tight: true }),
+        t('lp2', '(', 'op'),
+        t('x2', 'x', 'var', { tight: true }),
+        t('s2', '−', 'op'),
+        t('q', '6', 'num'),
+        t('rp2', ')', 'op', { tight: true }),
+      ],
+      explainEn:
+        'Multiply two binomials with FOIL: First, Outer, Inner, Last — distribute 4 times, then combine like terms.',
+      explainEs:
+        'Multiplica dos binomios con FOIL: Primeros, Externos, Internos, Últimos — distribuye 4 veces y luego combina términos semejantes.',
+    },
+    {
+      tokens: [
+        t('lp1', '(', 'op'),
+        t('x1', 'x', 'var', { tight: true, emph: 'focus' }),
+        t('s1', '+', 'op'),
+        t('p', '5', 'num'),
+        t('rp1', ')', 'op', { tight: true }),
+        t('lp2', '(', 'op'),
+        t('x2', 'x', 'var', { tight: true, emph: 'focus' }),
+        t('s2', '−', 'op'),
+        t('q', '6', 'num'),
+        t('rp2', ')', 'op', { tight: true }),
+      ],
+      explainEn: 'First: multiply the first terms. x · x = x².',
+      explainEs: 'Primeros: multiplica los primeros términos. x · x = x².',
+    },
+    {
+      tokens: [
+        t('lp1', '(', 'op'),
+        t('x1', 'x', 'var', { tight: true, emph: 'focus' }),
+        t('s1', '+', 'op'),
+        t('p', '5', 'num'),
+        t('rp1', ')', 'op', { tight: true }),
+        t('lp2', '(', 'op'),
+        t('x2', 'x', 'var', { tight: true }),
+        t('s2', '−', 'op'),
+        t('q', '6', 'num', { emph: 'focus' }),
+        t('rp2', ')', 'op', { tight: true }),
+      ],
+      explainEn: 'Outer: the outer pair. x · (−6) = −6x.',
+      explainEs: 'Externos: el par de afuera. x · (−6) = −6x.',
+    },
+    {
+      tokens: [
+        t('lp1', '(', 'op'),
+        t('x1', 'x', 'var', { tight: true }),
+        t('s1', '+', 'op'),
+        t('p', '5', 'num', { emph: 'focus' }),
+        t('rp1', ')', 'op', { tight: true }),
+        t('lp2', '(', 'op'),
+        t('x2', 'x', 'var', { tight: true, emph: 'focus' }),
+        t('s2', '−', 'op'),
+        t('q', '6', 'num'),
+        t('rp2', ')', 'op', { tight: true }),
+      ],
+      explainEn: 'Inner: the inner pair. 5 · x = 5x.',
+      explainEs: 'Internos: el par de adentro. 5 · x = 5x.',
+    },
+    {
+      tokens: [
+        t('lp1', '(', 'op'),
+        t('x1', 'x', 'var', { tight: true }),
+        t('s1', '+', 'op'),
+        t('p', '5', 'num', { emph: 'focus' }),
+        t('rp1', ')', 'op', { tight: true }),
+        t('lp2', '(', 'op'),
+        t('x2', 'x', 'var', { tight: true }),
+        t('s2', '−', 'op'),
+        t('q', '6', 'num', { emph: 'focus' }),
+        t('rp2', ')', 'op', { tight: true }),
+      ],
+      explainEn: 'Last: the last terms. 5 · (−6) = −30.',
+      explainEs: 'Últimos: los últimos términos. 5 · (−6) = −30.',
+    },
+    {
+      tokens: [
+        t('F', 'x²', 'var', { emph: 'result' }),
+        t('opO', '−', 'op'),
+        t('O', '6x', 'var', { emph: 'result' }),
+        t('opI', '+', 'op'),
+        t('I', '5x', 'var', { emph: 'result' }),
+        t('opL', '−', 'op'),
+        t('L', '30', 'num', { emph: 'result' }),
+      ],
+      explainEn: 'All four products: x² − 6x + 5x − 30. Now combine like terms.',
+      explainEs: 'Los cuatro productos: x² − 6x + 5x − 30. Ahora combina los términos semejantes.',
+    },
+    {
+      tokens: [
+        t('F', 'x²', 'var'),
+        t('opO', '−', 'op'),
+        t('O', '6x', 'var', { emph: 'focus' }),
+        t('opI', '+', 'op'),
+        t('I', '5x', 'var', { emph: 'focus' }),
+        t('opL', '−', 'op'),
+        t('L', '30', 'num'),
+      ],
+      explainEn: 'The two middle terms are LIKE terms: −6x + 5x = −x.',
+      explainEs: 'Los dos términos del medio son SEMEJANTES: −6x + 5x = −x.',
+      holdMs: 3000,
+    },
+    {
+      tokens: [
+        t('F', 'x²', 'var'),
+        t('opM', '−', 'op'),
+        t('M', 'x', 'var', { emph: 'result' }),
+        t('opL', '−', 'op'),
+        t('L', '30', 'num'),
+      ],
+      explainEn: 'The answer is x² − x − 30. Standard form lists the highest power first!',
+      explainEs: 'La respuesta es x² − x − 30. La forma estándar pone primero la potencia mayor.',
+    },
+  ],
+};
+
 /** Slope from two points: (1, 2) and (5, 8) (Unit 5). */
 export const slopeTwoPointsScript: EqScript = {
   id: 'slope-two-points',
@@ -710,6 +840,7 @@ export const demoScripts: EqScript[] = [
   inequalityScript,
   evaluateScript,
   polyAddScript,
+  foilScript,
   slopeTwoPointsScript,
   slopeInterceptScript,
 ];
@@ -721,7 +852,7 @@ export const demoScripts: EqScript[] = [
 export const scriptsByLessonCode: Record<string, EqScript[]> = {
   '2.1': [evaluateScript],
   '2.2': [likeTermsScript],
-  '2.3': [polyAddScript],
+  '2.3': [polyAddScript, foilScript],
   '3.1': [twoStepScript, distributeScript],
   '3.2': [bothSidesScript],
   '3.3': [inequalityScript],

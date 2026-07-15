@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildAddPolynomials,
+  buildFoil,
   buildMultiStepEquation,
   buildScriptForProblem,
   buildSlopeFromPoints,
@@ -169,6 +170,38 @@ describe('buildAddPolynomials', () => {
   });
 });
 
+describe('buildFoil', () => {
+  it('walks First·Outer·Inner·Last, then combines the middle terms', () => {
+    // (x + 5)(x − 6) = x² − 6x + 5x − 30 = x² − x − 30
+    const s = buildFoil(5, -6);
+    const l = lines(s);
+    expect(l.length).toBe(8);
+    expect(l[0]).toBe('(x + 5) (x − 6)');
+    expect(l[5]).toBe('x² − 6x + 5x − 30'); // the four products, before combining
+    expect(l[l.length - 1]).toBe('x² − x − 30');
+  });
+
+  it('renders positive results with all + signs', () => {
+    // (x + 2)(x + 3) = x² + 5x + 6
+    expect(lines(buildFoil(2, 3)).pop()).toBe('x² + 5x + 6');
+  });
+
+  it('handles coefficient-1 outer/inner terms', () => {
+    // (x − 1)(x + 4) = x² + 4x − x − 4 = x² + 3x − 4
+    const l = lines(buildFoil(-1, 4));
+    expect(l[0]).toBe('(x − 1) (x + 4)');
+    expect(l[5]).toBe('x² + 4x − x − 4');
+    expect(l.pop()).toBe('x² + 3x − 4');
+  });
+
+  it('cancels the middle term when Outer + Inner sum to zero', () => {
+    // (x + 6)(x − 6) = x² − 36 (difference of squares)
+    const s = buildFoil(6, -6);
+    expect(lines(s).pop()).toBe('x² − 36');
+    expect(lastStep(s).tokens.some((tk) => tk.id === 'M')).toBe(false);
+  });
+});
+
 describe('buildSlopeFromPoints', () => {
   it('substitutes, computes, and simplifies the fraction', () => {
     // (1, 2) → (5, 8): rise 6, run 4 → 3/2
@@ -236,6 +269,10 @@ describe('lesson script registry', () => {
     expect(scriptsByLessonCode['5.2']?.[0]?.id).toBe('slope-two-points');
     expect(scriptsByLessonCode['5.3']?.[0]?.id).toBe('slope-intercept');
   });
+
+  it('registers the add-polynomials and FOIL scripts for lesson 2.3', () => {
+    expect(scriptsByLessonCode['2.3']?.map((s) => s.id)).toEqual(['poly-add', 'foil']);
+  });
 });
 
 describe('buildScriptForProblem dispatch', () => {
@@ -264,8 +301,14 @@ describe('buildScriptForProblem dispatch', () => {
       a1: 3, b1: 2, c1: 4, a2: 2, b2: 5, c2: 1, sub: false,
     });
     expect(lines(s)[0]).toBe('(3x² + 2x + 4) + (2x² + 5x + 1)');
-    // foil params under the same skill are not animatable
-    expect(buildScriptForProblem('polynomial-operations', { p: 2, q: 3 })).toBeNull();
+  });
+
+  it('routes foil {p, q} params under the same skill to the FOIL builder', () => {
+    const s = buildScriptForProblem('polynomial-operations', { p: 5, q: -6 });
+    expect(lines(s)[0]).toBe('(x + 5) (x − 6)');
+    expect(lines(s).pop()).toBe('x² − x − 30');
+    // mono_times_poly ({m, a, b}) shares the skill but stays unanimated
+    expect(buildScriptForProblem('polynomial-operations', { m: 2, a: 3, b: 4 })).toBeNull();
   });
 
   it('routes slope-intercepts point params to the slope builder', () => {

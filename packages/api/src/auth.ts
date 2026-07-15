@@ -59,6 +59,18 @@ export async function revokeRefreshToken(token: string): Promise<void> {
   });
 }
 
+/**
+ * Revoke every active refresh token for a user. Used after a password change so
+ * any other logged-in session (a shared or stolen device) is forced to
+ * re-authenticate; the caller then issues a fresh token for the current device.
+ */
+export async function revokeAllUserTokens(userId: number): Promise<void> {
+  await prisma.refreshToken.updateMany({
+    where: { userId: BigInt(userId), revoked: false },
+    data: { revoked: true },
+  });
+}
+
 export async function loadUser(id: number): Promise<AuthUser | null> {
   const u = await prisma.user.findUnique({
     where: { id: BigInt(id) },
