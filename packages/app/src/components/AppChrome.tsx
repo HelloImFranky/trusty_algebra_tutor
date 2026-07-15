@@ -1,41 +1,69 @@
 /**
- * Shared chrome: brand top bar (language toggle, logout) and navigation.
- * Desktop-width web gets the nav links in the top bar like a traditional
- * website; phones (native app and narrow web) keep the app-style bottom
- * tab bar (design: students on phones first). Wraps every signed-in
- * screen on web and native.
+ * Shared chrome: brand top bar (streak, reference sheet, appearance, language
+ * toggle, settings, logout) and navigation. Desktop-width web gets the nav
+ * links in the top bar like a traditional website; phones (native app and
+ * narrow web) keep the app-style bottom tab bar (design: students on phones
+ * first). Wraps every signed-in screen on web and native.
  */
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, type ComponentType, type ReactNode } from 'react';
 import { Platform, useWindowDimensions } from 'react-native';
 import { Link } from 'solito/link';
 import { useRouter } from 'solito/navigation';
 import { usePathname } from 'solito/navigation';
+import {
+  BookOpen,
+  Calculator,
+  Library,
+  LogOut,
+  Palette,
+  School,
+  Settings,
+  Shield,
+  TrendingUp,
+  Zap,
+} from '@tamagui/lucide-icons';
+import type { IconProps } from '@tamagui/helpers-icon';
 import { Button, Text, XStack, YStack } from 'tamagui';
 import { useAuth } from '../lib/auth';
 import { logout } from '../lib/trpc';
 import { useI18n } from '../lib/i18n';
 import { ReferenceSheetButton } from './ReferenceSheet';
-import { BRAND, COLORS } from './ui';
+import { INK, NEUTRAL, useAccent, type Hex } from './ui';
+
+const CHROME_BTN = { backgroundColor: NEUTRAL[200], color: INK, borderRadius: 999 } as const;
+
+function TabIcon({
+  icon: Icon,
+  active,
+  accent,
+}: {
+  icon: ComponentType<IconProps>;
+  active: boolean;
+  accent: Hex;
+}) {
+  return <Icon size={20} color={active ? accent : NEUTRAL[700]} />;
+}
 
 export function AppChrome({ children }: { children: ReactNode }) {
   const { t, locale, setLocale } = useI18n();
   const auth = useAuth((s) => s.auth);
   const router = useRouter();
   const pathname = usePathname() ?? '/';
+  const accent = useAccent();
 
   // Admins get the governance console; teachers get the class dashboard;
   // students/guardians get the learner tabs.
   const tabs =
     auth?.user.role === 'admin'
-      ? [{ href: '/admin', icon: '🛡️', label: t('admin') }]
+      ? [{ href: '/admin', icon: Shield, label: t('admin') }]
       : auth?.user.role === 'teacher'
-        ? [{ href: '/classes', icon: '🏫', label: t('classes') }]
+        ? [{ href: '/classes', icon: School, label: t('classes') }]
         : [
-            { href: '/', icon: '📘', label: t('curriculum') },
-            { href: '/sprint', icon: '⚡', label: t('sprint') },
-            { href: '/review', icon: '📚', label: t('review') },
-            { href: '/progress', icon: '📈', label: t('progress') },
-            { href: '/calculator', icon: '🧮', label: t('calculator') },
+            { href: '/', icon: BookOpen, label: t('curriculum') },
+            { href: '/sprint', icon: Zap, label: t('sprint') },
+            { href: '/review', icon: Library, label: t('review') },
+            { href: '/progress', icon: TrendingUp, label: t('progress') },
+            { href: '/calculator', icon: Calculator, label: t('calculator') },
           ];
 
   const { width } = useWindowDimensions();
@@ -46,17 +74,19 @@ export function AppChrome({ children }: { children: ReactNode }) {
     // place with plain CSS — #top-bar is sticky and #bottom-tabs is fixed
     // (see the web layout's global style) — so they behave from the first
     // paint, before hydration. Native pins them via the flex column.
-    <YStack flex={1} backgroundColor="#f6f7fb">
+    <YStack flex={1} backgroundColor="#f3f2f2">
       <XStack
         id="top-bar"
-        backgroundColor={BRAND}
-        paddingHorizontal={14}
-        paddingVertical={10}
+        backgroundColor="#f3f2f2"
+        borderBottomWidth={2}
+        borderBottomColor="rgba(32,30,29,0.12)"
+        paddingHorizontal={16}
+        paddingVertical={12}
         alignItems="center"
         justifyContent="space-between"
       >
         <XStack gap={26} alignItems="center" flexShrink={1}>
-          <Text color="white" fontWeight="900" fontSize={17}>
+          <Text color={INK} fontWeight="800" fontSize={18}>
             ∑ {t('appName')}
           </Text>
           {topNav &&
@@ -65,13 +95,12 @@ export function AppChrome({ children }: { children: ReactNode }) {
               const active = pathname === tab.href;
               return (
                 <Link key={tab.href} href={tab.href}>
-                  <XStack gap={5} alignItems="center" opacity={active ? 1 : 0.75}>
-                    <Text fontSize={15}>{tab.icon}</Text>
+                  <XStack gap={6} alignItems="center">
+                    <TabIcon icon={tab.icon} active={active} accent={accent} />
                     <Text
-                      color="white"
+                      color={active ? accent : NEUTRAL[700]}
                       fontSize={14}
                       fontWeight={active ? '800' : '600'}
-                      textDecorationLine={active ? 'underline' : 'none'}
                     >
                       {tab.label}
                     </Text>
@@ -83,23 +112,22 @@ export function AppChrome({ children }: { children: ReactNode }) {
         <XStack gap={8} alignItems="center">
           {auth && <ReferenceSheetButton compact={!topNav} />}
           {auth && (
+            <Link href="/appearance">
+              <Button size="$2" {...CHROME_BTN} aria-label={t('appearance')}>
+                <Palette size={15} color={INK} />
+              </Button>
+            </Link>
+          )}
+          {auth && (
             <Link href="/settings">
-              <Button
-                size="$2"
-                backgroundColor="rgba(255,255,255,0.18)"
-                color="white"
-                borderRadius={999}
-                aria-label={t('settings')}
-              >
-                ⚙️
+              <Button size="$2" {...CHROME_BTN} aria-label={t('settings')}>
+                <Settings size={15} color={INK} />
               </Button>
             </Link>
           )}
           <Button
             size="$2"
-            backgroundColor="rgba(255,255,255,0.18)"
-            color="white"
-            borderRadius={999}
+            {...CHROME_BTN}
             onPress={() => setLocale(locale === 'en' ? 'es' : 'en')}
             aria-label="language"
           >
@@ -108,15 +136,13 @@ export function AppChrome({ children }: { children: ReactNode }) {
           {auth && (
             <Button
               size="$2"
-              backgroundColor="rgba(255,255,255,0.18)"
-              color="white"
-              borderRadius={999}
+              {...CHROME_BTN}
               onPress={() => {
                 void logout();
                 router.replace('/login');
               }}
             >
-              {t('logout')}
+              <LogOut size={15} color={INK} />
             </Button>
           )}
         </XStack>
@@ -128,8 +154,8 @@ export function AppChrome({ children }: { children: ReactNode }) {
         <XStack
           id="bottom-tabs"
           backgroundColor="#ffffff"
-          borderTopWidth={1}
-          borderTopColor={COLORS.border}
+          borderTopWidth={2}
+          borderTopColor="rgba(32,30,29,0.12)"
           paddingVertical={6}
           paddingBottom={10}
           justifyContent="space-around"
@@ -139,9 +165,9 @@ export function AppChrome({ children }: { children: ReactNode }) {
             const active = pathname === tab.href;
             return (
               <Link key={tab.href} href={tab.href}>
-                <YStack alignItems="center" paddingHorizontal={6} opacity={active ? 1 : 0.65}>
-                  <Text fontSize={20}>{tab.icon}</Text>
-                  <Text fontSize={10} fontWeight="700" color={active ? BRAND : COLORS.muted}>
+                <YStack alignItems="center" gap={3} paddingHorizontal={6}>
+                  <TabIcon icon={tab.icon} active={active} accent={accent} />
+                  <Text fontSize={10} fontWeight="700" color={active ? accent : NEUTRAL[700]}>
                     {tab.label}
                   </Text>
                 </YStack>

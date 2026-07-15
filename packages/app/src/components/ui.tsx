@@ -1,19 +1,51 @@
-/** Small shared building blocks so every screen reads the same. */
+/**
+ * Shared building blocks so every screen reads the same. Palette/type/radii
+ * follow the "Modernist / rounded & friendly" design (Claude Design project
+ * 937947b2-2ad0-4187-ba61-c2e54cc33dd6, variant 3): warm neutral surfaces,
+ * near-black ink, a themeable accent (see ../lib/theme.tsx), heavy rounding.
+ */
 import type { ReactNode } from 'react';
 import { ScrollView } from 'react-native';
 import { Button, Card, Input, Spinner, Text, XStack, YStack, styled } from 'tamagui';
+import { DEFAULT_ACCENT, useAccent, type Hex } from '../lib/theme';
 
-export const BRAND = '#3b5bdb';
+export { useAccent, type Hex };
+
+/** Static default accent — for the rare non-reactive context (e.g. native
+ * splash/meta config). Prefer useAccent() inside components so the
+ * Appearance picker actually changes them live. */
+export const BRAND = DEFAULT_ACCENT;
+
+export const INK = '#201e1d';
+export const NEUTRAL = {
+  100: '#f8f4f4',
+  200: '#eae7e7',
+  300: '#d7d3d3',
+  400: '#bab6b6',
+  500: '#9b9797',
+  600: '#7d7979',
+  700: '#605d5d',
+  800: '#444141',
+  900: '#2d2b2b',
+} as const;
+export const ACCENT_TINT = {
+  100: '#fff2ef',
+  700: '#ae1800',
+  800: '#7c1405',
+} as const;
+
 export const COLORS = {
   good: '#0ca678',
   goodBg: '#e6fcf5',
-  bad: '#e03131',
-  badBg: '#fff5f5',
-  warn: '#e8590c',
-  warnBg: '#fff4e6',
-  muted: '#6b7280',
-  border: '#e5e7eb',
+  bad: '#ae1800',
+  badBg: '#fff2ef',
+  warn: '#c98a00',
+  warnBg: '#fff9db',
+  muted: NEUTRAL[700],
+  border: NEUTRAL[300],
 } as const;
+
+export const RADIUS = { card: 20, control: 14, pill: 999 } as const;
 
 /** Scrollable page container, phone-first max width. */
 export function Screen({ children, maxWidth = 760 }: { children: ReactNode; maxWidth?: number }) {
@@ -33,20 +65,26 @@ export function Screen({ children, maxWidth = 760 }: { children: ReactNode; maxW
  */
 export const AppInput = styled(Input, {
   fontSize: 16,
+  backgroundColor: NEUTRAL[200],
+  borderColor: 'transparent',
+  borderRadius: RADIUS.control,
 });
 
 export const AppCard = styled(Card, {
   backgroundColor: '#ffffff',
-  borderRadius: 14,
+  borderRadius: RADIUS.card,
   padding: 16,
-  borderWidth: 1,
-  borderColor: COLORS.border,
-  elevation: 1,
+  gap: 8,
+  shadowColor: '#2d2b2b',
+  shadowOpacity: 0.16,
+  shadowRadius: 10,
+  shadowOffset: { width: 0, height: 3 },
+  elevation: 2,
 });
 
 export function Title({ children }: { children: ReactNode }) {
   return (
-    <Text fontSize={24} fontWeight="800" color="#111827" marginVertical={4}>
+    <Text fontSize={24} fontWeight="800" color={INK} marginVertical={4}>
       {children}
     </Text>
   );
@@ -54,7 +92,7 @@ export function Title({ children }: { children: ReactNode }) {
 
 export function SubTitle({ children }: { children: ReactNode }) {
   return (
-    <Text fontSize={18} fontWeight="700" color="#111827">
+    <Text fontSize={18} fontWeight="700" color={INK}>
       {children}
     </Text>
   );
@@ -69,13 +107,14 @@ export function Muted({ children, size = 13 }: { children: ReactNode; size?: num
 }
 
 export function PrimaryButton(props: React.ComponentProps<typeof Button>) {
+  const accent = useAccent();
   return (
     <Button
-      backgroundColor={BRAND}
-      color="white"
-      fontWeight="700"
-      borderRadius={12}
-      pressStyle={{ backgroundColor: '#2f4bc0' }}
+      backgroundColor={accent}
+      color="#ffffff"
+      fontWeight="800"
+      borderRadius={RADIUS.control}
+      pressStyle={{ opacity: 0.85 }}
       {...props}
     />
   );
@@ -84,26 +123,27 @@ export function PrimaryButton(props: React.ComponentProps<typeof Button>) {
 export function SecondaryButton(props: React.ComponentProps<typeof Button>) {
   return (
     <Button
-      backgroundColor="#eef1fd"
-      color={BRAND}
-      fontWeight="700"
-      borderRadius={12}
-      pressStyle={{ backgroundColor: '#dde3fb' }}
+      backgroundColor={NEUTRAL[200]}
+      color={INK}
+      fontWeight="800"
+      borderRadius={RADIUS.control}
+      pressStyle={{ backgroundColor: NEUTRAL[300] }}
       {...props}
     />
   );
 }
 
 export function GhostButton(props: React.ComponentProps<typeof Button>) {
+  const accent = useAccent();
   return (
     <Button
       backgroundColor="transparent"
-      color={COLORS.muted}
-      fontWeight="700"
-      borderRadius={12}
-      borderWidth={1}
-      borderColor={COLORS.border}
-      pressStyle={{ backgroundColor: '#f3f4f6' }}
+      color={accent}
+      fontWeight="800"
+      borderRadius={RADIUS.control}
+      borderWidth={1.5}
+      borderColor={accent}
+      pressStyle={{ backgroundColor: NEUTRAL[100] }}
       {...props}
     />
   );
@@ -112,42 +152,135 @@ export function GhostButton(props: React.ComponentProps<typeof Button>) {
 /** Inline result banner: correct / incorrect / warning / offline-queued. */
 export function Feedback({
   kind,
+  icon,
   children,
 }: {
   kind: 'good' | 'bad' | 'warn';
+  icon?: ReactNode;
   children: ReactNode;
 }) {
   const color = COLORS[kind];
   const bg = kind === 'good' ? COLORS.goodBg : kind === 'bad' ? COLORS.badBg : COLORS.warnBg;
   return (
-    <XStack backgroundColor={bg} borderRadius={10} padding={10} marginTop={8}>
-      <Text color={color} fontWeight="700" fontSize={14}>
+    <XStack backgroundColor={bg} borderRadius={RADIUS.control} padding={12} marginTop={8} gap={6} alignItems="center">
+      {icon}
+      <Text color={color} fontWeight="700" fontSize={14} flexShrink={1}>
         {children}
       </Text>
     </XStack>
   );
 }
 
-type Hex = `#${string}`;
-const BADGE_COLORS: Record<string, { bg: Hex; fg: Hex }> = {
-  mastered: { bg: '#e6fcf5', fg: '#0ca678' },
-  proficient: { bg: '#e7f5ff', fg: '#1c7ed6' },
-  practicing: { bg: '#fff9db', fg: '#997404' },
-  struggling: { bg: '#fff5f5', fg: '#e03131' },
-  not_started: { bg: '#f1f3f5', fg: '#6b7280' },
-  standard: { bg: '#fff9db', fg: '#997404' },
-  modified: { bg: '#fff5f5', fg: '#e03131' },
-  challenge: { bg: '#e6fcf5', fg: '#0ca678' },
-  active: { bg: '#e6fcf5', fg: '#0ca678' },
-  pending: { bg: '#fff9db', fg: '#997404' },
-  disabled: { bg: '#fff5f5', fg: '#e03131' },
+/** Small circular/rounded icon container — unit numbers, choice letters, medal dots. */
+export function IconCircle({
+  size = 28,
+  background = INK,
+  color = '#ffffff',
+  radius = 999,
+  children,
+}: {
+  size?: number;
+  background?: Hex;
+  color?: Hex;
+  radius?: number;
+  children: ReactNode;
+}) {
+  return (
+    <XStack
+      width={size}
+      height={size}
+      borderRadius={radius}
+      backgroundColor={background}
+      alignItems="center"
+      justifyContent="center"
+      flexShrink={0}
+    >
+      <Text color={color} fontWeight="800" fontSize={size * 0.46}>
+        {children}
+      </Text>
+    </XStack>
+  );
+}
+
+/** Icon + big number + label pill, used on Home and Progress stat rows. */
+export function StatChip({
+  icon,
+  value,
+  label,
+  flex = 1,
+}: {
+  icon: ReactNode;
+  value: number | string;
+  label: string;
+  flex?: number;
+}) {
+  return (
+    <YStack
+      flex={flex}
+      minWidth={76}
+      backgroundColor={NEUTRAL[200]}
+      borderRadius={18}
+      alignItems="center"
+      gap={2}
+      paddingVertical={10}
+      paddingHorizontal={6}
+    >
+      {icon}
+      <Text fontSize={20} fontWeight="800" color={INK}>
+        {value}
+      </Text>
+      <Text fontSize={10} color={COLORS.muted} textAlign="center">
+        {label}
+      </Text>
+    </YStack>
+  );
+}
+
+type MasteryTier = 'accent' | 'outline' | 'warn' | 'bad' | 'neutral';
+const TIER_BY_LABEL: Record<string, MasteryTier> = {
+  mastered: 'accent',
+  proficient: 'accent',
+  active: 'accent',
+  challenge: 'accent',
+  practicing: 'outline',
+  standard: 'outline',
+  pending: 'warn',
+  struggling: 'bad',
+  disabled: 'bad',
+  modified: 'bad',
+  not_started: 'neutral',
 };
 
+/** Pill tag: accent tiers track the live theme, struggling/disabled always
+ * read as alarming regardless of the chosen accent (mastery vs. warning are
+ * different signals and shouldn't be conflated by a color pick). */
+interface TierStyle {
+  bg: Hex | 'transparent';
+  fg: Hex;
+  border: Hex | 'transparent';
+}
+
 export function Badge({ label, text }: { label: string; text?: string }) {
-  const c = BADGE_COLORS[label] ?? BADGE_COLORS.not_started;
+  const accent = useAccent();
+  const tier = TIER_BY_LABEL[label] ?? 'neutral';
+  const styles: Record<MasteryTier, TierStyle> = {
+    accent: { bg: NEUTRAL[100], fg: accent, border: 'transparent' },
+    outline: { bg: 'transparent', fg: accent, border: accent },
+    warn: { bg: COLORS.warnBg, fg: COLORS.warn, border: 'transparent' },
+    bad: { bg: COLORS.badBg, fg: COLORS.bad, border: 'transparent' },
+    neutral: { bg: NEUTRAL[100], fg: NEUTRAL[800], border: 'transparent' },
+  };
+  const style = styles[tier];
   return (
-    <XStack backgroundColor={c.bg} borderRadius={999} paddingHorizontal={10} paddingVertical={3}>
-      <Text color={c.fg} fontSize={12} fontWeight="700">
+    <XStack
+      backgroundColor={style.bg}
+      borderWidth={tier === 'outline' ? 1.5 : 0}
+      borderColor={style.border}
+      borderRadius={RADIUS.pill}
+      paddingHorizontal={10}
+      paddingVertical={3}
+    >
+      <Text color={style.fg} fontSize={12} fontWeight="700">
         {text ?? label}
       </Text>
     </XStack>
@@ -156,22 +289,24 @@ export function Badge({ label, text }: { label: string; text?: string }) {
 
 /** Thin progress bar used for mastery and review scores. */
 export function ProgressBar({ ratio }: { ratio: number }) {
+  const accent = useAccent();
   return (
-    <YStack flex={1} height={10} backgroundColor="#eef1f5" borderRadius={999} overflow="hidden">
+    <YStack flex={1} height={10} backgroundColor={NEUTRAL[200]} borderRadius={RADIUS.pill} overflow="hidden">
       <YStack
         height="100%"
         width={`${Math.max(0, Math.min(1, ratio)) * 100}%`}
-        backgroundColor={BRAND}
-        borderRadius={999}
+        backgroundColor={accent}
+        borderRadius={RADIUS.pill}
       />
     </YStack>
   );
 }
 
 export function Loading() {
+  const accent = useAccent();
   return (
     <YStack padding={40} alignItems="center">
-      <Spinner size="large" color={BRAND} />
+      <Spinner size="large" color={accent} />
     </YStack>
   );
 }

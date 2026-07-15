@@ -8,19 +8,30 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'solito/link';
-import { Text, XStack } from 'tamagui';
+import {
+  ArrowLeft,
+  Check,
+  Film,
+  Footprints,
+  Lightbulb,
+  Lock,
+  MessageCircle,
+  X,
+} from '@tamagui/lucide-icons';
+import { Text, XStack, YStack } from 'tamagui';
 import { client } from '../lib/trpc';
 import { attemptOrQueue } from '../lib/offline';
 import { useI18n } from '../lib/i18n';
 import { useRequireAuth } from '../components/AppChrome';
+import { Mascot } from '../components/Mascot';
 import { MathInput } from '../components/MathInput';
 import { MathText } from '../components/MathText';
 import { AnimatedEquation } from '../components/stepanim/AnimatedEquation';
 import { buildScriptForProblem } from '../components/stepanim/builders';
 import { TutorChat } from '../components/TutorChat';
 import {
-  AppCard, Badge, Feedback, GhostButton, Loading, Muted, PrimaryButton, Screen,
-  SecondaryButton, BRAND,
+  AppCard, Badge, COLORS, Feedback, GhostButton, INK, Loading, Muted, NEUTRAL, PrimaryButton, Screen,
+  SecondaryButton, useAccent,
 } from '../components/ui';
 
 interface ProblemStep {
@@ -45,6 +56,7 @@ type Phase = 'answer' | 'steps' | 'done';
 export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonId?: number }) {
   const { t, locale } = useI18n();
   const authed = useRequireAuth();
+  const accent = useAccent();
 
   const [problem, setProblem] = useState<Problem | null>(null);
   const [tier, setTier] = useState('standard');
@@ -196,9 +208,12 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
     <Screen>
       <XStack justifyContent="space-between" alignItems="center">
         <Link href={lessonId ? `/lesson/${lessonId}` : '/'}>
-          <Text color={BRAND} fontWeight="700">
-            ← {lessonId ? t('lesson') : t('curriculum')}
-          </Text>
+          <XStack alignItems="center" gap={6}>
+            <ArrowLeft size={17} color={INK} />
+            <Text color={INK} fontWeight="800" fontSize={14}>
+              {lessonId ? t('lesson') : t('curriculum')}
+            </Text>
+          </XStack>
         </Link>
         <XStack gap={8} alignItems="center">
           <Muted>
@@ -208,91 +223,176 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
         </XStack>
       </XStack>
 
-      <AppCard gap={10}>
-        <MathText text={problem.prompt} size={18} />
+      {phase === 'steps' && (
+        <XStack gap={5}>
+          {problem.steps.map((s, i) => (
+            <XStack
+              key={s.position}
+              flex={1}
+              height={6}
+              borderRadius={999}
+              backgroundColor={i < stepIndex ? INK : i === stepIndex ? accent : NEUTRAL[300]}
+            />
+          ))}
+        </XStack>
+      )}
 
-        {phase !== 'steps' && (
-          <>
-            <MathInput value={answer} onChange={setAnswer} onSubmit={submit} disabled={phase === 'done'} />
-            {feedback === 'good' && <Feedback kind="good">{t('correct')}</Feedback>}
-            {feedback === 'bad' && (
-              <Feedback kind="bad">
-                {message ? <MathText text={message} size={14} /> : t('incorrect')}
-              </Feedback>
-            )}
-            {feedback === 'warn' && <Feedback kind="warn">{message || t('almostCanonical')}</Feedback>}
-            {feedback === 'queued' && <Feedback kind="warn">{t('offlineQueued')}</Feedback>}
-            {hintText ? (
-              <Feedback kind="warn">
-                💡 <MathText text={hintText} size={14} />
-              </Feedback>
-            ) : null}
-            <XStack gap={8} flexWrap="wrap" marginTop={4}>
-              {phase === 'answer' && (
-                <>
-                  <PrimaryButton onPress={submit}>{t('check')}</PrimaryButton>
-                  <SecondaryButton onPress={nudge}>💡 {t('hint')}</SecondaryButton>
-                  {feedback === 'bad' && animScript && !showAnim && (
-                    <GhostButton onPress={() => openAnim(0)}>🎬 {t('animatedExample')}</GhostButton>
-                  )}
-                  {problem.steps.length > 0 && (
-                    <GhostButton
-                      onPress={() => {
-                        setPhase('steps');
-                        setHintsUsed((h) => h + 1);
-                      }}
-                    >
-                      🪜 {t('showStep')}
-                    </GhostButton>
-                  )}
-                  <GhostButton onPress={() => setShowTutor((s) => !s)}>🤖 {t('askTutor')}</GhostButton>
-                </>
-              )}
-              {phase === 'done' && (
-                <>
-                  <PrimaryButton onPress={loadNext}>{t('next')} →</PrimaryButton>
-                  {animScript && (
-                    <GhostButton
-                      onPress={() => {
-                        // reinforcement after a correct answer — not a hint
-                        setAnimStart(0);
-                        setShowAnim((s) => !s);
-                      }}
-                    >
-                      🎬 {t('animatedExample')}
-                    </GhostButton>
-                  )}
-                </>
-              )}
-            </XStack>
-          </>
-        )}
-
-        {phase === 'steps' && step && (
-          <>
-            <Muted>
-              {t('step')} {stepIndex + 1} {t('of')} {problem.steps.length}
-            </Muted>
-            <MathText text={step.prompt} />
-            <MathInput value={stepAnswer} onChange={setStepAnswer} onSubmit={checkStep} />
-            {stepFeedback === 'good' && <Feedback kind="good">{t('correct')}</Feedback>}
-            {stepFeedback && stepFeedback !== 'good' && (
-              <Feedback kind="warn">
-                {stepFeedback === 'bad' ? t('incorrect') : <>💡 <MathText text={stepFeedback} size={14} /></>}
-              </Feedback>
-            )}
-            <XStack gap={8} marginTop={4} flexWrap="wrap">
-              <PrimaryButton onPress={checkStep}>{t('check')}</PrimaryButton>
-              {animScript && (
-                <GhostButton onPress={() => (showAnim ? setShowAnim(false) : openAnim(0))}>
-                  🎬 {t('animatedExample')}
+      {phase !== 'steps' && (
+        <AppCard gap={10} borderRadius={22}>
+          <Text fontSize={10} fontWeight="800" textTransform="uppercase" letterSpacing={0.8} color={accent}>
+            {t('yourAnswer')}
+          </Text>
+          <MathText text={problem.prompt} size={18} />
+          <MathInput value={answer} onChange={setAnswer} onSubmit={submit} disabled={phase === 'done'} />
+          {feedback === 'good' && <Feedback kind="good">{t('correct')}</Feedback>}
+          {feedback === 'bad' && (
+            <Feedback kind="bad" icon={<X size={15} color={COLORS.bad} />}>
+              {message ? <MathText text={message} size={14} /> : t('incorrect')}
+            </Feedback>
+          )}
+          {feedback === 'warn' && <Feedback kind="warn">{message || t('almostCanonical')}</Feedback>}
+          {feedback === 'queued' && <Feedback kind="warn">{t('offlineQueued')}</Feedback>}
+          {hintText ? (
+            <Feedback kind="warn" icon={<Lightbulb size={14} color={COLORS.warn} />}>
+              <MathText text={hintText} size={14} />
+            </Feedback>
+          ) : null}
+          <XStack gap={8} flexWrap="wrap" marginTop={4}>
+            {phase === 'answer' && (
+              <>
+                <PrimaryButton onPress={submit}>{t('check')}</PrimaryButton>
+                <SecondaryButton icon={<Lightbulb size={15} />} onPress={nudge}>
+                  {t('hint')}
+                </SecondaryButton>
+                {feedback === 'bad' && animScript && !showAnim && (
+                  <GhostButton icon={<Film size={15} />} onPress={() => openAnim(0)}>
+                    {t('animatedExample')}
+                  </GhostButton>
+                )}
+                {problem.steps.length > 0 && (
+                  <GhostButton
+                    icon={<Footprints size={15} />}
+                    onPress={() => {
+                      setPhase('steps');
+                      setHintsUsed((h) => h + 1);
+                    }}
+                  >
+                    {t('showStep')}
+                  </GhostButton>
+                )}
+                <GhostButton icon={<MessageCircle size={15} />} onPress={() => setShowTutor((s) => !s)}>
+                  {t('askTutor')}
                 </GhostButton>
+              </>
+            )}
+            {phase === 'done' && (
+              <>
+                <PrimaryButton onPress={loadNext}>{t('next')} →</PrimaryButton>
+                {animScript && (
+                  <GhostButton
+                    icon={<Film size={15} />}
+                    onPress={() => {
+                      // reinforcement after a correct answer — not a hint
+                      setAnimStart(0);
+                      setShowAnim((s) => !s);
+                    }}
+                  >
+                    {t('animatedExample')}
+                  </GhostButton>
+                )}
+              </>
+            )}
+          </XStack>
+        </AppCard>
+      )}
+
+      {phase === 'answer' && feedback !== 'good' && (
+        <AppCard flexDirection="row" alignItems="center" gap={10}>
+          <Mascot size={44} />
+          <Text fontSize={13} fontWeight="600" color={INK} flexShrink={1}>
+            {t('practiceEncourage')}
+          </Text>
+        </AppCard>
+      )}
+
+      {phase === 'steps' && (
+        <YStack gap={10}>
+          {problem.steps.slice(0, stepIndex).map((s) => (
+            <AppCard
+              key={s.position}
+              flexDirection="row"
+              alignItems="center"
+              gap={8}
+              opacity={0.6}
+              borderRadius={20}
+            >
+              <Check size={16} color={accent} />
+              <Text fontSize={13} color={INK} textDecorationLine="line-through" flexShrink={1}>
+                <MathText text={s.prompt} size={13} />
+              </Text>
+            </AppCard>
+          ))}
+
+          {step && (
+            <AppCard gap={10} borderRadius={22}>
+              <Text fontSize={11} fontWeight="800" textTransform="uppercase" letterSpacing={0.6} color={accent}>
+                {t('step')} {stepIndex + 1} {t('of')} {problem.steps.length}
+              </Text>
+              <MathText text={step.prompt} />
+              <MathInput value={stepAnswer} onChange={setStepAnswer} onSubmit={checkStep} />
+              {stepFeedback === 'good' && <Feedback kind="good">{t('correct')}</Feedback>}
+              {stepFeedback && stepFeedback !== 'good' && (
+                <Feedback kind="warn">
+                  {stepFeedback === 'bad' ? t('incorrect') : <>💡 <MathText text={stepFeedback} size={14} /></>}
+                </Feedback>
               )}
-              <GhostButton onPress={() => setShowTutor((s) => !s)}>🤖 {t('askTutor')}</GhostButton>
-            </XStack>
-          </>
-        )}
-      </AppCard>
+              <XStack gap={8} marginTop={4} flexWrap="wrap">
+                <PrimaryButton onPress={checkStep}>{t('check')}</PrimaryButton>
+                {animScript && (
+                  <GhostButton
+                    icon={<Film size={15} />}
+                    onPress={() => (showAnim ? setShowAnim(false) : openAnim(0))}
+                  >
+                    {t('animatedExample')}
+                  </GhostButton>
+                )}
+                <GhostButton icon={<MessageCircle size={15} />} onPress={() => setShowTutor((s) => !s)}>
+                  {t('askTutor')}
+                </GhostButton>
+              </XStack>
+            </AppCard>
+          )}
+
+          {problem.steps.slice(stepIndex + 1).map((s) => (
+            <AppCard
+              key={s.position}
+              flexDirection="row"
+              alignItems="center"
+              gap={8}
+              opacity={0.4}
+              borderRadius={20}
+            >
+              <Lock size={16} color={NEUTRAL[600]} />
+              <Text fontSize={13} color={INK} flexShrink={1}>
+                <MathText text={s.prompt} size={13} />
+              </Text>
+            </AppCard>
+          ))}
+
+          <XStack
+            alignSelf="flex-start"
+            backgroundColor={INK}
+            borderRadius={16}
+            borderBottomLeftRadius={4}
+            paddingHorizontal={12}
+            paddingVertical={8}
+          >
+            <Text color="#f3f2f2" fontWeight="600" fontSize={12}>
+              {t('practiceEncourage')}
+            </Text>
+          </XStack>
+        </YStack>
+      )}
 
       {showAnim && animScript && (
         <AnimatedEquation

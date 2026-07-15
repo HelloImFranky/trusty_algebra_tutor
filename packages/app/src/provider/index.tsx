@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TamaguiProvider, type TamaguiProviderProps } from 'tamagui';
 import { config } from '../tamagui.config';
 import { I18nProvider } from '../lib/i18n';
+import { ThemeProvider } from '../lib/theme';
 import { trpc, trpcClientOptions, silentBootRefresh } from '../lib/trpc';
 import { hydrateAuth, isWeb, useAuth } from '../lib/auth';
 import { flushQueue } from '../lib/offline';
@@ -33,7 +34,9 @@ export function AppProvider({
     <TamaguiProvider config={config} defaultTheme="light" {...rest}>
       <trpc.Provider client={trpcClient} queryClient={queryClient}>
         <QueryClientProvider client={queryClient}>
-          <I18nProvider>{hydrated ? children : <Loading />}</I18nProvider>
+          <ThemeProvider>
+            <I18nProvider>{hydrated ? children : <Loading />}</I18nProvider>
+          </ThemeProvider>
         </QueryClientProvider>
       </trpc.Provider>
     </TamaguiProvider>

@@ -9,7 +9,7 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "backgroundColor": "#3b5bdb"
+      "backgroundColor": "#ec3013"
     },
     "ios": {
       "supportsTablet": true,
@@ -19,7 +19,7 @@
       "package": "com.algebra891.tutor",
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#3b5bdb"
+        "backgroundColor": "#ec3013"
       }
     },
     "web": {

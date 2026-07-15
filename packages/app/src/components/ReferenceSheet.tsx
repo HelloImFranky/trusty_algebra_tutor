@@ -1,11 +1,12 @@
 /** Always-accessible Regents Reference Sheet (design doc §1/§4.5), as a Tamagui Sheet. */
 import { useState } from 'react';
 import { Platform } from 'react-native';
+import { BookMarked } from '@tamagui/lucide-icons';
 import { Button, Separator, Sheet, Text, XStack, YStack } from 'tamagui';
 import { trpc } from '../lib/trpc';
 import { useI18n } from '../lib/i18n';
 import { Katex } from './Katex';
-import { BRAND, COLORS, SubTitle } from './ui';
+import { COLORS, INK, NEUTRAL, useAccent, SubTitle } from './ui';
 
 /**
  * Top-bar pill that opens the reference sheet. Lives in the AppChrome top bar
@@ -14,6 +15,7 @@ import { BRAND, COLORS, SubTitle } from './ui';
  */
 export function ReferenceSheetButton({ compact = false }: { compact?: boolean }) {
   const { t, locale } = useI18n();
+  const accent = useAccent();
   const [open, setOpen] = useState(false);
   const sheet = trpc.curriculum.referenceSheet.useQuery({ locale }, { enabled: open });
 
@@ -22,14 +24,15 @@ export function ReferenceSheetButton({ compact = false }: { compact?: boolean })
       <Button
         id="ref-sheet-btn"
         size="$2"
-        backgroundColor="rgba(255,255,255,0.18)"
-        color="white"
+        backgroundColor={NEUTRAL[200]}
+        color={INK}
         fontWeight="800"
         borderRadius={999}
         onPress={() => setOpen(true)}
         aria-label={t('referenceSheet')}
+        icon={<BookMarked size={15} color={INK} />}
       >
-        📖 {compact ? t('referenceSheetShort') : t('referenceSheet')}
+        {compact ? null : t('referenceSheetShort')}
       </Button>
       <Sheet
         modal
@@ -63,7 +66,7 @@ export function ReferenceSheetButton({ compact = false }: { compact?: boolean })
             <YStack padding={18} paddingBottom={48} gap={10}>
               {sheet.data?.sections.map((s) => (
                 <YStack key={s.title} gap={6}>
-                  <Text fontWeight="800" fontSize={15} color={BRAND} marginTop={8}>
+                  <Text fontWeight="800" fontSize={15} color={accent} marginTop={8}>
                     {s.title}
                   </Text>
                   <Separator borderColor={COLORS.border} />

@@ -1,5 +1,10 @@
 import type { Metadata, Viewport } from 'next';
+import { Archivo } from 'next/font/google';
 import { Providers } from './providers';
+
+// Weights match tamagui.config.ts's face map (400/600/800). display: 'swap'
+// avoids blocking first paint on the font.
+const archivo = Archivo({ subsets: ['latin'], weight: ['400', '600', '800'], display: 'swap' });
 
 export const metadata: Metadata = {
   title: 'Algebra Tutor',
@@ -21,13 +26,13 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  themeColor: '#3b5bdb',
+  themeColor: '#ec3013',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body style={{ margin: 0, background: '#f6f7fb' }}>
+    <html lang="en" suppressHydrationWarning className={archivo.className}>
+      <body style={{ margin: 0, background: '#f3f2f2' }}>
         {/* The document scrolls normally; the chrome holds its place with
             plain CSS so it works from the first paint, before hydration:
             sticky top bar, fixed bottom tabs (phone widths only — the JS

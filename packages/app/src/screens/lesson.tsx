@@ -7,17 +7,28 @@
 import { useEffect, useState } from 'react';
 import { Image, Linking, Platform } from 'react-native';
 import { Link } from 'solito/link';
+import {
+  ArrowLeft,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  FileText,
+  Lightbulb,
+  MessageCircle,
+  PenLine,
+} from '@tamagui/lucide-icons';
 import { Text, XStack, YStack } from 'tamagui';
 import { trpc, getBaseUrl } from '../lib/trpc';
 import { useI18n } from '../lib/i18n';
 import { useRequireAuth } from '../components/AppChrome';
+import { Mascot } from '../components/Mascot';
 import { MathText } from '../components/MathText';
 import { Katex } from '../components/Katex';
 import { LessonAnimations } from '../components/stepanim/LessonAnimations';
 import { TutorChat } from '../components/TutorChat';
 import {
-  AppCard, GhostButton, Loading, Muted, PrimaryButton, Screen,
-  SubTitle, Title, BRAND, COLORS,
+  AppCard, GhostButton, INK, Loading, Muted, NEUTRAL, PrimaryButton, Screen,
+  useAccent, COLORS,
 } from '../components/ui';
 
 /** Save the scaffold to the device: a real download on web, the system
@@ -52,11 +63,12 @@ function ScaffoldImage({ src, title }: { src: string; title: string }) {
     <YStack width="100%" gap={4}>
       <Image
         source={{ uri }}
-        style={{ width: '100%', aspectRatio: ratio, borderRadius: 10, backgroundColor: '#fff' }}
+        style={{ width: '100%', aspectRatio: ratio, borderRadius: 14, backgroundColor: '#fff' }}
         resizeMode="contain"
         accessibilityLabel={title}
       />
-      <XStack justifyContent="flex-end">
+      <XStack justifyContent="flex-end" alignItems="center" gap={4}>
+        <Download size={13} color={COLORS.muted} />
         <Text
           color={COLORS.muted}
           fontSize={13}
@@ -66,7 +78,7 @@ function ScaffoldImage({ src, title }: { src: string; title: string }) {
           onPress={() => downloadImage(uri)}
           accessibilityRole="button"
         >
-          ⬇ {t('downloadScaffold')}
+          {t('downloadScaffold')}
         </Text>
       </XStack>
     </YStack>
@@ -76,6 +88,7 @@ function ScaffoldImage({ src, title }: { src: string; title: string }) {
 export function LessonScreen({ id }: { id: number }) {
   const { t, locale } = useI18n();
   const authed = useRequireAuth();
+  const accent = useAccent();
   const lesson = trpc.curriculum.lesson.useQuery({ id, locale }, { enabled: authed && !!id });
   const [revealed, setRevealed] = useState(1);
   const [openScaffold, setOpenScaffold] = useState<string | null>(null);
@@ -88,15 +101,18 @@ export function LessonScreen({ id }: { id: number }) {
   return (
     <Screen>
       <Link href="/">
-        <Text color={BRAND} fontWeight="700">← {t('curriculum')}</Text>
+        <XStack alignItems="center" gap={8}>
+          <ArrowLeft size={18} color={INK} />
+          <Text color={INK} fontWeight="800" fontSize={15}>
+            {l.code} · {l.title}
+          </Text>
+        </XStack>
       </Link>
-      <Title>
-        {l.code} · {l.title}
-      </Title>
+
       {l.mnemonic && (
-        <XStack backgroundColor="#fff9db" borderRadius={12} padding={10} alignItems="center" gap={6}>
-          <Text>💡</Text>
-          <Text fontSize={14}>
+        <XStack backgroundColor={NEUTRAL[200]} borderRadius={16} padding={12} alignItems="center" gap={8}>
+          <Lightbulb size={17} color={accent} />
+          <Text fontSize={13.5} color={INK}>
             <Text fontWeight="800">{t('mnemonic')}:</Text> {l.mnemonic}
           </Text>
         </XStack>
@@ -104,39 +120,54 @@ export function LessonScreen({ id }: { id: number }) {
 
       {l.steps.slice(0, revealed).map((s) => (
         <AppCard key={s.position} gap={6}>
-          <Muted>
+          <Text fontSize={11} fontWeight="800" textTransform="uppercase" letterSpacing={0.6} color={accent}>
             {t('step')} {s.position} {t('of')} {l.steps.length}
-          </Muted>
+          </Text>
           <MathText text={s.body} size={16} />
           {s.workedExampleLatex && (
-            <YStack backgroundColor="#f8f9fa" borderRadius={10} padding={12} gap={4}>
+            <YStack backgroundColor={NEUTRAL[200]} borderRadius={14} padding={12} gap={4}>
               <Muted size={12}>{t('workedExample')}</Muted>
               <Katex tex={s.workedExampleLatex} block />
             </YStack>
           )}
           {s.hint && (
-            <Text fontSize={14} color={COLORS.warn}>
-              💡 <MathText text={s.hint} size={14} />
-            </Text>
+            <XStack gap={4} alignItems="flex-start">
+              <Lightbulb size={14} color={COLORS.warn} />
+              <Text fontSize={14} color={COLORS.warn}>
+                <MathText text={s.hint} size={14} />
+              </Text>
+            </XStack>
           )}
         </AppCard>
       ))}
 
+      {allShown && (
+        <AppCard flexDirection="row" alignItems="center" gap={10}>
+          <Mascot size={44} />
+          <Text fontSize={13} fontWeight="600" color={INK} flexShrink={1}>
+            {t('lessonEncourage')}
+          </Text>
+        </AppCard>
+      )}
+
       {allShown && <LessonAnimations code={l.code} />}
 
       {l.classroomScaffolds.length > 0 && (
-        <AppCard gap={8} borderLeftWidth={4} borderLeftColor={COLORS.warn}>
-          <SubTitle>📄 {t('classroomScaffold')}</SubTitle>
+        <AppCard gap={8} borderLeftWidth={4} borderLeftColor={accent}>
+          <XStack alignItems="center" gap={6}>
+            <FileText size={16} color={accent} />
+            <Text fontWeight="800" fontSize={12} color="#ae1800" textTransform="uppercase" letterSpacing={0.6}>
+              {t('classroomScaffold')}
+            </Text>
+          </XStack>
           <Muted>{t('scaffoldNote')}</Muted>
           {l.classroomScaffolds.map((s) => {
             const open = openScaffold === s.title;
             return (
               <YStack
                 key={s.title}
-                borderWidth={1}
-                borderColor="#f1f5f9"
-                borderRadius={10}
-                backgroundColor="#fffdf5"
+                borderRadius={14}
+                backgroundColor={NEUTRAL[100]}
               >
                 <XStack
                   padding={12}
@@ -144,9 +175,14 @@ export function LessonScreen({ id }: { id: number }) {
                   pressStyle={{ opacity: 0.7 }}
                   cursor="pointer"
                   gap={8}
+                  alignItems="center"
                 >
-                  <Text color={COLORS.warn}>{open ? '▾' : '▸'}</Text>
-                  <Text fontWeight="700" fontSize={15} flexShrink={1}>
+                  {open ? (
+                    <ChevronDown size={16} color={COLORS.muted} />
+                  ) : (
+                    <ChevronRight size={16} color={COLORS.muted} />
+                  )}
+                  <Text fontWeight="700" fontSize={15} flexShrink={1} color={INK}>
                     {s.title}
                   </Text>
                 </XStack>
@@ -173,10 +209,12 @@ export function LessonScreen({ id }: { id: number }) {
         )}
         {allShown && l.skill && (
           <Link href={`/practice/${l.skill.id}?lesson=${l.id}`}>
-            <PrimaryButton>✏️ {t('practice')}</PrimaryButton>
+            <PrimaryButton icon={<PenLine size={15} color="#fff" />}>{t('practice')}</PrimaryButton>
           </Link>
         )}
-        <GhostButton onPress={() => setShowTutor((s) => !s)}>🤖 {t('askTutor')}</GhostButton>
+        <GhostButton icon={<MessageCircle size={15} />} onPress={() => setShowTutor((s) => !s)}>
+          {t('askTutor')}
+        </GhostButton>
       </XStack>
 
       {showTutor && <TutorChat lessonId={l.id} />}

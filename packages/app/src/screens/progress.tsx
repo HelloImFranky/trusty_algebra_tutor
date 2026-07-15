@@ -5,6 +5,7 @@
  * Guardians/teachers land here via /progress/[studentId].
  */
 import { useState } from 'react';
+import { Brain, Clock, Flame, Lock, Medal as MedalIcon, TrendingUp } from '@tamagui/lucide-icons';
 import { Text, XStack, YStack } from 'tamagui';
 import { trpc } from '../lib/trpc';
 import { useI18n, type I18nKey } from '../lib/i18n';
@@ -12,20 +13,9 @@ import { useAuth } from '../lib/auth';
 import { useRequireAuth } from '../components/AppChrome';
 import { JoinClassCard } from '../components/JoinClassCard';
 import {
-  AppCard, Badge, Feedback, Loading, Muted, ProgressBar, Screen, SubTitle, Title, BRAND, COLORS,
+  AppCard, Badge, Feedback, INK, Loading, Muted, NEUTRAL, ProgressBar, Screen, StatChip,
+  SubTitle, Title, useAccent, COLORS,
 } from '../components/ui';
-
-function Stat({ icon, value, label }: { icon: string; value: number | string; label: string }) {
-  return (
-    <AppCard flex={1} minWidth={140} alignItems="center" gap={2}>
-      <Text fontSize={34}>{icon}</Text>
-      <Text fontSize={26} fontWeight="900">
-        {value}
-      </Text>
-      <Muted>{label}</Muted>
-    </AppCard>
-  );
-}
 
 const TIER_STYLE = {
   bronze: { ring: '#b08d57', fill: '#f6ead9', label: '#8a6a3b' },
@@ -54,14 +44,16 @@ function Medal({ a }: { a: AchievementView }) {
         height={62}
         borderRadius={999}
         borderWidth={4}
-        borderColor={a.earned ? tier.ring : COLORS.border}
-        backgroundColor={a.earned ? tier.fill : '#f1f3f5'}
+        borderColor={a.earned ? tier.ring : NEUTRAL[300]}
+        backgroundColor={a.earned ? tier.fill : NEUTRAL[100]}
         alignItems="center"
         justifyContent="center"
       >
-        <Text fontSize={26} opacity={a.earned ? 1 : 0.4}>
-          {a.earned ? a.icon : '🔒'}
-        </Text>
+        {a.earned ? (
+          <Text fontSize={26}>{a.icon}</Text>
+        ) : (
+          <Lock size={22} color={NEUTRAL[400]} />
+        )}
       </YStack>
       {a.earned ? (
         <XStack backgroundColor={tier.fill} borderRadius={999} paddingHorizontal={8} paddingVertical={1}>
@@ -74,7 +66,7 @@ function Medal({ a }: { a: AchievementView }) {
           <ProgressBar ratio={a.target ? a.value / a.target : 0} />
         </XStack>
       )}
-      <Text fontSize={12} fontWeight="800" textAlign="center">
+      <Text fontSize={12} fontWeight="800" textAlign="center" color={INK}>
         {a.name}
       </Text>
       <Muted size={10.5}>
@@ -87,6 +79,7 @@ function Medal({ a }: { a: AchievementView }) {
 export function ProgressScreen({ studentId }: { studentId?: number }) {
   const { t, locale } = useI18n();
   const authed = useRequireAuth();
+  const accent = useAccent();
   const role = useAuth((s) => s.auth?.user.role);
   // Which Regents topic's detail dropdown is open (one at a time keeps the
   // scoreboard tidy).
@@ -135,28 +128,34 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
 
   return (
     <Screen maxWidth={980}>
-      <Title>
-        📈 {t('progress')}
-        {data.student ? ` — ${data.student.displayName}` : ''}
-      </Title>
+      <XStack alignItems="center" gap={8}>
+        <TrendingUp size={20} color={INK} />
+        <Title>
+          {t('progress')}
+          {data.student ? ` — ${data.student.displayName}` : ''}
+        </Title>
+      </XStack>
 
       {!studentId && role === 'student' && <JoinClassCard />}
 
-      <XStack gap={12} flexWrap="wrap">
-        <Stat icon="🔥" value={data.streakDays} label={t('streak')} />
-        <Stat icon="⏱" value={Math.round(totalMinutes)} label={`${t('minutes')} / 30d`} />
-        <Stat
-          icon="🧠"
+      <XStack gap={8} flexWrap="wrap">
+        <StatChip icon={<Flame size={20} color={accent} />} value={data.streakDays} label={t('streak')} />
+        <StatChip icon={<Clock size={20} color={INK} />} value={Math.round(totalMinutes)} label={`${t('minutes')} / 30d`} />
+        <StatChip
+          icon={<Brain size={20} color={INK} />}
           value={data.skills.filter((s) => s.label === 'mastered' || s.label === 'proficient').length}
           label={t('mastered')}
         />
-        <Stat icon="🏅" value={`${earned.length}/${achievements.length}`} label={t('badgesEarned')} />
-        <Stat icon="🎯" value={data.regents.questionsCorrect} label={t('regentsCorrectLabel')} />
+        <StatChip icon={<MedalIcon size={20} color={accent} />} value={`${earned.length}/${achievements.length}`} label={t('badgesEarned')} />
+        <StatChip icon={<Text fontSize={18}>🎯</Text>} value={data.regents.questionsCorrect} label={t('regentsCorrectLabel')} />
       </XStack>
 
       <AppCard gap={4}>
         <XStack justifyContent="space-between" alignItems="center">
-          <SubTitle>🏅 {t('achievements')}</SubTitle>
+          <XStack alignItems="center" gap={6}>
+            <MedalIcon size={17} color={accent} />
+            <SubTitle>{t('achievements')}</SubTitle>
+          </XStack>
           <Muted>
             {earned.length} / {achievements.length}
           </Muted>
@@ -197,7 +196,7 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
                 <Text fontSize={16} width={26}>
                   {topic.icon}
                 </Text>
-                <Text fontSize={13.5} fontWeight="700" width={170} numberOfLines={1}>
+                <Text fontSize={13.5} fontWeight="700" width={170} numberOfLines={1} color={INK}>
                   {locale === 'es' ? topic.titleEs : topic.titleEn}
                 </Text>
                 <ProgressBar ratio={topic.answered / topic.total} />
@@ -206,7 +205,7 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
                   fontWeight="800"
                   width={54}
                   textAlign="right"
-                  color={perfect ? COLORS.good : done ? BRAND : COLORS.muted}
+                  color={perfect ? COLORS.good : done ? accent : COLORS.muted}
                 >
                   {perfect ? '🌟 ' : done ? '✓ ' : ''}
                   {topic.correct}/{topic.total}
@@ -223,8 +222,8 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
                   marginVertical={4}
                   paddingHorizontal={12}
                   paddingVertical={8}
-                  borderRadius={10}
-                  backgroundColor="#f6f7fb"
+                  borderRadius={14}
+                  backgroundColor={NEUTRAL[100]}
                 >
                   <Muted size={12.5}>
                     ✅ {topic.correctAll} {t('rightLabel')}
@@ -246,7 +245,7 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
         <AppCard borderLeftWidth={4} borderLeftColor={COLORS.bad} gap={4}>
           <SubTitle>🚩 {t('struggling')}</SubTitle>
           {data.struggleFlags.map((s) => (
-            <Text key={s.lessonCode} fontSize={14}>
+            <Text key={s.lessonCode} fontSize={14} color={INK}>
               <Text fontWeight="800">{s.lessonCode}</Text> {s.name}
             </Text>
           ))}
@@ -257,7 +256,7 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
         <SubTitle>{t('masteryMap')}</SubTitle>
         {units.map((u) => (
           <YStack key={u} gap={4}>
-            <Text fontWeight="800">Unit {u}</Text>
+            <Text fontWeight="800" color={INK}>Unit {u}</Text>
             {data.skills
               .filter((s) => s.unitNumber === u)
               .map((s) => (
