@@ -46,7 +46,7 @@ function TabIcon({
 }
 
 export function AppChrome({ children }: { children: ReactNode }) {
-  const { t, locale, setLocale } = useI18n();
+  const { t } = useI18n();
   const auth = useAuth((s) => s.auth);
   const router = useRouter();
   const pathname = usePathname() ?? '/';
@@ -127,14 +127,6 @@ export function AppChrome({ children }: { children: ReactNode }) {
               </Button>
             </Link>
           )}
-          <Button
-            size="$2"
-            {...CHROME_BTN}
-            onPress={() => setLocale(locale === 'en' ? 'es' : 'en')}
-            aria-label="language"
-          >
-            {locale === 'en' ? '🇪🇸 ES' : '🇺🇸 EN'}
-          </Button>
           {auth && (
             <Button
               size="$2"
