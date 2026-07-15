@@ -316,7 +316,7 @@ export function CalcView() {
         {input ? <Katex tex={toPreviewTex(input)} /> : null}
       </YStack>
       {inputError === 'equation' ? (
-        <Feedback kind="warn">{t('calcEquationHint')}</Feedback>
+        <Feedback kind="hint">{t('calcEquationHint')}</Feedback>
       ) : inputError ? (
         <Feedback kind="warn">{inputError}</Feedback>
       ) : null}

@@ -30,7 +30,7 @@ import { AnimatedEquation } from '../components/stepanim/AnimatedEquation';
 import { buildScriptForProblem } from '../components/stepanim/builders';
 import { TutorChat } from '../components/TutorChat';
 import {
-  AppCard, Badge, COLORS, Feedback, GhostButton, INK, Loading, Muted, NEUTRAL, PrimaryButton, Screen,
+  AppCard, Badge, COLORS, Feedback, GhostButton, HINT, INK, Loading, Muted, NEUTRAL, PrimaryButton, Screen,
   SecondaryButton, useAccent,
 } from '../components/ui';
 
@@ -253,7 +253,7 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
           {feedback === 'warn' && <Feedback kind="warn">{message || t('almostCanonical')}</Feedback>}
           {feedback === 'queued' && <Feedback kind="warn">{t('offlineQueued')}</Feedback>}
           {hintText ? (
-            <Feedback kind="warn" icon={<Lightbulb size={14} color={COLORS.warn} />}>
+            <Feedback kind="hint" icon={<Lightbulb size={14} color={HINT.fg} />}>
               <MathText text={hintText} size={14} />
             </Feedback>
           ) : null}
@@ -341,9 +341,10 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
               <MathText text={step.prompt} />
               <MathInput value={stepAnswer} onChange={setStepAnswer} onSubmit={checkStep} />
               {stepFeedback === 'good' && <Feedback kind="good">{t('correct')}</Feedback>}
-              {stepFeedback && stepFeedback !== 'good' && (
-                <Feedback kind="warn">
-                  {stepFeedback === 'bad' ? t('incorrect') : <>💡 <MathText text={stepFeedback} size={14} /></>}
+              {stepFeedback === 'bad' && <Feedback kind="bad">{t('incorrect')}</Feedback>}
+              {stepFeedback && stepFeedback !== 'good' && stepFeedback !== 'bad' && (
+                <Feedback kind="hint">
+                  <>💡 <MathText text={stepFeedback} size={14} /></>
                 </Feedback>
               )}
               <XStack gap={8} marginTop={4} flexWrap="wrap">

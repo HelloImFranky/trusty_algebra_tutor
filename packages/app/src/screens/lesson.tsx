@@ -27,7 +27,7 @@ import { Katex } from '../components/Katex';
 import { LessonAnimations } from '../components/stepanim/LessonAnimations';
 import { TutorChat } from '../components/TutorChat';
 import {
-  AppCard, GhostButton, INK, Loading, Muted, NEUTRAL, PrimaryButton, Screen,
+  AppCard, GhostButton, HINT, INK, Loading, Muted, NEUTRAL, PrimaryButton, Screen,
   useAccent, COLORS,
 } from '../components/ui';
 
@@ -132,8 +132,8 @@ export function LessonScreen({ id }: { id: number }) {
           )}
           {s.hint && (
             <XStack gap={4} alignItems="flex-start">
-              <Lightbulb size={14} color={COLORS.warn} />
-              <Text fontSize={14} color={COLORS.warn}>
+              <Lightbulb size={14} color={HINT.fg} />
+              <Text fontSize={14} color={HINT.fg}>
                 <MathText text={s.hint} size={14} />
               </Text>
             </XStack>

@@ -45,6 +45,20 @@ export const COLORS = {
   border: NEUTRAL[300],
 } as const;
 
+/**
+ * Hint tokens are deliberately theme-invariant — they never derive from the
+ * live accent (see ../lib/theme.tsx) and must stay warm yellow through every
+ * appearance change (dark mode included). Hints only work if students notice
+ * them; letting the picked accent recolor them destroys that signal. Keep
+ * these values pinned; only shift HINT.bg in a future dark theme to preserve
+ * contrast, never HINT.fg.
+ */
+export const HINT = {
+  fg: '#c98a00',
+  bg: '#fff9db',
+  border: '#f4dfa8',
+} as const;
+
 export const RADIUS = { card: 20, control: 14, pill: 999 } as const;
 
 /** Scrollable page container, phone-first max width. */
@@ -149,18 +163,25 @@ export function GhostButton(props: React.ComponentProps<typeof Button>) {
   );
 }
 
-/** Inline result banner: correct / incorrect / warning / offline-queued. */
+/** Inline result banner. `hint` is the yellow, theme-invariant nudge (see
+ * HINT). `warn` is for non-hint warnings (form validation, offline queue,
+ * calculator input errors) — same color today, but a distinct token so
+ * we can diverge later. */
 export function Feedback({
   kind,
   icon,
   children,
 }: {
-  kind: 'good' | 'bad' | 'warn';
+  kind: 'good' | 'bad' | 'warn' | 'hint';
   icon?: ReactNode;
   children: ReactNode;
 }) {
-  const color = COLORS[kind];
-  const bg = kind === 'good' ? COLORS.goodBg : kind === 'bad' ? COLORS.badBg : COLORS.warnBg;
+  const color = kind === 'hint' ? HINT.fg : COLORS[kind];
+  const bg =
+    kind === 'good' ? COLORS.goodBg
+    : kind === 'bad' ? COLORS.badBg
+    : kind === 'hint' ? HINT.bg
+    : COLORS.warnBg;
   return (
     <XStack backgroundColor={bg} borderRadius={RADIUS.control} padding={12} marginTop={8} gap={6} alignItems="center">
       {icon}
@@ -266,7 +287,7 @@ export function Badge({ label, text }: { label: string; text?: string }) {
   const styles: Record<MasteryTier, TierStyle> = {
     accent: { bg: NEUTRAL[100], fg: accent, border: 'transparent' },
     outline: { bg: 'transparent', fg: accent, border: accent },
-    warn: { bg: COLORS.warnBg, fg: COLORS.warn, border: 'transparent' },
+    warn: { bg: HINT.bg, fg: HINT.fg, border: 'transparent' },
     bad: { bg: COLORS.badBg, fg: COLORS.bad, border: 'transparent' },
     neutral: { bg: NEUTRAL[100], fg: NEUTRAL[800], border: 'transparent' },
   };
