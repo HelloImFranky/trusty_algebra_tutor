@@ -41,9 +41,8 @@ const HEX_RE = /^#[0-9a-fA-F]{6}$/;
  * slider blocks so the eye picks up the H/S/L axes without re-reading. */
 function SliderLabel({ text }: { text: string }) {
   const tokens = useTokens();
-  const muted = tokens.mode === 'dark' ? '#bab6b6' : '#605d5d';
   return (
-    <Text fontSize={12} fontWeight="800" textTransform="uppercase" letterSpacing={0.6} color={muted}>
+    <Text fontSize={12} fontWeight="800" textTransform="uppercase" letterSpacing={0.6} color={tokens.muted}>
       {text}
     </Text>
   );
@@ -203,7 +202,7 @@ export function AppearanceScreen() {
               />
             </YStack>
           ) : (
-            <Text fontSize={12} color={tokens.mode === 'dark' ? '#bab6b6' : '#7d7979'}>
+            <Text fontSize={12} color={tokens.muted}>
               {t('noRecentColors')}
             </Text>
           )}

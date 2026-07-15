@@ -27,8 +27,8 @@ import { Katex } from '../components/Katex';
 import { LessonAnimations } from '../components/stepanim/LessonAnimations';
 import { TutorChat } from '../components/TutorChat';
 import {
-  AppCard, GhostButton, HINT, INK, Loading, Muted, NEUTRAL, PrimaryButton, Screen,
-  useAccent, COLORS,
+  AppCard, GhostButton, HINT, Loading, Muted, PrimaryButton, Screen,
+  useAccent, useTokens,
 } from '../components/ui';
 
 /** Save the scaffold to the device: a real download on web, the system
@@ -50,6 +50,7 @@ function ScaffoldImage({ src, title }: { src: string; title: string }) {
   const uri = `${getBaseUrl()}${src}`;
   const [ratio, setRatio] = useState(0.75);
   const { t } = useI18n();
+  const tokens = useTokens();
   useEffect(() => {
     let alive = true;
     Image.getSize(uri, (iw, ih) => {
@@ -61,6 +62,10 @@ function ScaffoldImage({ src, title }: { src: string; title: string }) {
   }, [uri]);
   return (
     <YStack width="100%" gap={4}>
+      {/* The scaffold graphics are teacher-supplied JPGs with white
+          backgrounds. Keeping the image bg white on both themes lets the
+          artwork read as it does in the original document; anything else
+          would clip transparent-mat regions of some images. */}
       <Image
         source={{ uri }}
         style={{ width: '100%', aspectRatio: ratio, borderRadius: 14, backgroundColor: '#fff' }}
@@ -68,9 +73,9 @@ function ScaffoldImage({ src, title }: { src: string; title: string }) {
         accessibilityLabel={title}
       />
       <XStack justifyContent="flex-end" alignItems="center" gap={4}>
-        <Download size={13} color={COLORS.muted} />
+        <Download size={13} color={tokens.muted} />
         <Text
-          color={COLORS.muted}
+          color={tokens.muted}
           fontSize={13}
           fontWeight="700"
           cursor="pointer"
@@ -89,6 +94,7 @@ export function LessonScreen({ id }: { id: number }) {
   const { t, locale } = useI18n();
   const authed = useRequireAuth();
   const accent = useAccent();
+  const tokens = useTokens();
   const lesson = trpc.curriculum.lesson.useQuery({ id, locale }, { enabled: authed && !!id });
   const [revealed, setRevealed] = useState(1);
   const [openScaffold, setOpenScaffold] = useState<string | null>(null);
@@ -102,17 +108,17 @@ export function LessonScreen({ id }: { id: number }) {
     <Screen>
       <Link href="/">
         <XStack alignItems="center" gap={8}>
-          <ArrowLeft size={18} color={INK} />
-          <Text color={INK} fontWeight="800" fontSize={15}>
+          <ArrowLeft size={18} color={tokens.ink} />
+          <Text color={tokens.ink} fontWeight="800" fontSize={15}>
             {l.code} · {l.title}
           </Text>
         </XStack>
       </Link>
 
       {l.mnemonic && (
-        <XStack backgroundColor={NEUTRAL[200]} borderRadius={16} padding={12} alignItems="center" gap={8}>
+        <XStack backgroundColor={tokens.subtle} borderRadius={16} padding={12} alignItems="center" gap={8}>
           <Lightbulb size={17} color={accent} />
-          <Text fontSize={13.5} color={INK}>
+          <Text fontSize={13.5} color={tokens.ink}>
             <Text fontWeight="800">{t('mnemonic')}:</Text> {l.mnemonic}
           </Text>
         </XStack>
@@ -125,7 +131,7 @@ export function LessonScreen({ id }: { id: number }) {
           </Text>
           <MathText text={s.body} size={16} />
           {s.workedExampleLatex && (
-            <YStack backgroundColor={NEUTRAL[200]} borderRadius={14} padding={12} gap={4}>
+            <YStack backgroundColor={tokens.subtle} borderRadius={14} padding={12} gap={4}>
               <Muted size={12}>{t('workedExample')}</Muted>
               <Katex tex={s.workedExampleLatex} block />
             </YStack>
@@ -144,7 +150,7 @@ export function LessonScreen({ id }: { id: number }) {
       {allShown && (
         <AppCard flexDirection="row" alignItems="center" gap={10}>
           <Mascot size={44} />
-          <Text fontSize={13} fontWeight="600" color={INK} flexShrink={1}>
+          <Text fontSize={13} fontWeight="600" color={tokens.ink} flexShrink={1}>
             {t('lessonEncourage')}
           </Text>
         </AppCard>
@@ -156,7 +162,7 @@ export function LessonScreen({ id }: { id: number }) {
         <AppCard gap={8} borderLeftWidth={4} borderLeftColor={accent}>
           <XStack alignItems="center" gap={6}>
             <FileText size={16} color={accent} />
-            <Text fontWeight="800" fontSize={12} color="#ae1800" textTransform="uppercase" letterSpacing={0.6}>
+            <Text fontWeight="800" fontSize={12} color={accent} textTransform="uppercase" letterSpacing={0.6}>
               {t('classroomScaffold')}
             </Text>
           </XStack>
@@ -167,7 +173,7 @@ export function LessonScreen({ id }: { id: number }) {
               <YStack
                 key={s.title}
                 borderRadius={14}
-                backgroundColor={NEUTRAL[100]}
+                backgroundColor={tokens.subtle}
               >
                 <XStack
                   padding={12}
@@ -178,11 +184,11 @@ export function LessonScreen({ id }: { id: number }) {
                   alignItems="center"
                 >
                   {open ? (
-                    <ChevronDown size={16} color={COLORS.muted} />
+                    <ChevronDown size={16} color={tokens.muted} />
                   ) : (
-                    <ChevronRight size={16} color={COLORS.muted} />
+                    <ChevronRight size={16} color={tokens.muted} />
                   )}
-                  <Text fontWeight="700" fontSize={15} flexShrink={1} color={INK}>
+                  <Text fontWeight="700" fontSize={15} flexShrink={1} color={tokens.ink}>
                     {s.title}
                   </Text>
                 </XStack>

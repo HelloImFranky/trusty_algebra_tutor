@@ -30,8 +30,8 @@ import { AnimatedEquation } from '../components/stepanim/AnimatedEquation';
 import { buildScriptForProblem } from '../components/stepanim/builders';
 import { TutorChat } from '../components/TutorChat';
 import {
-  AppCard, Badge, COLORS, Feedback, GhostButton, HINT, INK, Loading, Muted, NEUTRAL, PrimaryButton, Screen,
-  SecondaryButton, useAccent,
+  AppCard, Badge, COLORS, Feedback, GhostButton, HINT, Loading, Muted, PrimaryButton, Screen,
+  SecondaryButton, useAccent, useTokens,
 } from '../components/ui';
 
 interface ProblemStep {
@@ -57,6 +57,7 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
   const { t, locale } = useI18n();
   const authed = useRequireAuth();
   const accent = useAccent();
+  const tokens = useTokens();
 
   const [problem, setProblem] = useState<Problem | null>(null);
   const [tier, setTier] = useState('standard');
@@ -209,8 +210,8 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
       <XStack justifyContent="space-between" alignItems="center">
         <Link href={lessonId ? `/lesson/${lessonId}` : '/'}>
           <XStack alignItems="center" gap={6}>
-            <ArrowLeft size={17} color={INK} />
-            <Text color={INK} fontWeight="800" fontSize={14}>
+            <ArrowLeft size={17} color={tokens.ink} />
+            <Text color={tokens.ink} fontWeight="800" fontSize={14}>
               {lessonId ? t('lesson') : t('curriculum')}
             </Text>
           </XStack>
@@ -231,7 +232,7 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
               flex={1}
               height={6}
               borderRadius={999}
-              backgroundColor={i < stepIndex ? INK : i === stepIndex ? accent : NEUTRAL[300]}
+              backgroundColor={i < stepIndex ? tokens.ink : i === stepIndex ? accent : tokens.border}
             />
           ))}
         </XStack>
@@ -309,7 +310,7 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
       {phase === 'answer' && feedback !== 'good' && (
         <AppCard flexDirection="row" alignItems="center" gap={10}>
           <Mascot size={44} />
-          <Text fontSize={13} fontWeight="600" color={INK} flexShrink={1}>
+          <Text fontSize={13} fontWeight="600" color={tokens.ink} flexShrink={1}>
             {t('practiceEncourage')}
           </Text>
         </AppCard>
@@ -327,7 +328,7 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
               borderRadius={20}
             >
               <Check size={16} color={accent} />
-              <Text fontSize={13} color={INK} textDecorationLine="line-through" flexShrink={1}>
+              <Text fontSize={13} color={tokens.ink} textDecorationLine="line-through" flexShrink={1}>
                 <MathText text={s.prompt} size={13} />
               </Text>
             </AppCard>
@@ -373,8 +374,8 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
               opacity={0.4}
               borderRadius={20}
             >
-              <Lock size={16} color={NEUTRAL[600]} />
-              <Text fontSize={13} color={INK} flexShrink={1}>
+              <Lock size={16} color={tokens.muted} />
+              <Text fontSize={13} color={tokens.ink} flexShrink={1}>
                 <MathText text={s.prompt} size={13} />
               </Text>
             </AppCard>
@@ -382,13 +383,15 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
 
           <XStack
             alignSelf="flex-start"
-            backgroundColor={INK}
+            backgroundColor={tokens.poster}
+            borderWidth={tokens.mode === 'dark' ? 1 : 0}
+            borderColor={tokens.posterBorder}
             borderRadius={16}
             borderBottomLeftRadius={4}
             paddingHorizontal={12}
             paddingVertical={8}
           >
-            <Text color="#f3f2f2" fontWeight="600" fontSize={12}>
+            <Text color={tokens.posterInk} fontWeight="600" fontSize={12}>
               {t('practiceEncourage')}
             </Text>
           </XStack>

@@ -9,7 +9,7 @@ import { MathInput } from '../components/MathInput';
 import { MathText } from '../components/MathText';
 import { AnimatedEquation } from '../components/stepanim/AnimatedEquation';
 import { buildScriptForProblem } from '../components/stepanim/builders';
-import { AppCard, GhostButton, Muted, PrimaryButton, Screen, SubTitle, Title, COLORS } from '../components/ui';
+import { AppCard, GhostButton, Muted, PrimaryButton, Screen, SubTitle, Title, useTokens, COLORS } from '../components/ui';
 
 interface SprintProblem {
   id: number;
@@ -22,6 +22,7 @@ const SPRINT_SECONDS = 90;
 
 export function SprintScreen() {
   const { t, locale } = useI18n();
+  const tokens = useTokens();
   useRequireAuth();
   const [problems, setProblems] = useState<SprintProblem[]>([]);
   const [index, setIndex] = useState(-1);
@@ -82,7 +83,7 @@ export function SprintScreen() {
       <Title>⚡ {t('sprint')}</Title>
       {!running && index === -1 && (
         <AppCard alignItems="center" gap={10}>
-          <Text fontSize={16}>90s · 20 ❓</Text>
+          <Text fontSize={16} color={tokens.ink}>90s · 20 ❓</Text>
           <PrimaryButton onPress={start}>{t('sprintGo')}</PrimaryButton>
         </AppCard>
       )}
@@ -102,7 +103,7 @@ export function SprintScreen() {
         <>
           <AppCard alignItems="center" gap={8}>
             <SubTitle>{t('sprintDone')}</SubTitle>
-            <Text fontSize={40} fontWeight="900">
+            <Text fontSize={40} fontWeight="900" color={tokens.ink}>
               {score} / {attempted}
             </Text>
             <PrimaryButton onPress={start}>↻ {t('sprintGo')}</PrimaryButton>
@@ -116,7 +117,7 @@ export function SprintScreen() {
               {misses.map((p) => {
                 const script = buildScriptForProblem(p.skillSlug, p.params);
                 return (
-                  <YStack key={p.id} gap={8} borderTopWidth={1} borderTopColor={COLORS.border} paddingTop={10}>
+                  <YStack key={p.id} gap={8} borderTopWidth={1} borderTopColor={tokens.border} paddingTop={10}>
                     <MathText text={p.prompt} size={16} />
                     {script ? (
                       <XStack>

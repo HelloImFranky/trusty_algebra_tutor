@@ -16,8 +16,8 @@ import { MathText } from '../components/MathText';
 import { AnimatedEquation } from '../components/stepanim/AnimatedEquation';
 import { buildScriptForProblem } from '../components/stepanim/builders';
 import {
-  AppCard, Feedback, GhostButton, INK, Loading, Muted, NEUTRAL, PrimaryButton, ProgressBar, Screen,
-  SubTitle, Title, useAccent, COLORS,
+  AppCard, Feedback, GhostButton, HeroCard, Loading, Muted, PrimaryButton, ProgressBar, Screen,
+  SubTitle, Title, useAccent, useTokens, COLORS,
 } from '../components/ui';
 
 const LETTERS = ['A', 'B', 'C', 'D'];
@@ -42,6 +42,7 @@ export function ReviewScreen() {
 function TopicCatalog({ onOpen }: { onOpen: (slug: string) => void }) {
   const { t, locale } = useI18n();
   const accent = useAccent();
+  const tokens = useTokens();
   const catalog = trpc.regents.catalog.useQuery({ locale });
 
   const topics = catalog.data?.topics ?? [];
@@ -55,7 +56,7 @@ function TopicCatalog({ onOpen }: { onOpen: (slug: string) => void }) {
   return (
     <Screen maxWidth={980}>
       <XStack alignItems="center" gap={8}>
-        <Library size={20} color={INK} />
+        <Library size={20} color={tokens.ink} />
         <Title>{t('review')}</Title>
       </XStack>
       <Muted size={14}>
@@ -65,22 +66,24 @@ function TopicCatalog({ onOpen }: { onOpen: (slug: string) => void }) {
       {catalog.isLoading && <Loading />}
 
       {answered > 0 && (
-        <YStack backgroundColor={INK} borderRadius={20} padding={16} gap={8}>
+        <HeroCard>
           <Text color="#ff9783" fontSize={10} fontWeight="800" textTransform="uppercase" letterSpacing={0.8}>
             {t('examReadiness')}
           </Text>
           <XStack alignItems="baseline" gap={6}>
-            <Text color="#f3f2f2" fontSize={30} fontWeight="800">
+            <Text color={tokens.posterInk} fontSize={30} fontWeight="800">
               {readiness}%
             </Text>
-            <Text color={NEUTRAL[400]} fontSize={12}>
+            {/* Secondary caption uses a low-contrast neutral so it reads as
+                a subtitle on the poster in either mode. */}
+            <Text color={tokens.mode === 'dark' ? '#9b9797' : '#bab6b6'} fontSize={12}>
               {t('questionsAnsweredLabel')}
             </Text>
           </XStack>
-          <XStack height={8} backgroundColor="#444141" borderRadius={999} overflow="hidden">
+          <XStack height={8} backgroundColor={tokens.mode === 'dark' ? '#4a4646' : '#444141'} borderRadius={999} overflow="hidden">
             <XStack width={`${readiness}%`} height="100%" backgroundColor={accent} borderRadius={999} />
           </XStack>
-        </YStack>
+        </HeroCard>
       )}
       {weakest && (
         <PrimaryButton justifyContent="center" onPress={() => onOpen(weakest.slug)}>
@@ -105,7 +108,7 @@ function TopicCatalog({ onOpen }: { onOpen: (slug: string) => void }) {
               <XStack gap={10} alignItems="center">
                 <Target size={22} color={accent} />
                 <YStack flexShrink={1}>
-                  <Text fontSize={16} fontWeight="800" color={INK}>
+                  <Text fontSize={16} fontWeight="800" color={tokens.ink}>
                     {topic.title}
                   </Text>
                   <Muted>{topic.blurb}</Muted>
@@ -116,7 +119,7 @@ function TopicCatalog({ onOpen }: { onOpen: (slug: string) => void }) {
                 {topic.extraRounds > 0 && <Muted size={12}>🔄 ×{topic.extraRounds}</Muted>}
                 {done ? (
                   <XStack
-                    backgroundColor={perfect ? COLORS.goodBg : NEUTRAL[100]}
+                    backgroundColor={perfect ? COLORS.goodBg : tokens.subtle}
                     borderRadius={999}
                     paddingHorizontal={10}
                     paddingVertical={3}
@@ -158,6 +161,7 @@ interface AnsweredState {
 function TopicQuiz({ slug, onExit }: { slug: string; onExit: () => void }) {
   const { t, locale } = useI18n();
   const accent = useAccent();
+  const tokens = useTokens();
   const utils = trpc.useUtils();
   // undefined = let the server pick the student's latest round; renewing a
   // finished round requests the next one, which is generated on the fly.
@@ -315,8 +319,8 @@ function TopicQuiz({ slug, onExit }: { slug: string; onExit: () => void }) {
             const isPick = answered ? answered.choiceIndex === i : selected === i;
             const isRight = answered ? answered.correctIndex === i : false;
             const showWrongPick = answered && isPick && !isRight;
-            const borderColor = isRight && answered ? COLORS.good : showWrongPick ? COLORS.bad : isPick ? accent : NEUTRAL[300];
-            const backgroundColor = isRight && answered ? COLORS.goodBg : showWrongPick ? COLORS.badBg : isPick ? NEUTRAL[100] : '#ffffff';
+            const borderColor = isRight && answered ? COLORS.good : showWrongPick ? COLORS.bad : isPick ? accent : tokens.border;
+            const backgroundColor = isRight && answered ? COLORS.goodBg : showWrongPick ? COLORS.badBg : isPick ? tokens.subtle : tokens.surface;
             return (
               <XStack
                 key={i}
@@ -339,9 +343,9 @@ function TopicQuiz({ slug, onExit }: { slug: string; onExit: () => void }) {
                   borderRadius={999}
                   alignItems="center"
                   justifyContent="center"
-                  backgroundColor={isRight && answered ? COLORS.good : showWrongPick ? COLORS.bad : isPick ? accent : NEUTRAL[200]}
+                  backgroundColor={isRight && answered ? COLORS.good : showWrongPick ? COLORS.bad : isPick ? accent : tokens.subtle}
                 >
-                  <Text fontWeight="900" fontSize={14} color={isPick || (isRight && answered) ? 'white' : COLORS.muted}>
+                  <Text fontWeight="900" fontSize={14} color={isPick || (isRight && answered) ? 'white' : tokens.muted}>
                     {answered ? (isRight ? '✓' : showWrongPick ? '✗' : LETTERS[i]) : LETTERS[i]}
                   </Text>
                 </XStack>

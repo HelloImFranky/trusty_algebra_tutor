@@ -13,8 +13,8 @@ import { useAuth } from '../lib/auth';
 import { useRequireAuth } from '../components/AppChrome';
 import { JoinClassCard } from '../components/JoinClassCard';
 import {
-  AppCard, Badge, Feedback, INK, Loading, Muted, NEUTRAL, ProgressBar, Screen, StatChip,
-  SubTitle, Title, useAccent, COLORS,
+  AppCard, Badge, Feedback, Loading, Muted, NEUTRAL, ProgressBar, Screen, StatChip,
+  SubTitle, Title, useAccent, useTokens, COLORS,
 } from '../components/ui';
 
 const TIER_STYLE = {
@@ -34,9 +34,14 @@ interface AchievementView {
   desc: string;
 }
 
-/** A medallion drawn with plain shapes so it renders identically everywhere. */
+/** A medallion drawn with plain shapes so it renders identically everywhere.
+ * Earned medals keep their tier-specific ring / fill / label colors (they're
+ * meant to look like literal bronze/silver/gold metal in either mode);
+ * unearned placeholders adopt the current theme's subtle/border neutrals so
+ * they blend into a dark card instead of glowing white. */
 function Medal({ a }: { a: AchievementView }) {
   const tier = TIER_STYLE[a.tier];
+  const tokens = useTokens();
   return (
     <YStack width={104} alignItems="center" gap={5} paddingVertical={6} opacity={a.earned ? 1 : 0.85}>
       <YStack
@@ -44,8 +49,8 @@ function Medal({ a }: { a: AchievementView }) {
         height={62}
         borderRadius={999}
         borderWidth={4}
-        borderColor={a.earned ? tier.ring : NEUTRAL[300]}
-        backgroundColor={a.earned ? tier.fill : NEUTRAL[100]}
+        borderColor={a.earned ? tier.ring : tokens.border}
+        backgroundColor={a.earned ? tier.fill : tokens.subtle}
         alignItems="center"
         justifyContent="center"
       >
@@ -66,7 +71,7 @@ function Medal({ a }: { a: AchievementView }) {
           <ProgressBar ratio={a.target ? a.value / a.target : 0} />
         </XStack>
       )}
-      <Text fontSize={12} fontWeight="800" textAlign="center" color={INK}>
+      <Text fontSize={12} fontWeight="800" textAlign="center" color={tokens.ink}>
         {a.name}
       </Text>
       <Muted size={10.5}>
@@ -80,6 +85,7 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
   const { t, locale } = useI18n();
   const authed = useRequireAuth();
   const accent = useAccent();
+  const tokens = useTokens();
   const role = useAuth((s) => s.auth?.user.role);
   // Which Regents topic's detail dropdown is open (one at a time keeps the
   // scoreboard tidy).
@@ -129,7 +135,7 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
   return (
     <Screen maxWidth={980}>
       <XStack alignItems="center" gap={8}>
-        <TrendingUp size={20} color={INK} />
+        <TrendingUp size={20} color={tokens.ink} />
         <Title>
           {t('progress')}
           {data.student ? ` — ${data.student.displayName}` : ''}
@@ -140,9 +146,9 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
 
       <XStack gap={8} flexWrap="wrap">
         <StatChip icon={<Flame size={20} color={accent} />} value={data.streakDays} label={t('streak')} />
-        <StatChip icon={<Clock size={20} color={INK} />} value={Math.round(totalMinutes)} label={`${t('minutes')} / 30d`} />
+        <StatChip icon={<Clock size={20} color={tokens.ink} />} value={Math.round(totalMinutes)} label={`${t('minutes')} / 30d`} />
         <StatChip
-          icon={<Brain size={20} color={INK} />}
+          icon={<Brain size={20} color={tokens.ink} />}
           value={data.skills.filter((s) => s.label === 'mastered' || s.label === 'proficient').length}
           label={t('mastered')}
         />
@@ -196,7 +202,7 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
                 <Text fontSize={16} width={26}>
                   {topic.icon}
                 </Text>
-                <Text fontSize={13.5} fontWeight="700" width={170} numberOfLines={1} color={INK}>
+                <Text fontSize={13.5} fontWeight="700" width={170} numberOfLines={1} color={tokens.ink}>
                   {locale === 'es' ? topic.titleEs : topic.titleEn}
                 </Text>
                 <ProgressBar ratio={topic.answered / topic.total} />
@@ -210,7 +216,7 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
                   {perfect ? '🌟 ' : done ? '✓ ' : ''}
                   {topic.correct}/{topic.total}
                 </Text>
-                <Text fontSize={11} width={14} color={COLORS.muted}>
+                <Text fontSize={11} width={14} color={tokens.muted}>
                   {open ? '▾' : '▸'}
                 </Text>
               </XStack>
@@ -223,7 +229,7 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
                   paddingHorizontal={12}
                   paddingVertical={8}
                   borderRadius={14}
-                  backgroundColor={NEUTRAL[100]}
+                  backgroundColor={tokens.subtle}
                 >
                   <Muted size={12.5}>
                     ✅ {topic.correctAll} {t('rightLabel')}
@@ -245,7 +251,7 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
         <AppCard borderLeftWidth={4} borderLeftColor={COLORS.bad} gap={4}>
           <SubTitle>🚩 {t('struggling')}</SubTitle>
           {data.struggleFlags.map((s) => (
-            <Text key={s.lessonCode} fontSize={14} color={INK}>
+            <Text key={s.lessonCode} fontSize={14} color={tokens.ink}>
               <Text fontWeight="800">{s.lessonCode}</Text> {s.name}
             </Text>
           ))}
@@ -256,7 +262,7 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
         <SubTitle>{t('masteryMap')}</SubTitle>
         {units.map((u) => (
           <YStack key={u} gap={4}>
-            <Text fontWeight="800" color={INK}>Unit {u}</Text>
+            <Text fontWeight="800" color={tokens.ink}>Unit {u}</Text>
             {data.skills
               .filter((s) => s.unitNumber === u)
               .map((s) => (

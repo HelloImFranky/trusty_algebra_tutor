@@ -60,8 +60,17 @@ export interface ThemeTokens {
   bg: Hex;           // page background
   surface: Hex;      // card / raised surface
   ink: Hex;          // primary text
+  muted: Hex;        // secondary text (StatChip subtitles, captions, muted rows)
   border: Hex;       // dividers, input outlines
-  subtle: Hex;       // chip / input background
+  subtle: Hex;       // chip / input background, hover / press states on rows
+  /** "Poster" surface — the CONTINUE hero card on Curriculum/Review and any
+   * other feature panel that used `backgroundColor={INK}`. In light mode we
+   * keep the near-black poster (dark on light bg = the intended contrast);
+   * in dark mode we lift to a raised neutral so the panel doesn't collapse
+   * into the page background. Text on this surface uses `posterInk`. */
+  poster: Hex;
+  posterInk: Hex;
+  posterBorder: Hex; // subtle stroke to lift the poster off the bg in dark
   /** Top-bar / bottom-tab separator. 8-digit hex encodes ~12% alpha
    * (`1f` = 31/255) so the divider reads as a subtle line in either mode. */
   chromeBorder: Hex;
@@ -72,8 +81,12 @@ const LIGHT_TOKENS: ThemeTokens = {
   bg: '#f3f2f2',
   surface: '#ffffff',
   ink: INK,
+  muted: NEUTRAL[700],
   border: NEUTRAL[300],
   subtle: NEUTRAL[200],
+  poster: INK,
+  posterInk: '#f3f2f2',
+  posterBorder: INK, // same as bg — no visible stroke needed in light
   chromeBorder: '#201e1d1f',
 };
 
@@ -82,8 +95,12 @@ const DARK_TOKENS: ThemeTokens = {
   bg: '#141313',
   surface: '#232121',
   ink: DARK_INK,
+  muted: DARK_NEUTRAL[700], // same 30/60 relationship to ink as in light
   border: DARK_NEUTRAL[300],
   subtle: DARK_NEUTRAL[200],
+  poster: DARK_NEUTRAL[200],
+  posterInk: DARK_INK,
+  posterBorder: DARK_NEUTRAL[400],
   chromeBorder: '#f3f2f224',
 };
 
@@ -205,13 +222,34 @@ export function SubTitle({ children }: { children: ReactNode }) {
 
 export function Muted({ children, size = 13 }: { children: ReactNode; size?: number }) {
   const tokens = useTokens();
-  // NEUTRAL[700] in light == same visual as DARK_NEUTRAL[700] in dark
-  // (mirrored scale keeps the muted-ness legible in both).
-  const color = tokens.mode === 'dark' ? DARK_NEUTRAL[700] : NEUTRAL[700];
   return (
-    <Text fontSize={size} color={color}>
+    <Text fontSize={size} color={tokens.muted}>
       {children}
     </Text>
+  );
+}
+
+/** "Poster" surface — used by the CONTINUE hero card on Curriculum/Review
+ * and any other feature panel that used `backgroundColor={INK}` directly.
+ * See tokens.poster/posterInk/posterBorder for the mode-aware color story.
+ * Children read text off `tokens.posterInk`. */
+export function HeroCard({
+  children,
+  ...rest
+}: React.ComponentProps<typeof YStack>) {
+  const tokens = useTokens();
+  return (
+    <YStack
+      backgroundColor={tokens.poster}
+      borderRadius={20}
+      borderWidth={tokens.mode === 'dark' ? 1 : 0}
+      borderColor={tokens.posterBorder}
+      padding={16}
+      gap={8}
+      {...rest}
+    >
+      {children}
+    </YStack>
   );
 }
 
@@ -349,7 +387,7 @@ export function StatChip({
       <Text fontSize={20} fontWeight="800" color={tokens.ink}>
         {value}
       </Text>
-      <Text fontSize={10} color={COLORS.muted} textAlign="center">
+      <Text fontSize={10} color={tokens.muted} textAlign="center">
         {label}
       </Text>
     </YStack>
