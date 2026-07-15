@@ -6,13 +6,14 @@
 import { useState } from 'react';
 import { Text, YStack } from 'tamagui';
 import { useI18n } from '../../lib/i18n';
-import { SubTitle } from '../ui';
+import { SubTitle, useTokens } from '../ui';
 import { AnimatedEquation } from './AnimatedEquation';
 import { scriptsByLessonCode } from './model';
 import { ScriptPicker } from './ScriptPicker';
 
 export function LessonAnimations({ code }: { code: string }) {
   const { t, locale } = useI18n();
+  const tokens = useTokens();
   const scripts = scriptsByLessonCode[code];
   const [scriptId, setScriptId] = useState<string | null>(null);
   if (!scripts || scripts.length === 0) return null;
@@ -23,7 +24,7 @@ export function LessonAnimations({ code }: { code: string }) {
       <SubTitle>🎬 {t('animatedExample')}</SubTitle>
       <ScriptPicker scripts={scripts} selectedId={script.id} onSelect={setScriptId} size="$3" />
       {scripts.length === 1 && (
-        <Text fontSize={14} color="#6b7280">
+        <Text fontSize={14} color={tokens.muted}>
           {locale === 'es' ? script.titleEs : script.titleEn}
         </Text>
       )}

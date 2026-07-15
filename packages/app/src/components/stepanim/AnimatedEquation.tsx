@@ -12,7 +12,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, Animated, Easing, Platform, Text as RNText, View } from 'react-native';
 import { Text, XStack } from 'tamagui';
 import { useI18n } from '../../lib/i18n';
-import { AppCard, BRAND, COLORS, GhostButton, PrimaryButton, SecondaryButton, useAccent, type Hex } from '../ui';
+import { AppCard, BRAND, COLORS, GhostButton, PrimaryButton, SecondaryButton, useAccent, useTokens, type Hex } from '../ui';
 import { BalanceScale } from './BalanceScale';
 import { stepToText, type EqScript, type EqToken } from './model';
 
@@ -35,10 +35,13 @@ interface TokenAnim {
 
 /** `accent` defaults to the static brand color for the layout-measurement
  * pass (see layoutStep), where only whether a token has a bg matters; the
- * live theme color is threaded in for the actual render below. */
-function tokenStyle(tok: EqToken, accent: Hex = BRAND) {
+ * live theme color is threaded in for the actual render below. `ink` and
+ * `muted` follow useTokens() at the callsite so num/frac/op tokens read
+ * correctly in dark mode — the previous hard-coded near-black number
+ * color rendered as invisible on dark bg. */
+function tokenStyle(tok: EqToken, accent: Hex = BRAND, ink: string = '#111827', muted: string = '#6b7280') {
   let color: string =
-    tok.kind === 'var' ? accent : tok.kind === 'num' || tok.kind === 'frac' ? '#111827' : '#6b7280';
+    tok.kind === 'var' ? accent : tok.kind === 'num' || tok.kind === 'frac' ? ink : muted;
   let bg: string | undefined;
   let strike = false;
   switch (tok.emph) {
@@ -133,6 +136,7 @@ export function AnimatedEquation({
 }) {
   const { t, locale } = useI18n();
   const accent = useAccent();
+  const tokens = useTokens();
   const [index, setIndex] = useState(() =>
     Math.min(Math.max(0, startAtStep), script.steps.length - 1),
   );
@@ -391,7 +395,7 @@ export function AnimatedEquation({
           style={{ width: '100%', height: stageH, transform: [{ scale: lineScale }] }}
         >
         {[...exiting, ...step.tokens].map((tok) => {
-          const st = tokenStyle(tok, accent);
+          const st = tokenStyle(tok, accent, tokens.ink, tokens.muted);
           const a = getAnim(tok.id);
           return (
             <Animated.View
@@ -470,7 +474,7 @@ export function AnimatedEquation({
       <FadeIn key={`explain-${index}`}>
         <Text
           fontSize={15}
-          color="#374151"
+          color={tokens.ink}
           textAlign="center"
           minHeight={40}
           accessibilityLiveRegion="polite"
@@ -491,7 +495,7 @@ export function AnimatedEquation({
               width: 8,
               height: 8,
               borderRadius: 999,
-              backgroundColor: i < index ? COLORS.good : i === index ? accent : '#d1d5db',
+              backgroundColor: i < index ? COLORS.good : i === index ? accent : tokens.border,
             }}
           />
         ))}

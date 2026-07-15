@@ -111,10 +111,15 @@ export function useTokens(): ThemeTokens {
 export const COLORS = {
   good: '#0ca678',
   goodBg: '#e6fcf5',
+  goodBgDark: '#0f3d2e',   // dark-mode deep green so white/tinted text pops
+  goodInkDark: '#67e8b8',  // dark-mode "correct" label — soft, still green
   bad: '#ae1800',
   badBg: '#fff2ef',
+  badBgDark: '#3d1414',    // dark-mode deep red for the "wrong" answer card
+  badInkDark: '#ff9783',   // dark-mode "not quite" label — light salmon
   warn: '#c98a00',
   warnBg: '#fff9db',
+  warnBgDark: '#3a2f10',   // matches HINT.bgDark so warn Feedback lines up
   muted: NEUTRAL[700],
   border: NEUTRAL[300],
 } as const;
@@ -143,6 +148,36 @@ export const HINT: {
  * theme mode re-renders every consumer. */
 export function useHintBg(): Hex {
   return useResolvedMode() === 'dark' ? HINT.bgDark : HINT.bg;
+}
+
+/** Mode-correct feedback background + text — used by Feedback and by any
+ * answer-card / explanation panel that overlays text on a good/bad/warn
+ * surface. Light mode keeps the pale bg + saturated text; dark mode uses a
+ * deep bg so white / lightly-tinted text has real contrast to stand on.
+ * `hint` routes through HINT tokens (see useHintBg). */
+export function useFeedbackColors(kind: 'good' | 'bad' | 'warn' | 'hint'): {
+  bg: Hex;
+  ink: Hex;
+} {
+  const dark = useResolvedMode() === 'dark';
+  switch (kind) {
+    case 'good':
+      return dark
+        ? { bg: COLORS.goodBgDark, ink: COLORS.goodInkDark }
+        : { bg: COLORS.goodBg, ink: COLORS.good };
+    case 'bad':
+      return dark
+        ? { bg: COLORS.badBgDark, ink: COLORS.badInkDark }
+        : { bg: COLORS.badBg, ink: COLORS.bad };
+    case 'warn':
+      return dark
+        ? { bg: COLORS.warnBgDark, ink: HINT.fg }
+        : { bg: COLORS.warnBg, ink: COLORS.warn };
+    case 'hint':
+      return dark
+        ? { bg: HINT.bgDark, ink: HINT.fg }
+        : { bg: HINT.bg, ink: HINT.fg };
+  }
 }
 
 export const RADIUS = { card: 20, control: 14, pill: 999 } as const;
@@ -301,7 +336,9 @@ export function GhostButton(props: React.ComponentProps<typeof Button>) {
 /** Inline result banner. `hint` is the yellow, theme-invariant nudge (see
  * HINT). `warn` is for non-hint warnings (form validation, offline queue,
  * calculator input errors) — same color today, but a distinct token so
- * we can diverge later. */
+ * we can diverge later. bg / text pair comes from useFeedbackColors, so
+ * dark mode gets a deep-colored bg with white-ish text and light mode
+ * keeps the pale bg with saturated colored text. */
 export function Feedback({
   kind,
   icon,
@@ -311,17 +348,11 @@ export function Feedback({
   icon?: ReactNode;
   children: ReactNode;
 }) {
-  const hintBg = useHintBg();
-  const color = kind === 'hint' ? HINT.fg : COLORS[kind];
-  const bg =
-    kind === 'good' ? COLORS.goodBg
-    : kind === 'bad' ? COLORS.badBg
-    : kind === 'hint' ? hintBg
-    : COLORS.warnBg;
+  const { bg, ink } = useFeedbackColors(kind);
   return (
     <XStack backgroundColor={bg} borderRadius={RADIUS.control} padding={12} marginTop={8} gap={6} alignItems="center">
       {icon}
-      <Text color={color} fontWeight="700" fontSize={14} flexShrink={1}>
+      <Text color={ink} fontWeight="700" fontSize={14} flexShrink={1}>
         {children}
       </Text>
     </XStack>

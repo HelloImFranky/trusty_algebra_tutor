@@ -1,15 +1,15 @@
 /**
- * Options (all roles): profile rename, password change, language, and
- * appearance (light/dark mode + entry point to the color picker). Language
- * and Appearance moved here from the top chrome in the UI/UX refresh
- * (Phase 5) so every account/preference toggle lives in one place.
- * Each concern is its own titled AppCard so the screen scans as a stack
- * of tasks rather than a wall of controls.
+ * Options (all roles): language, profile (with a collapsible password row),
+ * appearance, and sign out — one titled AppCard per concern, ordered by how
+ * often students touch them (language first for ES students who tend to
+ * flip it before doing anything else). Password change hides behind a
+ * disclosure row (chevron-down toggle) so the Profile card stays tight
+ * until the student actually wants to update credentials.
  */
 import { useState } from 'react';
 import { Link } from 'solito/link';
 import { useRouter } from 'solito/navigation';
-import { ChevronRight, LogOut, Palette } from '@tamagui/lucide-icons';
+import { ChevronDown, ChevronRight, KeyRound, LogOut, Palette } from '@tamagui/lucide-icons';
 import { Button, Text, XStack, YStack } from 'tamagui';
 import { trpc, logout } from '../lib/trpc';
 import { useI18n, type Locale } from '../lib/i18n';
@@ -64,6 +64,47 @@ function SegmentedOption<T extends string>({
   );
 }
 
+/** Same "row-with-chevron" pattern the Appearance card uses for the color
+ * picker link — reused here to disclose the password fields inline. Kept a
+ * shared component so a future settings row (2FA, connected accounts, etc.)
+ * gets the same visuals for free. */
+function DisclosureRow({
+  icon,
+  label,
+  open,
+  onPress,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  open: boolean;
+  onPress: () => void;
+}) {
+  const tokens = useTokens();
+  return (
+    <XStack
+      backgroundColor={tokens.subtle}
+      borderRadius={RADIUS.control}
+      paddingVertical={12}
+      paddingHorizontal={14}
+      alignItems="center"
+      gap={10}
+      cursor="pointer"
+      pressStyle={{ opacity: 0.85 }}
+      onPress={onPress}
+    >
+      {icon}
+      <Text color={tokens.ink} fontWeight="700" fontSize={15} flex={1}>
+        {label}
+      </Text>
+      {open ? (
+        <ChevronDown size={18} color={tokens.ink} />
+      ) : (
+        <ChevronRight size={18} color={tokens.ink} />
+      )}
+    </XStack>
+  );
+}
+
 export function SettingsScreen() {
   const { t, locale, setLocale } = useI18n();
   const { mode, setMode } = useTheme();
@@ -76,6 +117,7 @@ export function SettingsScreen() {
   const [username, setUsername] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [passwordOpen, setPasswordOpen] = useState(false);
 
   // Seed the profile fields from the signed-in user the first time we have one.
   const [seeded, setSeeded] = useState(false);
@@ -104,6 +146,7 @@ export function SettingsScreen() {
         });
       setCurrentPassword('');
       setNewPassword('');
+      setPasswordOpen(false); // collapse the row once the change succeeds
     },
   });
 
@@ -118,6 +161,18 @@ export function SettingsScreen() {
     <Screen maxWidth={620}>
       <Title>⚙️ {t('settings')}</Title>
 
+      {/* Card order: Language first (ES students flip it before anything
+          else) → Profile (with collapsible password) → Appearance → Sign
+          out. Sign out is intentionally last, separated as a
+          destructive-ish action. */}
+      <AppCard gap={10}>
+        <SubTitle>{t('languageSectionTitle')}</SubTitle>
+        <XStack gap={8}>
+          <SegmentedOption<Locale> value="en" current={locale} label={t('english')} onSelect={setLocale} />
+          <SegmentedOption<Locale> value="es" current={locale} label={t('spanish')} onSelect={setLocale} />
+        </XStack>
+      </AppCard>
+
       <AppCard gap={10}>
         <SubTitle>{t('profileSection')}</SubTitle>
         <Muted>{t('displayNameLabel')}</Muted>
@@ -125,8 +180,9 @@ export function SettingsScreen() {
           value={displayName}
           onChangeText={setDisplayName}
           placeholder={t('displayNameLabel')}
+          color={tokens.ink}
           backgroundColor={tokens.surface}
-          borderColor={COLORS.border}
+          borderColor={tokens.border}
         />
         <Muted>{t('username')}</Muted>
         <AppInput
@@ -134,8 +190,9 @@ export function SettingsScreen() {
           onChangeText={setUsername}
           autoCapitalize="none"
           placeholder={t('username')}
+          color={tokens.ink}
           backgroundColor={tokens.surface}
-          borderColor={COLORS.border}
+          borderColor={tokens.border}
         />
         <PrimaryButton
           disabled={profile.isPending || !profileDirty || !profileValid}
@@ -148,49 +205,54 @@ export function SettingsScreen() {
         </PrimaryButton>
         {profile.isSuccess && !profileDirty && <Feedback kind="good">{t('profileUpdated')}</Feedback>}
         {profile.error && <Feedback kind="bad">{profile.error.message}</Feedback>}
-      </AppCard>
 
-      <AppCard gap={10}>
-        <SubTitle>{t('changePasswordTitle')}</SubTitle>
-        <Muted>{t('changePasswordNote')}</Muted>
-        <AppInput
-          value={currentPassword}
-          onChangeText={setCurrentPassword}
-          secureTextEntry
-          autoCapitalize="none"
-          placeholder={t('currentPassword')}
-          backgroundColor={tokens.surface}
-          borderColor={COLORS.border}
+        {/* Password change lives inside Profile as a disclosure row — mirrors
+            the Appearance card's "Change accent color →" pattern so both
+            entry points look and behave the same. Clicking expands the row
+            in place; a successful change collapses it (see onSuccess above). */}
+        <DisclosureRow
+          icon={<KeyRound size={18} color={tokens.ink} />}
+          label={t('changePasswordTitle')}
+          open={passwordOpen}
+          onPress={() => setPasswordOpen((v) => !v)}
         />
-        <AppInput
-          value={newPassword}
-          onChangeText={setNewPassword}
-          secureTextEntry
-          autoCapitalize="none"
-          placeholder={t('newPassword')}
-          backgroundColor={tokens.surface}
-          borderColor={COLORS.border}
-        />
-        {newPassword.length > 0 && newPassword.length < 8 && (
-          <Muted>{t('passwordTooShort')}</Muted>
+        {passwordOpen && (
+          <YStack gap={8}>
+            <Muted>{t('changePasswordNote')}</Muted>
+            <AppInput
+              value={currentPassword}
+              onChangeText={setCurrentPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              placeholder={t('currentPassword')}
+              color={tokens.ink}
+              backgroundColor={tokens.surface}
+              borderColor={tokens.border}
+            />
+            <AppInput
+              value={newPassword}
+              onChangeText={setNewPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              placeholder={t('newPassword')}
+              color={tokens.ink}
+              backgroundColor={tokens.surface}
+              borderColor={tokens.border}
+            />
+            {newPassword.length > 0 && newPassword.length < 8 && (
+              <Muted>{t('passwordTooShort')}</Muted>
+            )}
+            <PrimaryButton
+              disabled={password.isPending || !passwordValid}
+              opacity={passwordValid ? 1 : 0.5}
+              onPress={() => password.mutate({ currentPassword, newPassword })}
+            >
+              {t('changePasswordTitle')}
+            </PrimaryButton>
+            {password.isSuccess && <Feedback kind="good">{t('passwordChanged')}</Feedback>}
+            {password.error && <Feedback kind="bad">{password.error.message}</Feedback>}
+          </YStack>
         )}
-        <PrimaryButton
-          disabled={password.isPending || !passwordValid}
-          opacity={passwordValid ? 1 : 0.5}
-          onPress={() => password.mutate({ currentPassword, newPassword })}
-        >
-          {t('changePasswordTitle')}
-        </PrimaryButton>
-        {password.isSuccess && <Feedback kind="good">{t('passwordChanged')}</Feedback>}
-        {password.error && <Feedback kind="bad">{password.error.message}</Feedback>}
-      </AppCard>
-
-      <AppCard gap={10}>
-        <SubTitle>{t('languageSectionTitle')}</SubTitle>
-        <XStack gap={8}>
-          <SegmentedOption<Locale> value="en" current={locale} label={t('english')} onSelect={setLocale} />
-          <SegmentedOption<Locale> value="es" current={locale} label={t('spanish')} onSelect={setLocale} />
-        </XStack>
       </AppCard>
 
       <AppCard gap={10}>
@@ -201,9 +263,10 @@ export function SettingsScreen() {
           <SegmentedOption<ThemeMode> value="dark" current={mode} label={t('modeDark')} onSelect={setMode} />
         </XStack>
         <Muted size={12}>{t('modeAutoNote')}</Muted>
-        {/* Second row inside the Appearance card: the sole remaining path
-            into the color picker after removing the chrome palette icon.
-            Full-width tap target with a chevron so it reads as a link. */}
+        {/* Full-width tap target navigating to the color picker — same
+            visual as the DisclosureRow above so the two entry points feel
+            like siblings. This one navigates instead of expands because
+            the picker is too tall for an inline reveal. */}
         <Link href="/appearance">
           <XStack
             backgroundColor={tokens.subtle}
@@ -222,10 +285,6 @@ export function SettingsScreen() {
         </Link>
       </AppCard>
 
-      {/* Sign out lives at the very bottom of Options, apart from the
-          per-topic cards — a destructive-ish action shouldn't sit next to
-          things like language toggle. Red text on the accent-agnostic bad
-          color so it reads as "leaves the app" in either theme. */}
       <AppCard gap={8}>
         <SubTitle>{t('signOutSection')}</SubTitle>
         <Muted>{t('signOutNote')}</Muted>

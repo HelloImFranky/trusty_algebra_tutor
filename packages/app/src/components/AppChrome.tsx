@@ -13,7 +13,6 @@ import { Link } from 'solito/link';
 import { useRouter, usePathname } from 'solito/navigation';
 import {
   BookOpen,
-  Calculator,
   Library,
   School,
   Settings,
@@ -25,6 +24,7 @@ import type { IconProps } from '@tamagui/helpers-icon';
 import { Button, Text, XStack, YStack } from 'tamagui';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
+import { CalculatorButton } from './CalculatorButton';
 import { ReferenceSheetButton } from './ReferenceSheet';
 import { NEUTRAL, useAccent, useTokens, type Hex } from './ui';
 
@@ -114,16 +114,11 @@ export function AppChrome({ children }: { children: ReactNode }) {
         </XStack>
         <XStack gap={8} alignItems="center">
           {/* Order — Calculator first: it's the most-used chrome tool
-              (opens over a lesson without losing place). Reference sheet
-              next. Settings last: preferences, account, and Sign out
-              (moved off the chrome, into the Settings screen). */}
-          {auth && (
-            <Link href="/calculator">
-              <Button size="$2" {...CHROME_BTN} aria-label={t('calculator')}>
-                <Calculator size={15} color={tokens.ink} />
-              </Button>
-            </Link>
-          )}
+              and opens as a bottom sheet OVER the current page instead
+              of navigating away, so students never lose their spot in a
+              lesson / practice / review. Reference sheet next (also a
+              sheet). Settings last: preferences + Sign out. */}
+          {auth && <CalculatorButton />}
           {auth && <ReferenceSheetButton compact={!topNav} />}
           {auth && (
             <Link href="/settings">

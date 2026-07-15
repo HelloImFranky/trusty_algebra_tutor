@@ -7,7 +7,7 @@
  * badges.
  */
 import { useMemo, useState } from 'react';
-import { Library, Target } from '@tamagui/lucide-icons';
+import { Library } from '@tamagui/lucide-icons';
 import { Text, XStack, YStack } from 'tamagui';
 import { trpc } from '../lib/trpc';
 import { useI18n } from '../lib/i18n';
@@ -17,7 +17,7 @@ import { AnimatedEquation } from '../components/stepanim/AnimatedEquation';
 import { buildScriptForProblem } from '../components/stepanim/builders';
 import {
   AppCard, Feedback, GhostButton, HeroCard, Loading, Muted, PrimaryButton, ProgressBar, Screen,
-  SubTitle, Title, useAccent, useTokens, COLORS,
+  SubTitle, Title, useAccent, useFeedbackColors, useTokens, COLORS,
 } from '../components/ui';
 
 const LETTERS = ['A', 'B', 'C', 'D'];
@@ -106,7 +106,11 @@ function TopicCatalog({ onOpen }: { onOpen: (slug: string) => void }) {
               onPress={() => onOpen(topic.slug)}
             >
               <XStack gap={10} alignItems="center">
-                <Target size={22} color={accent} />
+                {/* topic.icon is the same emoji Progress uses for the
+                    Regents-review stat row — keep the visual consistent
+                    across surfaces so students recognise a topic at a
+                    glance from either page. */}
+                <Text fontSize={22}>{topic.icon}</Text>
                 <YStack flexShrink={1}>
                   <Text fontSize={16} fontWeight="800" color={tokens.ink}>
                     {topic.title}
@@ -162,6 +166,8 @@ function TopicQuiz({ slug, onExit }: { slug: string; onExit: () => void }) {
   const { t, locale } = useI18n();
   const accent = useAccent();
   const tokens = useTokens();
+  const goodBg = useFeedbackColors('good');
+  const badBg = useFeedbackColors('bad');
   const utils = trpc.useUtils();
   // undefined = let the server pick the student's latest round; renewing a
   // finished round requests the next one, which is generated on the fly.
@@ -330,8 +336,13 @@ function TopicQuiz({ slug, onExit }: { slug: string; onExit: () => void }) {
             const isPick = answered ? answered.choiceIndex === i : selected === i;
             const isRight = answered ? answered.correctIndex === i : false;
             const showWrongPick = answered && isPick && !isRight;
+            // Border stays saturated (COLORS.good / COLORS.bad) in both
+            // modes — a bright ring reads correctly on the deep-color bg in
+            // dark mode. Only the bg shifts to the mode-correct deep tone
+            // so the MathText inside (which follows tokens.ink) has real
+            // contrast.
             const borderColor = isRight && answered ? COLORS.good : showWrongPick ? COLORS.bad : isPick ? accent : tokens.border;
-            const backgroundColor = isRight && answered ? COLORS.goodBg : showWrongPick ? COLORS.badBg : isPick ? tokens.subtle : tokens.surface;
+            const backgroundColor = isRight && answered ? goodBg.bg : showWrongPick ? badBg.bg : isPick ? tokens.subtle : tokens.surface;
             return (
               <XStack
                 key={i}
@@ -383,20 +394,20 @@ function TopicQuiz({ slug, onExit }: { slug: string; onExit: () => void }) {
                   {answered.correct ? '✓' : '✗'}
                 </Text>
               </XStack>
-              <Text fontSize={17} fontWeight="800" color={answered.correct ? COLORS.good : COLORS.bad}>
+              <Text fontSize={17} fontWeight="800" color={answered.correct ? goodBg.ink : badBg.ink}>
                 {answered.correct ? t('correct') : t('notQuite')}
               </Text>
             </XStack>
             {!answered.correct && (
               <YStack
-                backgroundColor={COLORS.badBg}
+                backgroundColor={badBg.bg}
                 borderLeftWidth={4}
                 borderLeftColor={COLORS.bad}
                 borderRadius={14}
                 padding={12}
                 gap={6}
               >
-                <Text fontSize={13} fontWeight="800" color={COLORS.bad}>
+                <Text fontSize={13} fontWeight="800" color={badBg.ink}>
                   💡 {t('howToSolve')}
                 </Text>
                 <MathText text={answered.explanation} size={14.5} />
