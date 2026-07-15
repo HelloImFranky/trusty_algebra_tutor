@@ -1,22 +1,20 @@
 /**
- * Shared chrome: brand top bar (reference sheet, calculator, language toggle,
- * logout) and navigation tabs. Desktop-width web gets the nav links in the
- * top bar like a traditional website; phones (native app and narrow web)
- * keep the app-style bottom tab bar. Calculator lives in the top chrome so
- * students can pop it open from any screen without losing their place; the
- * Options / Settings icon takes Calculator's old slot in the tab bar.
- * Wraps every signed-in screen on web and native.
+ * Shared chrome: brand top bar (calculator, reference sheet, settings) and
+ * navigation tabs. Desktop-width web gets the nav links in the top bar like
+ * a traditional website; phones (native app and narrow web) keep the
+ * app-style bottom tab bar. Calculator lives in the top chrome so students
+ * can pop it open from any screen without losing their place; Settings is
+ * also chrome-level so account/preferences (including Sign out) are always
+ * one tap away. Wraps every signed-in screen on web and native.
  */
 import { useEffect, type ComponentType, type ReactNode } from 'react';
 import { Platform, useWindowDimensions } from 'react-native';
 import { Link } from 'solito/link';
-import { useRouter } from 'solito/navigation';
-import { usePathname } from 'solito/navigation';
+import { useRouter, usePathname } from 'solito/navigation';
 import {
   BookOpen,
   Calculator,
   Library,
-  LogOut,
   School,
   Settings,
   Shield,
@@ -26,7 +24,6 @@ import {
 import type { IconProps } from '@tamagui/helpers-icon';
 import { Button, Text, XStack, YStack } from 'tamagui';
 import { useAuth } from '../lib/auth';
-import { logout } from '../lib/trpc';
 import { useI18n } from '../lib/i18n';
 import { ReferenceSheetButton } from './ReferenceSheet';
 import { NEUTRAL, useAccent, useTokens, type Hex } from './ui';
@@ -48,7 +45,6 @@ function TabIcon({
 export function AppChrome({ children }: { children: ReactNode }) {
   const { t } = useI18n();
   const auth = useAuth((s) => s.auth);
-  const router = useRouter();
   const pathname = usePathname() ?? '/';
   const accent = useAccent();
   const tokens = useTokens();
@@ -117,9 +113,10 @@ export function AppChrome({ children }: { children: ReactNode }) {
             })}
         </XStack>
         <XStack gap={8} alignItems="center">
-          {auth && <ReferenceSheetButton compact={!topNav} />}
-          {/* Calculator is chrome-level now — reachable from every screen
-              without navigating away from the current lesson/practice. */}
+          {/* Order — Calculator first: it's the most-used chrome tool
+              (opens over a lesson without losing place). Reference sheet
+              next. Settings last: preferences, account, and Sign out
+              (moved off the chrome, into the Settings screen). */}
           {auth && (
             <Link href="/calculator">
               <Button size="$2" {...CHROME_BTN} aria-label={t('calculator')}>
@@ -127,17 +124,13 @@ export function AppChrome({ children }: { children: ReactNode }) {
               </Button>
             </Link>
           )}
+          {auth && <ReferenceSheetButton compact={!topNav} />}
           {auth && (
-            <Button
-              size="$2"
-              {...CHROME_BTN}
-              onPress={() => {
-                void logout();
-                router.replace('/login');
-              }}
-            >
-              <LogOut size={15} color={tokens.ink} />
-            </Button>
+            <Link href="/settings">
+              <Button size="$2" {...CHROME_BTN} aria-label={t('settings')}>
+                <Settings size={15} color={tokens.ink} />
+              </Button>
+            </Link>
           )}
         </XStack>
       </XStack>

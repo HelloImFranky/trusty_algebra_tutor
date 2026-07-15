@@ -1,12 +1,12 @@
 /**
- * Color picker (Appearance): A/B preview at the top (Current vs New), then
- * three separately-labelled H/S/L sliders under one shared ColorPicker root,
- * an optional hex text input, a "recently used" swatch row, and Save.
- * Splitting hue / saturation / brightness into their own labelled controls
- * makes the axes obvious (a saturation-and-brightness panel plus a hue
- * slider previously read as "click here and something changes"). Web drags
- * don't fire the library's onComplete reliably, so the Save button remains
- * the reliable commit path there —
+ * Color picker (Appearance): at the top, two color-only swatches (Current vs
+ * New) plus a live full-component preview that reflects the New color as the
+ * H/S/L sliders drag. Below the top strip: three separately-labelled sliders,
+ * an optional hex input, a "recently used" row, and Save. Everything above
+ * the sliders is redundant on first look, but that's the point — dragging a
+ * slider should show its result without scrolling. Web drags don't fire the
+ * library's onComplete reliably, so the Save button remains the reliable
+ * commit path there —
  * https://alabsi91.github.io/reanimated-color-picker/api/color-picker-wrapper/
  */
 import { useState } from 'react';
@@ -25,12 +25,8 @@ import { useI18n } from '../lib/i18n';
 import { useTheme, type Hex } from '../lib/theme';
 import { useRequireAuth } from '../components/AppChrome';
 import {
-  Badge,
-  PrimaryButton,
-  ProgressBar,
   RADIUS,
   Screen,
-  StatChip,
   Title,
   useTokens,
 } from '../components/ui';
@@ -48,53 +44,66 @@ function SliderLabel({ text }: { text: string }) {
   );
 }
 
-/** One of the A/B preview cards. Renders a mini "app in miniature" using the
- * supplied hex so students see exactly what will happen when they save. */
-function ThemePreviewCard({
-  label,
-  color,
-  align,
-}: {
-  label: string;
-  color: Hex;
-  align: 'flex-start' | 'flex-end';
-}) {
+/** One of the two color-only swatches at the top. Literally just a colored
+ * square with a label — the "actual" theme preview is the LivePreview
+ * component next to it. */
+function ColorSwatch({ label, color }: { label: string; color: Hex }) {
+  return (
+    <YStack flex={1} gap={6}>
+      <SliderLabel text={label} />
+      <YStack height={72} borderRadius={RADIUS.card} backgroundColor={color} />
+    </YStack>
+  );
+}
+
+/** Live theme preview — a mini card that mirrors the real Badge / StatChip /
+ * ProgressBar / PrimaryButton visuals but reads its accent from a prop, so
+ * it can reflect the New color while the user drags a slider (the app's
+ * real components pull from useAccent() and only see the committed value). */
+function LivePreview({ color }: { color: Hex }) {
   const tokens = useTokens();
   return (
-    <YStack
-      flex={1}
-      backgroundColor={tokens.surface}
-      borderRadius={RADIUS.card}
-      padding={12}
-      gap={8}
-      alignItems={align}
-    >
-      <SliderLabel text={label} />
-      <XStack
-        width={44}
-        height={44}
-        borderRadius={22}
+    <YStack backgroundColor={tokens.surface} borderRadius={RADIUS.card} padding={12} gap={10}>
+      <SliderLabel text="Preview" />
+      <XStack gap={8} alignItems="center" flexWrap="wrap">
+        {/* Stat chip with a fire-red streak: streak icon is hard-coded red
+            everywhere else in the app; keep the invariant here too so this
+            preview matches what the real dashboard will show. */}
+        <YStack
+          minWidth={76}
+          backgroundColor={tokens.subtle}
+          borderRadius={18}
+          alignItems="center"
+          gap={2}
+          paddingVertical={8}
+          paddingHorizontal={6}
+        >
+          <Flame size={20} color="#ec3013" />
+          <Text fontSize={18} fontWeight="800" color={tokens.ink}>5</Text>
+          <Text fontSize={10} color={tokens.muted}>streak</Text>
+        </YStack>
+        {/* "Mastered" badge — accent-filled tint, matches Badge tier="accent" */}
+        <XStack backgroundColor={tokens.subtle} borderRadius={RADIUS.pill} paddingHorizontal={10} paddingVertical={3}>
+          <Text color={color} fontSize={12} fontWeight="700">Mastered</Text>
+        </XStack>
+        {/* "Practicing" outline badge — matches Badge tier="outline" */}
+        <XStack borderWidth={1.5} borderColor={color} borderRadius={RADIUS.pill} paddingHorizontal={10} paddingVertical={3}>
+          <Text color={color} fontSize={12} fontWeight="700">Practicing</Text>
+        </XStack>
+      </XStack>
+      {/* Progress bar mirror */}
+      <YStack height={10} backgroundColor={tokens.subtle} borderRadius={RADIUS.pill} overflow="hidden">
+        <YStack height="100%" width="72%" backgroundColor={color} borderRadius={RADIUS.pill} />
+      </YStack>
+      {/* Primary button mirror */}
+      <YStack
+        height={38}
         backgroundColor={color}
+        borderRadius={RADIUS.control}
         alignItems="center"
         justifyContent="center"
       >
-        <Flame size={22} color="#ffffff" />
-      </XStack>
-      <YStack width="100%" gap={6}>
-        <YStack height={8} backgroundColor={tokens.subtle} borderRadius={RADIUS.pill} overflow="hidden">
-          <YStack height="100%" width="72%" backgroundColor={color} borderRadius={RADIUS.pill} />
-        </YStack>
-        <YStack
-          height={30}
-          backgroundColor={color}
-          borderRadius={RADIUS.control}
-          alignItems="center"
-          justifyContent="center"
-        >
-          <Text color="#ffffff" fontWeight="800" fontSize={12}>
-            Continue →
-          </Text>
-        </YStack>
+        <Text color="#ffffff" fontWeight="800" fontSize={14}>Continue →</Text>
       </YStack>
     </YStack>
   );
@@ -127,13 +136,16 @@ export function AppearanceScreen() {
         <Title>{t('appearance')}</Title>
       </XStack>
 
-      {/* A/B preview lives at the top so the effect of every drag is visible
-          without scrolling. Current on the left, New on the right — matches
-          left-to-right reading order. */}
+      {/* Top strip: two color-only swatches (Current vs New) so the raw
+          picked hue reads at a glance, and — under them — the live
+          full-component preview that updates in sync with the New swatch
+          as the sliders drag. The New swatch and the preview share the
+          same liveColor state, so they're always in agreement. */}
       <XStack gap={10}>
-        <ThemePreviewCard label={t('currentThemeLabel')} color={accent} align="flex-start" />
-        <ThemePreviewCard label={t('newThemeLabel')} color={liveColor} align="flex-end" />
+        <ColorSwatch label={t('currentThemeLabel')} color={accent} />
+        <ColorSwatch label={t('newThemeLabel')} color={liveColor} />
       </XStack>
+      <LivePreview color={liveColor} />
 
       <ColorPicker
         value={accent}
@@ -209,22 +221,21 @@ export function AppearanceScreen() {
         </YStack>
       </ColorPicker>
 
-      <PrimaryButton justifyContent="center" onPress={() => commit(liveColor)}>
-        {t('saveColor')}
-      </PrimaryButton>
-
-      {/* Below-the-fold live component preview so users can also see the
-          accent applied to real Badges + StatChip. Redundant with the A/B
-          cards but useful for the "recently used" case where the swatch
-          tap already committed and the A/B cards show identical colors. */}
-      <YStack backgroundColor={tokens.surface} borderRadius={RADIUS.card} padding={16} gap={10}>
-        <SliderLabel text={t('previewLabel')} />
-        <XStack gap={10} alignItems="center" flexWrap="wrap">
-          <StatChip icon={<Flame size={20} color={accent} />} value={5} label="" flex={0} />
-          <Badge label="mastered" text="Mastered" />
-          <Badge label="practicing" text="Practicing" />
-        </XStack>
-        <ProgressBar ratio={0.7} />
+      {/* Save is the reliable commit on web (see file header). Filled with
+          the LIVE color so the button previews the new theme too. */}
+      <YStack
+        height={44}
+        backgroundColor={liveColor}
+        borderRadius={RADIUS.control}
+        alignItems="center"
+        justifyContent="center"
+        cursor="pointer"
+        pressStyle={{ opacity: 0.85 }}
+        onPress={() => commit(liveColor)}
+      >
+        <Text color="#ffffff" fontWeight="800" fontSize={15}>
+          {t('saveColor')}
+        </Text>
       </YStack>
     </Screen>
   );

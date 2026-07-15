@@ -8,9 +8,10 @@
  */
 import { useState } from 'react';
 import { Link } from 'solito/link';
-import { ChevronRight, Palette } from '@tamagui/lucide-icons';
+import { useRouter } from 'solito/navigation';
+import { ChevronRight, LogOut, Palette } from '@tamagui/lucide-icons';
 import { Button, Text, XStack, YStack } from 'tamagui';
-import { trpc } from '../lib/trpc';
+import { trpc, logout } from '../lib/trpc';
 import { useI18n, type Locale } from '../lib/i18n';
 import { useTheme, type ThemeMode } from '../lib/theme';
 import { getAuth, setAuth, useAuth } from '../lib/auth';
@@ -67,6 +68,7 @@ export function SettingsScreen() {
   const { t, locale, setLocale } = useI18n();
   const { mode, setMode } = useTheme();
   const tokens = useTokens();
+  const router = useRouter();
   const authed = useRequireAuth();
   const user = useAuth((s) => s.auth?.user);
 
@@ -218,7 +220,30 @@ export function SettingsScreen() {
             <ChevronRight size={18} color={tokens.ink} />
           </XStack>
         </Link>
-        <YStack />
+      </AppCard>
+
+      {/* Sign out lives at the very bottom of Options, apart from the
+          per-topic cards — a destructive-ish action shouldn't sit next to
+          things like language toggle. Red text on the accent-agnostic bad
+          color so it reads as "leaves the app" in either theme. */}
+      <AppCard gap={8}>
+        <SubTitle>{t('signOutSection')}</SubTitle>
+        <Muted>{t('signOutNote')}</Muted>
+        <Button
+          size="$3"
+          backgroundColor={COLORS.badBg}
+          color={COLORS.bad}
+          fontWeight="800"
+          borderRadius={RADIUS.control}
+          pressStyle={{ opacity: 0.85 }}
+          icon={<LogOut size={16} color={COLORS.bad} />}
+          onPress={() => {
+            void logout();
+            router.replace('/login');
+          }}
+        >
+          {t('logout')}
+        </Button>
       </AppCard>
     </Screen>
   );

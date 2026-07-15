@@ -145,10 +145,13 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
       {!studentId && role === 'student' && <JoinClassCard />}
 
       <XStack gap={8} flexWrap="wrap">
-        <StatChip icon={<Flame size={20} color={accent} />} value={data.streakDays} label={t('streak')} />
-        <StatChip icon={<Clock size={20} color={tokens.ink} />} value={Math.round(totalMinutes)} label={`${t('minutes')} / 30d`} />
+        {/* Streak flame is a fixed brand red — see curriculum.tsx for the
+            rationale; the fire signal is stronger when it doesn't shift
+            with the picked accent. Clock and Brain adopt the accent. */}
+        <StatChip icon={<Flame size={20} color="#ec3013" />} value={data.streakDays} label={t('streak')} />
+        <StatChip icon={<Clock size={20} color={accent} />} value={Math.round(totalMinutes)} label={`${t('minutes')} / 30d`} />
         <StatChip
-          icon={<Brain size={20} color={tokens.ink} />}
+          icon={<Brain size={20} color={accent} />}
           value={data.skills.filter((s) => s.label === 'mastered' || s.label === 'proficient').length}
           label={t('mastered')}
         />

@@ -50,9 +50,13 @@ export function CurriculumScreen() {
       <Title>{t('curriculum')}</Title>
 
       <XStack gap={8}>
-        <StatChip icon={<Flame size={22} color={accent} />} value={me.data?.streakDays ?? '—'} label={t('streak')} />
-        <StatChip icon={<Clock size={22} color={tokens.ink} />} value={totalMinutes} label={`${t('minutes')} / 30d`} />
-        <StatChip icon={<Brain size={22} color={tokens.ink} />} value={masteredCount ?? '—'} label={t('mastered')} />
+        {/* Streak flame is a fixed brand red — the fire signal is stronger
+            when it doesn't shift with the picked accent. Clock and Brain,
+            in contrast, are neutral progress indicators and adopt the
+            accent so the stat row still feels themed. */}
+        <StatChip icon={<Flame size={22} color="#ec3013" />} value={me.data?.streakDays ?? '—'} label={t('streak')} />
+        <StatChip icon={<Clock size={22} color={accent} />} value={totalMinutes} label={`${t('minutes')} / 30d`} />
+        <StatChip icon={<Brain size={22} color={accent} />} value={masteredCount ?? '—'} label={t('mastered')} />
       </XStack>
 
       {continueLesson && (
