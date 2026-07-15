@@ -1,9 +1,11 @@
 /**
- * Shared chrome: brand top bar (streak, reference sheet, appearance, language
- * toggle, settings, logout) and navigation. Desktop-width web gets the nav
- * links in the top bar like a traditional website; phones (native app and
- * narrow web) keep the app-style bottom tab bar (design: students on phones
- * first). Wraps every signed-in screen on web and native.
+ * Shared chrome: brand top bar (reference sheet, calculator, language toggle,
+ * logout) and navigation tabs. Desktop-width web gets the nav links in the
+ * top bar like a traditional website; phones (native app and narrow web)
+ * keep the app-style bottom tab bar. Calculator lives in the top chrome so
+ * students can pop it open from any screen without losing their place; the
+ * Options / Settings icon takes Calculator's old slot in the tab bar.
+ * Wraps every signed-in screen on web and native.
  */
 import { useEffect, type ComponentType, type ReactNode } from 'react';
 import { Platform, useWindowDimensions } from 'react-native';
@@ -15,7 +17,6 @@ import {
   Calculator,
   Library,
   LogOut,
-  Palette,
   School,
   Settings,
   Shield,
@@ -56,7 +57,9 @@ export function AppChrome({ children }: { children: ReactNode }) {
   const inactive: Hex = tokens.mode === 'dark' ? '#bab6b6' : NEUTRAL[700];
 
   // Admins get the governance console; teachers get the class dashboard;
-  // students/guardians get the learner tabs.
+  // students/guardians get the learner tabs. Calculator has moved out of
+  // the tab bar and into the top chrome (available from every screen so
+  // students never lose their spot), and Settings takes its slot here.
   const tabs =
     auth?.user.role === 'admin'
       ? [{ href: '/admin', icon: Shield, label: t('admin') }]
@@ -67,7 +70,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
             { href: '/sprint', icon: Zap, label: t('sprint') },
             { href: '/review', icon: Library, label: t('review') },
             { href: '/progress', icon: TrendingUp, label: t('progress') },
-            { href: '/calculator', icon: Calculator, label: t('calculator') },
+            { href: '/settings', icon: Settings, label: t('settings') },
           ];
 
   const { width } = useWindowDimensions();
@@ -115,17 +118,12 @@ export function AppChrome({ children }: { children: ReactNode }) {
         </XStack>
         <XStack gap={8} alignItems="center">
           {auth && <ReferenceSheetButton compact={!topNav} />}
+          {/* Calculator is chrome-level now — reachable from every screen
+              without navigating away from the current lesson/practice. */}
           {auth && (
-            <Link href="/appearance">
-              <Button size="$2" {...CHROME_BTN} aria-label={t('appearance')}>
-                <Palette size={15} color={tokens.ink} />
-              </Button>
-            </Link>
-          )}
-          {auth && (
-            <Link href="/settings">
-              <Button size="$2" {...CHROME_BTN} aria-label={t('settings')}>
-                <Settings size={15} color={tokens.ink} />
+            <Link href="/calculator">
+              <Button size="$2" {...CHROME_BTN} aria-label={t('calculator')}>
+                <Calculator size={15} color={tokens.ink} />
               </Button>
             </Link>
           )}
