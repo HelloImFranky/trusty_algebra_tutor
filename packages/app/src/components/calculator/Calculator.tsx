@@ -24,20 +24,22 @@ const TABS: { id: CalcTab; label: I18nKey }[] = [
   { id: 'table', label: 'tableTab' },
 ];
 
-export function Calculator() {
+export function Calculator({ compact = false }: { compact?: boolean } = {}) {
   const { t } = useI18n();
   const tab = useCalculatorStore((s) => s.tab);
   const setTab = useCalculatorStore((s) => s.setTab);
   useSessionSync();
 
   return (
-    <AppCard gap={12}>
+    // Compact drops AppCard's outer padding so a chrome-sheet render
+    // gets its own padding from the wrapper instead of double-padding.
+    <AppCard gap={compact ? 8 : 12} padding={compact ? 10 : 16}>
       <XStack gap={4} backgroundColor="#f1f3f9" borderRadius={12} padding={3}>
         {TABS.map(({ id, label }) => (
           <Button
             key={id}
             flex={1}
-            size="$3"
+            size={compact ? '$2' : '$3'}
             borderRadius={10}
             backgroundColor={tab === id ? '#fff' : 'transparent'}
             color={tab === id ? BRAND : '#6b7280'}
@@ -51,9 +53,9 @@ export function Calculator() {
         ))}
       </XStack>
       <YStack display={tab === 'calc' ? 'flex' : 'none'}>
-        <CalcView />
+        <CalcView compact={compact} />
       </YStack>
-      {tab === 'graph' && <GraphView />}
+      {tab === 'graph' && <GraphView compact={compact} />}
       {tab === 'table' && <TableView />}
     </AppCard>
   );

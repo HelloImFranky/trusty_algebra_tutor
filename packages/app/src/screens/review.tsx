@@ -301,11 +301,22 @@ function TopicQuiz({ slug, onExit }: { slug: string; onExit: () => void }) {
 
   return (
     <Screen maxWidth={720}>
-      <XStack justifyContent="space-between" alignItems="center">
-        <Title>
+      <XStack justifyContent="space-between" alignItems="center" gap={8}>
+        {/* flexShrink so the title yields room to the Back button, and
+            numberOfLines={1} so long topic names ("Exponents & Radicals",
+            "Solving Linear Equations") never wrap to two lines. Slightly
+            smaller than the shared Title to keep the header compact. */}
+        <Text
+          flexShrink={1}
+          fontSize={20}
+          fontWeight="800"
+          color={tokens.ink}
+          numberOfLines={1}
+          marginVertical={4}
+        >
           {topic.data.icon} {topic.data.title}
-        </Title>
-        <GhostButton size="$2" onPress={onExit}>
+        </Text>
+        <GhostButton size="$2" onPress={onExit} flexShrink={0}>
           ← {t('backToTopics')}
         </GhostButton>
       </XStack>

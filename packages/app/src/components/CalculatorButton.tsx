@@ -36,7 +36,10 @@ export function CalculatorButton() {
         open={open}
         onOpenChange={setOpen}
         snapPointsMode="percent"
-        snapPoints={[90]}
+        // 95% (up from 90) gives the calc + graph a bit more vertical
+        // room; anything more than 95 loses the "peek the page behind"
+        // signal that this is a modal-over-your-work.
+        snapPoints={[95]}
         dismissOnSnapToBottom
         // Sheet drag competes with the inner ScrollViews/wheels on web
         // and can strand them unscrollable; overlay + ✕ dismiss there.
@@ -48,8 +51,8 @@ export function CalculatorButton() {
             justifyContent="space-between"
             alignItems="center"
             paddingHorizontal={18}
-            paddingTop={14}
-            paddingBottom={8}
+            paddingTop={12}
+            paddingBottom={6}
             borderBottomWidth={1}
             borderBottomColor={tokens.chromeBorder}
           >
@@ -59,9 +62,16 @@ export function CalculatorButton() {
             </Button>
           </XStack>
           <Sheet.ScrollView flex={1}>
-            <XStack padding={12} paddingBottom={40}>
-              <XStack flex={1} maxWidth={720} marginHorizontal="auto">
-                <Calculator />
+            {/* Tighter horizontal padding and a narrower max-width so
+                buttons stay a comfortable finger-size at the constrained
+                sheet width — a full 720px would spread digit keys too far
+                apart at desktop sheet widths. `compact` shortens sci /
+                main button rows and shrinks the graph plot height so the
+                whole calc fits without the ScrollView having to scroll on
+                a typical laptop viewport. */}
+            <XStack paddingHorizontal={8} paddingTop={8} paddingBottom={28}>
+              <XStack flex={1} maxWidth={560} marginHorizontal="auto">
+                <Calculator compact />
               </XStack>
             </XStack>
           </Sheet.ScrollView>

@@ -35,7 +35,7 @@ const QUICK_KEYS: { label: string; insert: string; aria: string }[] = [
   { label: '|x|', insert: 'abs(', aria: 'absolute value' },
 ];
 
-export function GraphView() {
+export function GraphView({ compact = false }: { compact?: boolean } = {}) {
   const { t } = useI18n();
   const tokens = useTokens();
   const window = useCalculatorStore((s) => s.window);
@@ -213,7 +213,16 @@ export function GraphView() {
         </GhostButton>
       </XStack>
 
-      <GraphPlot fns={plotted} window={window} onWindowChange={setWindow} markers={markers} />
+      {/* Compact mode (sheet render): shorter plot so the whole graph
+          view — inputs + quick-keys + zoom row + plot + analysis —
+          fits without the popover having to scroll. */}
+      <GraphPlot
+        fns={plotted}
+        window={window}
+        onWindowChange={setWindow}
+        markers={markers}
+        {...(compact ? { height: 240 } : {})}
+      />
       {Platform.OS === 'web' && <Muted>{t('graphHint')}</Muted>}
 
       {plotted.length > 0 && (

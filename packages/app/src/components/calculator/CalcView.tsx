@@ -128,7 +128,7 @@ const KEY_STYLE: Record<Variant, { bg: Hex; press: Hex; color: Hex; fontSize: nu
   op: { bg: '#ff9f0a', press: '#e68e00', color: '#ffffff', fontSize: 24, height: 52 },
 };
 
-export function CalcView() {
+export function CalcView({ compact = false }: { compact?: boolean } = {}) {
   const { t } = useI18n();
   const input = useCalculatorStore((s) => s.input);
   const inputError = useCalculatorStore((s) => s.inputError);
@@ -215,20 +215,28 @@ export function CalcView() {
     const memDisabled =
       (key.action === 'memClear' || key.action === 'memRecall') && memory == null;
     const s = KEY_STYLE[variant];
+    // Compact mode (sheet render): trim ~25% off each row height and drop
+    // sci font a hair so the full calc fits inside the popover sheet.
+    const height = compact
+      ? variant === 'sci' ? 30 : 42
+      : s.height;
+    const fontSize = compact
+      ? variant === 'sci' ? 12 : variant === 'op' ? 20 : variant === 'digit' ? 17 : s.fontSize
+      : s.fontSize;
     const latched = isSecondToggle && second;
     return (
       <Button
         key={key.action ?? key.label}
         flex={1}
         flexBasis={0}
-        height={s.height}
+        height={height}
         minWidth={0}
         paddingHorizontal={0}
         borderRadius={999}
         backgroundColor={latched ? '#374151' : s.bg}
         color={latched ? '#ffffff' : s.color}
         fontWeight="600"
-        fontSize={s.fontSize}
+        fontSize={fontSize}
         disabled={memDisabled}
         opacity={memDisabled ? 0.4 : 1}
         hoverStyle={{ backgroundColor: latched ? '#374151' : s.press }}
@@ -241,7 +249,7 @@ export function CalcView() {
             ellipsis for math glyphs where a "…" would misread. */}
         <Text
           color={latched ? '#ffffff' : s.color}
-          fontSize={s.fontSize}
+          fontSize={fontSize}
           fontWeight="600"
           numberOfLines={1}
           ellipsizeMode="clip"
@@ -340,17 +348,18 @@ export function CalcView() {
       {/* Sci and main pads share the same gap (8) so the two grids read as
           one aligned surface — 6-column sci above a 4-column main means
           columns still stagger, but the consistent gutter makes the
-          alignment feel intentional rather than fragmentary. */}
-      <YStack gap={8}>
+          alignment feel intentional rather than fragmentary. Compact
+          mode uses a tighter gap so the pad fits in the popover sheet. */}
+      <YStack gap={compact ? 5 : 8}>
         {SCI_KEYS.map((row, ri) => (
-          <XStack key={ri} gap={8}>
+          <XStack key={ri} gap={compact ? 5 : 8}>
             {row.map((key) => renderKey(key, 'sci'))}
           </XStack>
         ))}
       </YStack>
-      <YStack gap={8}>
+      <YStack gap={compact ? 6 : 8}>
         {MAIN_KEYS.map((row, ri) => (
-          <XStack key={ri} gap={8}>
+          <XStack key={ri} gap={compact ? 6 : 8}>
             {row.map(({ key, variant }) => renderKey(key, variant))}
           </XStack>
         ))}
