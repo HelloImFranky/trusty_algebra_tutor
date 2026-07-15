@@ -12,7 +12,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, Animated, Easing, Platform, Text as RNText, View } from 'react-native';
 import { Text, XStack } from 'tamagui';
 import { useI18n } from '../../lib/i18n';
-import { AppCard, BRAND, COLORS, GhostButton, PrimaryButton, SecondaryButton } from '../ui';
+import { AppCard, BRAND, COLORS, GhostButton, PrimaryButton, SecondaryButton, useAccent, type Hex } from '../ui';
 import { BalanceScale } from './BalanceScale';
 import { stepToText, type EqScript, type EqToken } from './model';
 
@@ -33,9 +33,12 @@ interface TokenAnim {
   o: Animated.Value;
 }
 
-function tokenStyle(tok: EqToken) {
+/** `accent` defaults to the static brand color for the layout-measurement
+ * pass (see layoutStep), where only whether a token has a bg matters; the
+ * live theme color is threaded in for the actual render below. */
+function tokenStyle(tok: EqToken, accent: Hex = BRAND) {
   let color: string =
-    tok.kind === 'var' ? BRAND : tok.kind === 'num' || tok.kind === 'frac' ? '#111827' : '#6b7280';
+    tok.kind === 'var' ? accent : tok.kind === 'num' || tok.kind === 'frac' ? '#111827' : '#6b7280';
   let bg: string | undefined;
   let strike = false;
   switch (tok.emph) {
@@ -48,7 +51,7 @@ function tokenStyle(tok: EqToken) {
       bg = COLORS.goodBg;
       break;
     case 'focus':
-      color = BRAND;
+      color = accent;
       bg = '#eef1fd';
       break;
     case 'cancel':
@@ -129,6 +132,7 @@ export function AnimatedEquation({
   startAtStep?: number;
 }) {
   const { t, locale } = useI18n();
+  const accent = useAccent();
   const [index, setIndex] = useState(() =>
     Math.min(Math.max(0, startAtStep), script.steps.length - 1),
   );
@@ -387,7 +391,7 @@ export function AnimatedEquation({
           style={{ width: '100%', height: stageH, transform: [{ scale: lineScale }] }}
         >
         {[...exiting, ...step.tokens].map((tok) => {
-          const st = tokenStyle(tok);
+          const st = tokenStyle(tok, accent);
           const a = getAnim(tok.id);
           return (
             <Animated.View
@@ -487,7 +491,7 @@ export function AnimatedEquation({
               width: 8,
               height: 8,
               borderRadius: 999,
-              backgroundColor: i < index ? COLORS.good : i === index ? BRAND : '#d1d5db',
+              backgroundColor: i < index ? COLORS.good : i === index ? accent : '#d1d5db',
             }}
           />
         ))}

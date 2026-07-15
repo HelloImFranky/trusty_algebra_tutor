@@ -9,7 +9,7 @@
  */
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, Platform, Text as RNText, View } from 'react-native';
-import { BRAND, COLORS } from '../ui';
+import { COLORS, useAccent } from '../ui';
 import { sideToText, splitSides, type EqStep } from './model';
 
 const NATIVE = Platform.OS !== 'web';
@@ -48,6 +48,7 @@ function Pan({ text, tint, textColor }: { text: string; tint: string; textColor:
 }
 
 export function BalanceScale({ step, wobble }: { step: EqStep; wobble: boolean }) {
+  const accent = useAccent();
   const tilt = useRef(new Animated.Value(0)).current;
 
   // Wobble and settle whenever an "apply to both sides" step arrives.
@@ -97,7 +98,7 @@ export function BalanceScale({ step, wobble }: { step: EqStep; wobble: boolean }
           }}
         />
         <View style={{ flexDirection: 'row', width: BEAM_W, justifyContent: 'space-between' }}>
-          <Pan text={sideToText(left)} tint="#eef1fd" textColor={BRAND} />
+          <Pan text={sideToText(left)} tint="#eef1fd" textColor={accent} />
           <Pan text={sideToText(right)} tint={COLORS.goodBg} textColor={COLORS.good} />
         </View>
       </Animated.View>

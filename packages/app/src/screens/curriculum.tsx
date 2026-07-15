@@ -5,7 +5,6 @@ import { Text, XStack, YStack } from 'tamagui';
 import { trpc } from '../lib/trpc';
 import { useI18n, type I18nKey } from '../lib/i18n';
 import { useRequireAuth } from '../components/AppChrome';
-import { Mascot } from '../components/Mascot';
 import {
   AppCard, Badge, Feedback, IconCircle, Loading, Screen, StatChip,
   Title, useAccent, INK, NEUTRAL,
@@ -48,8 +47,6 @@ export function CurriculumScreen() {
   return (
     <Screen maxWidth={980}>
       <Title>{t('curriculum')}</Title>
-
-      <Mascot size={130} radius={24} />
 
       <XStack gap={8}>
         <StatChip icon={<Flame size={22} color={accent} />} value={me.data?.streakDays ?? '—'} label={t('streak')} />
