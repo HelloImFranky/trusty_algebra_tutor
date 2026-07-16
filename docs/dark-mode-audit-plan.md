@@ -158,23 +158,36 @@ never need to catch it by eye again.
 
 ---
 
-## Phase C — visual regression net (optional, high-value)
+## Phase C — visual regression net — **shipped**
 
-**Goal.** Prove theming stays intact through future refactors.
+Playwright suite under `apps/web/e2e/`, three spec files. Rundown +
+"when a snapshot fails" flow lives in `docs/visual-snapshots.md`.
 
-**Tasks.**
-1. Add a Playwright snapshot test per major screen in both light and
-   dark modes. Landing on curriculum, progress, review, lesson,
-   practice, calculator, settings, appearance — 8 screens × 2 modes
-   = 16 snapshots.
-2. Run in CI on every PR that touches `packages/app/`. Any diff
-   requires human approval to update the snapshot.
-3. Include one snapshot of the Regents quiz mid-answer (the deep
-   green/red feedback) and one of the graph tab in the popover sheet
-   at both desktop and 400px mobile widths.
+- **9 screens × 2 modes × 2 viewports** — curriculum, progress, review,
+  practice, sprint, examples, calculator, settings, appearance —
+  captured in light + dark on both desktop (1280×900) and mobile
+  (Pixel 7). See `e2e/screens.spec.ts`.
+- **Feedback banners** — the four `useFeedbackColors` variants
+  (good/bad/warn/hint) rendered into an isolated demo page so the
+  baseline doesn't drift with content edits. See
+  `e2e/feedback-banners.spec.ts`.
+- **Mobile calculator sheet** — dedicated shot per mode; guards Bug 17
+  (graph responsive to container width) and the deliberate
+  light-iOS-chassis exception. See `e2e/calculator-mobile.spec.ts`.
 
-**Done when.** A change that inadvertently colors something wrong
-in dark mode is caught by CI, not by a user report.
+Auth is handled by a fixture that registers a `snapshot_student` user
+against the real API on first run; theme mode is primed in
+localStorage before each `page.goto` so the first paint already
+matches the target mode (no light-mode flash captured in the
+screenshot).
+
+Note vs. original plan: `/lesson/[id]` needed a curriculum id
+fixture we didn't want to bake into the harness; the shared banner
+surface is what tends to break in that view and the feedback-banners
+spec covers it directly.
+
+**Done when.** A change that inadvertently colors something wrong in
+dark mode is caught by CI, not by a user report.  ✓
 
 ---
 

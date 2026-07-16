@@ -18,3 +18,9 @@ packages/db/src/migrationsData.ts
 *.tsbuildinfo
 .vercel
 .env*
+
+# Playwright: keep committed baselines under e2e/__screenshots__/ but
+# ignore per-run outputs so failed diffs never accidentally get staged.
+apps/web/test-results/
+apps/web/playwright-report/
+apps/web/e2e/.auth/
