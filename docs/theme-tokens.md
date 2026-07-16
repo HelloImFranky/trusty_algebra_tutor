@@ -131,9 +131,10 @@ triggers the check. Existing pinned callsites:
 - **Scaffold image bg** in `screens/lesson.tsx` (`#fff`) — teacher-
   supplied JPGs with white matte; clipping to a themed bg would
   crop transparent regions.
-- **`ffffff` on active SegmentedOption text** in `settings.tsx` — the
-  segmented pill fills with the accent (which could be any color)
-  and white text is the accent-safe contrast.
+- **`ffffff` on accent-filled pill text** — `settings.tsx`
+  SegmentedOption and `UsageDashboard.tsx` UsageWindowPicker. The pill
+  fills with the accent (which could be any color) and white text is
+  the accent-safe contrast.
 - **Timer alerts** in `screens/sprint.tsx` (`COLORS.bad`, `COLORS.warn`)
   — time-critical signals that keep their traffic-light semantics.
 

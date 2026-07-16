@@ -843,6 +843,19 @@ describe('admin approval (teacher provisioning)', () => {
     });
   });
 
+  it('gates the usage dashboard to admins and fails safe without an admin key', async () => {
+    // A student never reaches the Admin API call — rejected at the role gate.
+    await expect(as(student).admin.usage.summary({ window: '30d' })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    // With no ANTHROPIC_ADMIN_KEY configured, the endpoint degrades to
+    // unavailable rather than erroring — the UI then shows the Console
+    // link-out card. (The key is read at call time, so deleting here works.)
+    delete process.env.ANTHROPIC_ADMIN_KEY;
+    const res = await as(admin).admin.usage.summary({ window: '7d' });
+    expect(res).toEqual({ available: false, summary: null });
+  });
+
   it('approves a teacher, unlocking teacher features', async () => {
     await as(admin).admin.teachers.approve({ userId: pendingTeacher.id });
     // Re-login: the server reloads role/status from the DB each request.

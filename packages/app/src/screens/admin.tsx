@@ -1,9 +1,18 @@
-/** Admin console: approve / reject / disable teacher accounts (governance). */
+/** Admin console: approve / reject / disable teacher accounts (governance),
+ * plus AI-tutor usage & billing. When the server has an Anthropic Admin
+ * key configured (admin.usage.summary → available), the card renders the
+ * numbers natively — spend, tokens, cache hit rate, daily trend, per-model
+ * split; otherwise it falls back to a link-out to the Anthropic Console,
+ * which needs no secret at all. Either way the browser only ever receives
+ * aggregated numbers. See docs/tutor-usage-dashboard-plan.md. */
+import { useState } from 'react';
+import { Linking } from 'react-native';
 import { Text, XStack, YStack } from 'tamagui';
 import { trpc } from '../lib/trpc';
 import { useI18n, type I18nKey } from '../lib/i18n';
 import { useAuth } from '../lib/auth';
 import { useRequireAuth } from '../components/AppChrome';
+import { UsageDashboard, UsageWindowPicker } from '../components/UsageDashboard';
 import {
   AppCard,
   Badge,
@@ -15,7 +24,13 @@ import {
   Screen,
   SubTitle,
   Title,
+  useAccent,
 } from '../components/ui';
+
+// Console root — lands on the dashboard where usage, billing, and per-model
+// token stats live. Kept to the root (not a deep settings path) so it can't
+// rot into a 404 if Anthropic reorganizes its settings routes.
+const ANTHROPIC_CONSOLE_URL = 'https://platform.claude.com/';
 
 const STATUS_KEY: Record<string, I18nKey> = {
   active: 'statusActive',
@@ -25,13 +40,16 @@ const STATUS_KEY: Record<string, I18nKey> = {
 
 export function AdminScreen() {
   const { t } = useI18n();
+  const accent = useAccent();
   const authed = useRequireAuth();
   const role = useAuth((s) => s.auth?.user.role);
   const isAdmin = authed && role === 'admin';
   const utils = trpc.useUtils();
+  const [usageWindow, setUsageWindow] = useState<'7d' | '30d'>('30d');
 
   const pending = trpc.admin.teachers.listPending.useQuery(undefined, { enabled: isAdmin });
   const all = trpc.admin.teachers.list.useQuery(undefined, { enabled: isAdmin });
+  const usage = trpc.admin.usage.summary.useQuery({ window: usageWindow }, { enabled: isAdmin });
 
   const refresh = () => {
     void utils.admin.teachers.listPending.invalidate();
@@ -101,6 +119,39 @@ export function AdminScreen() {
             </XStack>
           </XStack>
         ))}
+      </AppCard>
+
+      <AppCard gap={8}>
+        <XStack justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={8}>
+          <SubTitle>📊 {t('usageBillingTitle')}</SubTitle>
+          {usage.data?.available && (
+            <UsageWindowPicker value={usageWindow} onChange={setUsageWindow} />
+          )}
+        </XStack>
+        {usage.isLoading && <Loading />}
+        {usage.data?.available && usage.data.summary ? (
+          <>
+            <UsageDashboard summary={usage.data.summary} />
+            <Muted size={10.5}>{t('usageFreshnessNote')}</Muted>
+          </>
+        ) : (
+          // No admin key configured (or the report errored) — fall back to
+          // the zero-secret link-out. Never a hard error.
+          !usage.isLoading && <Muted>{t('usageBillingNote')}</Muted>
+        )}
+        <Text
+          fontWeight="800"
+          fontSize={15}
+          color={accent}
+          cursor="pointer"
+          hoverStyle={{ opacity: 0.8 }}
+          pressStyle={{ opacity: 0.6 }}
+          onPress={() => {
+            void Linking.openURL(ANTHROPIC_CONSOLE_URL);
+          }}
+        >
+          {t('openAnthropicConsole')}
+        </Text>
       </AppCard>
     </Screen>
   );
