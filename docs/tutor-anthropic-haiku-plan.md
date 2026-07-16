@@ -28,6 +28,13 @@ gated on sign-off (see "Rollout checklist" at the end).
    session token could run up usage. We already rate-limit (10/min),
    cap turns per session, and require auth. We add an Anthropic-side
    spend limit + a dedicated scoped key as backstops.
+5. **Two separate keys, both server-side.** The *tutor* key (`sk-ant-…`,
+   inference, one workspace) is what students' chat runs on. Showing
+   Anthropic's billing/token stats in the admin view needs a *different,
+   more privileged* **Admin API key** (`sk-ant-admin…`, org-scoped). Yes —
+   that one is secured too, and **more strictly**: admin-role-gated,
+   server-only, never client-exposed, treated as break-glass. See
+   "Surfacing usage & billing in the admin view" below.
 
 ---
 
@@ -163,6 +170,64 @@ one-click key regenerate + one Vercel env update — no code change.
 
 ---
 
+## Surfacing usage & billing in the app's admin view
+
+The app already has an `admin` role and an `/admin` route. Anthropic's
+statistics — token usage and spend — can live there so an admin sees them
+without leaving the app. Two ways, pick per how native it needs to feel.
+
+### Option 1 — Link out to the Anthropic Console (zero secrets)
+
+Put a card/link in the admin view pointing at the Anthropic Console's
+usage & billing dashboards (`platform.claude.com`). The admin logs into
+Anthropic directly with their own Anthropic account; **no key of any kind
+is involved**, nothing is proxied, nothing can leak. Simplest and safest —
+recommended unless you specifically need the numbers rendered in-app.
+
+### Option 2 — Render usage/billing natively via the Admin/Usage API
+
+To draw the charts inside our own admin view, we pull the numbers from
+Anthropic's **Admin API** (the Usage & Cost reporting endpoints). **This
+requires a different, more privileged key than the tutor key** — an
+**Admin API key** (`sk-ant-admin…`), created by an org admin, scoped at
+the *organization* level (not a single workspace). It can read usage and
+cost across the org and manage workspaces/members/keys.
+
+### "Will the billing/usage key also be secured?" — yes, and more strictly
+
+Short answer: **yes.** The two keys are separate on purpose, and the admin
+key is the *more* sensitive of the two — so it gets the same protections
+as the tutor key **plus extra**:
+
+| Concern | Tutor key (`sk-ant-…`) | Admin/usage key (`sk-ant-admin…`) |
+|---|---|---|
+| Privilege | Inference only, one workspace | Org-wide: usage, cost, member & key management |
+| Where it lives | Vercel env var, server-side only | Vercel env var, server-side only |
+| Client exposure | Never (`NEXT_PUBLIC_` forbidden) | Never — **even more critical** |
+| Who can trigger a call | Any logged-in student (tutor) | **Admin-role users only** — the server endpoint is gated to `role === 'admin'` |
+| Blast radius if leaked | One capped workspace | Whole org — treat as break-glass |
+| Rotation | On suspicion | On suspicion, **and on a schedule** |
+
+Concretely, if we do Option 2:
+- The admin key is read **only** in a server-side, **admin-role-gated**
+  tRPC/route handler (mirror the existing `/admin` auth check). It is
+  never read anywhere a student request can reach.
+- Same proxy shape as the tutor: the browser calls *our* admin endpoint;
+  our server calls Anthropic's Admin API; only the rendered numbers (not
+  the key) go back to the browser.
+- Same hard rules apply, doubly: no `NEXT_PUBLIC_`, no client-side call to
+  Anthropic, never committed, never logged.
+- Because it's org-privileged, prefer **read-scoped** usage/cost access if
+  Anthropic offers a narrower scope, keep it in its own Vercel var
+  (`ANTHROPIC_ADMIN_KEY`), and rotate it on a schedule as break-glass.
+
+**Recommendation:** start with **Option 1** (link-out) — it delivers the
+admin-facing stats with zero new secret to secure. Move to Option 2 only
+if you want the numbers rendered inside the app, and treat the admin key
+as a higher-sensitivity credential than the tutor key when you do.
+
+---
+
 ## Pricing per token, by model
 
 Anthropic bills per **million tokens (MTok)**, separately for input and
@@ -215,6 +280,14 @@ part of why Haiku is the right default here.)
    reply and that `getTutorProvider()` reports `anthropic` / `claude-haiku-4-5`.
 6. Confirm the key is absent from the client bundle (grep the built
    client output for `sk-ant` — expect zero hits).
+7. Admin-view stats: add a link-out card to the Anthropic Console in
+   `/admin` (Option 1, no secret). Only if native in-app charts are
+   wanted, do Option 2 — create an org **Admin API key**, store it as a
+   separate `ANTHROPIC_ADMIN_KEY` Vercel var, and read it **only** from an
+   admin-role-gated server endpoint (never client-exposed, never
+   `NEXT_PUBLIC_`).
 
-No application code changes are required for the switch itself; items 3–4
-are small, optional polish.
+The switch itself (items 1–6) needs no application code beyond the small
+optional polish in items 3–4. Item 7 Option 2 is a separate feature —
+a new admin-gated endpoint + UI — and would be planned/estimated on its
+own.
