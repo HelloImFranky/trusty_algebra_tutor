@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Text, XStack, YStack } from 'tamagui';
 import { tableValues } from '@tutor/core';
 import { useI18n } from '../../lib/i18n';
-import { AppInput, Muted, SecondaryButton, COLORS } from '../ui';
+import { AppInput, Muted, SecondaryButton, useTokens } from '../ui';
 import { useCalculatorStore } from './store';
 import { useCompiledFns } from './useCompiledFns';
 
@@ -14,6 +14,7 @@ const ROWS = 12;
 
 export function TableView() {
   const { t } = useI18n();
+  const tokens = useTokens();
   const start = useCalculatorStore((s) => s.tableStart);
   const step = useCalculatorStore((s) => s.tableStep);
   const setTable = useCalculatorStore((s) => s.setTable);
@@ -54,7 +55,7 @@ export function TableView() {
       <XStack gap={12} alignItems="center">
         <YStack gap={8} flexShrink={1}>
           <XStack gap={10} alignItems="center">
-            <Text fontWeight="700" width={106} numberOfLines={1}>
+            <Text fontWeight="700" width={106} numberOfLines={1} color={tokens.ink}>
               {t('startAt')}
             </Text>
             <AppInput
@@ -65,12 +66,14 @@ export function TableView() {
                 setTable(num(v, start), step);
               }}
               inputMode="numeric"
-              backgroundColor="#fff"
+              color={tokens.ink}
+              backgroundColor={tokens.surface}
+              borderColor={tokens.border}
               aria-label={t('startAt')}
             />
           </XStack>
           <XStack gap={10} alignItems="center">
-            <Text fontWeight="700" width={106} numberOfLines={1}>
+            <Text fontWeight="700" width={106} numberOfLines={1} color={tokens.ink}>
               Δx =
             </Text>
             <AppInput
@@ -81,7 +84,9 @@ export function TableView() {
                 setTable(start, num(v, step) || 1);
               }}
               inputMode="numeric"
-              backgroundColor="#fff"
+              color={tokens.ink}
+              backgroundColor={tokens.surface}
+              borderColor={tokens.border}
               aria-label="Δx"
             />
           </XStack>
@@ -99,9 +104,9 @@ export function TableView() {
       {plotted.length === 0 ? (
         <Muted>{t('graphTab')} →</Muted>
       ) : (
-        <YStack borderWidth={1} borderColor={COLORS.border} borderRadius={10} overflow="hidden">
-          <XStack backgroundColor="#f8f9fb" paddingVertical={8} paddingHorizontal={10}>
-            <Text flex={1} fontWeight="800" color="#111827">
+        <YStack borderWidth={1} borderColor={tokens.border} borderRadius={10} overflow="hidden">
+          <XStack backgroundColor={tokens.subtle} paddingVertical={8} paddingHorizontal={10}>
+            <Text flex={1} fontWeight="800" color={tokens.ink}>
               x
             </Text>
             {plotted.map((r, i) => (
@@ -115,13 +120,13 @@ export function TableView() {
               key={row.x}
               paddingVertical={6}
               paddingHorizontal={10}
-              backgroundColor={ri % 2 ? '#fbfcfe' : '#fff'}
+              backgroundColor={ri % 2 ? tokens.subtle : tokens.surface}
             >
-              <Text flex={1} fontWeight="700" color="#111827">
+              <Text flex={1} fontWeight="700" color={tokens.ink}>
                 {row.x}
               </Text>
               {row.values.map((v, vi) => (
-                <Text key={vi} flex={1} color="#374151" numberOfLines={1}>
+                <Text key={vi} flex={1} color={tokens.muted} numberOfLines={1}>
                   {v}
                 </Text>
               ))}

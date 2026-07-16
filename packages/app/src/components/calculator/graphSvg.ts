@@ -97,9 +97,15 @@ export function renderGraphSvg(opts: {
     );
   }
 
+  // Explicit width="100%" (plus max-width in inline style) so the SVG can
+  // never overflow its container — the viewBox handles the coord mapping
+  // even when the width state briefly lags behind the container measurement
+  // (e.g. sheet open + orientation change on mobile). preserveAspectRatio
+  // stays default so ticks and curves scale uniformly.
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" ` +
-    `viewBox="0 0 ${width} ${height}" style="display:block;background:#fff">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="${height}" ` +
+    `viewBox="0 0 ${width} ${height}" ` +
+    `style="display:block;background:#fff;max-width:100%">` +
     parts.join('') +
     '</svg>'
   );

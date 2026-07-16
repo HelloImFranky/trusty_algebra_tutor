@@ -3,10 +3,11 @@ import { useState } from 'react';
 import { XStack, YStack } from 'tamagui';
 import { trpc } from '../lib/trpc';
 import { useI18n } from '../lib/i18n';
-import { AppCard, AppInput, Feedback, Muted, PrimaryButton, SubTitle, COLORS } from './ui';
+import { AppCard, AppInput, Feedback, Muted, PrimaryButton, SubTitle, useTokens } from './ui';
 
 export function JoinClassCard() {
   const { t } = useI18n();
+  const tokens = useTokens();
   const [code, setCode] = useState('');
   const utils = trpc.useUtils();
   const join = trpc.teacher.classes.join.useMutation({
@@ -28,8 +29,8 @@ export function JoinClassCard() {
             placeholder={t('enterCode')}
             autoCapitalize="characters"
             autoCorrect={false}
-            backgroundColor="#fff"
-            borderColor={COLORS.border}
+            backgroundColor={tokens.surface}
+            borderColor={tokens.border}
           />
         </YStack>
         <PrimaryButton

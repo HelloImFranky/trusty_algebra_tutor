@@ -12,7 +12,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, Animated, Easing, Platform, Text as RNText, View } from 'react-native';
 import { Text, XStack } from 'tamagui';
 import { useI18n } from '../../lib/i18n';
-import { AppCard, BRAND, COLORS, GhostButton, PrimaryButton, SecondaryButton } from '../ui';
+import { AppCard, BRAND, COLORS, GhostButton, PrimaryButton, SecondaryButton, useAccent, useTokens, type Hex } from '../ui';
 import { BalanceScale } from './BalanceScale';
 import { stepToText, type EqScript, type EqToken } from './model';
 
@@ -33,31 +33,74 @@ interface TokenAnim {
   o: Animated.Value;
 }
 
-function tokenStyle(tok: EqToken) {
+/** Palette of theme-aware bg + fg pairs for emphasis states — passed into
+ * the pure `tokenStyle` from the render callsite so hooks stay in the
+ * component. `focus` deliberately keeps its pale-blue bg in both modes
+ * (per design: the blue "look here" tint is part of the storyboard's
+ * mental model and shouldn't shift with the theme). */
+interface EmphasisPalette {
+  apply: { color: string; bg: string };
+  result: { color: string; bg: string };
+  flip: { color: string; bg: string };
+  cancelColor: string;
+  focusBg: string;
+}
+
+const LIGHT_EMPHASIS: EmphasisPalette = {
+  apply: { color: COLORS.warn, bg: COLORS.warnBg },
+  result: { color: COLORS.good, bg: COLORS.goodBg },
+  flip: { color: COLORS.bad, bg: COLORS.badBg },
+  cancelColor: '#9ca3af',
+  focusBg: '#eef1fd',
+};
+
+const DARK_EMPHASIS: EmphasisPalette = {
+  // Deep-tinted bgs so tokens still read as their emphasis color against
+  // the dark card, without the pale bg washing out.
+  apply: { color: COLORS.warn, bg: COLORS.warnBgDark },
+  result: { color: COLORS.goodInkDark, bg: COLORS.goodBgDark },
+  flip: { color: COLORS.badInkDark, bg: COLORS.badBgDark },
+  cancelColor: '#bab6b6', // lighter than #9ca3af so struck-out text stays visible
+  focusBg: '#eef1fd',      // deliberately unchanged — see EmphasisPalette comment
+};
+
+/** `accent` defaults to the static brand color for the layout-measurement
+ * pass (see layoutStep), where only whether a token has a bg matters; the
+ * live theme color is threaded in for the actual render below. `ink` and
+ * `muted` follow useTokens() at the callsite so num/frac/op tokens read
+ * correctly in dark mode. `emphasis` picks between LIGHT_EMPHASIS and
+ * DARK_EMPHASIS so tinted bg + fg pairs also adapt. */
+function tokenStyle(
+  tok: EqToken,
+  accent: Hex = BRAND,
+  ink: string = '#111827',
+  muted: string = '#6b7280',
+  emphasis: EmphasisPalette = LIGHT_EMPHASIS,
+) {
   let color: string =
-    tok.kind === 'var' ? BRAND : tok.kind === 'num' || tok.kind === 'frac' ? '#111827' : '#6b7280';
+    tok.kind === 'var' ? accent : tok.kind === 'num' || tok.kind === 'frac' ? ink : muted;
   let bg: string | undefined;
   let strike = false;
   switch (tok.emph) {
     case 'apply':
-      color = COLORS.warn;
-      bg = COLORS.warnBg;
+      color = emphasis.apply.color;
+      bg = emphasis.apply.bg;
       break;
     case 'result':
-      color = COLORS.good;
-      bg = COLORS.goodBg;
+      color = emphasis.result.color;
+      bg = emphasis.result.bg;
       break;
     case 'focus':
-      color = BRAND;
-      bg = '#eef1fd';
+      color = accent;
+      bg = emphasis.focusBg;
       break;
     case 'cancel':
-      color = '#9ca3af';
+      color = emphasis.cancelColor;
       strike = true;
       break;
     case 'flip':
-      color = COLORS.bad;
-      bg = COLORS.badBg;
+      color = emphasis.flip.color;
+      bg = emphasis.flip.bg;
       break;
   }
   return { color, bg, strike };
@@ -129,6 +172,8 @@ export function AnimatedEquation({
   startAtStep?: number;
 }) {
   const { t, locale } = useI18n();
+  const accent = useAccent();
+  const tokens = useTokens();
   const [index, setIndex] = useState(() =>
     Math.min(Math.max(0, startAtStep), script.steps.length - 1),
   );
@@ -387,7 +432,13 @@ export function AnimatedEquation({
           style={{ width: '100%', height: stageH, transform: [{ scale: lineScale }] }}
         >
         {[...exiting, ...step.tokens].map((tok) => {
-          const st = tokenStyle(tok);
+          const st = tokenStyle(
+            tok,
+            accent,
+            tokens.ink,
+            tokens.muted,
+            tokens.mode === 'dark' ? DARK_EMPHASIS : LIGHT_EMPHASIS,
+          );
           const a = getAnim(tok.id);
           return (
             <Animated.View
@@ -466,7 +517,7 @@ export function AnimatedEquation({
       <FadeIn key={`explain-${index}`}>
         <Text
           fontSize={15}
-          color="#374151"
+          color={tokens.ink}
           textAlign="center"
           minHeight={40}
           accessibilityLiveRegion="polite"
@@ -487,7 +538,7 @@ export function AnimatedEquation({
               width: 8,
               height: 8,
               borderRadius: 999,
-              backgroundColor: i < index ? COLORS.good : i === index ? BRAND : '#d1d5db',
+              backgroundColor: i < index ? COLORS.good : i === index ? accent : tokens.border,
             }}
           />
         ))}

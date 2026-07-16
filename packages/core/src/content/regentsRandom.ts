@@ -97,8 +97,10 @@ const quad = (A: number, B: number, C: number) => {
   return parts.length ? parts.join(' + ').replace(/\+ -/g, '- ') : '0';
 };
 const pt = (x: number, y: number) => `$(${x}, ${y})$`;
-/** Money inside a math segment ("$\$25$") so MathText renders the $ sign. */
-const usd = (n: number) => `$\\$${n}$`;
+/** A literal dollar amount in prose: "\$25". MathText treats the escaped
+ * `\$` as a plain `$` (not a math delimiter), so the whole thing renders
+ * as text without pulling neighboring words into a math span. */
+const usd = (n: number) => `\\$${n}`;
 
 /** A choice: one string when En and Es render identically (pure math). */
 type Choice = string | { en: string; es: string };

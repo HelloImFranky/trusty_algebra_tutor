@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@tamagui/config": "^1.121.0",
+    "@tamagui/lucide-icons": "^1.121.0",
     "@tanstack/react-query": "^5.66.0",
     "@trpc/client": "^11.1.0",
     "@trpc/react-query": "^11.1.0",
@@ -22,6 +23,7 @@
     "@tutor/api": "*",
     "@tutor/core": "*",
     "katex": "^0.16.11",
+    "reanimated-color-picker": "^5.1.2",
     "solito": "^4.4.0",
     "superjson": "^2.2.2",
     "tamagui": "^1.121.0",
@@ -30,6 +32,9 @@
   "peerDependencies": {
     "react": "*",
     "react-native": "*",
+    "react-native-gesture-handler": "*",
+    "react-native-reanimated": "*",
+    "react-native-svg": "*",
     "react-native-web": "*"
   },
   "devDependencies": {

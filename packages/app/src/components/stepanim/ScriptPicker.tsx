@@ -11,7 +11,7 @@
  */
 import { Text, XStack, type SizeTokens } from 'tamagui';
 import { useI18n } from '../../lib/i18n';
-import { BRAND, SecondaryButton } from '../ui';
+import { SecondaryButton, useAccent } from '../ui';
 import type { EqScript } from './model';
 
 export function ScriptPicker({
@@ -26,6 +26,7 @@ export function ScriptPicker({
   size?: SizeTokens;
 }) {
   const { locale } = useI18n();
+  const accent = useAccent();
   if (scripts.length < 2) return null;
   return (
     <XStack gap={8} flexWrap="wrap" alignItems="stretch">
@@ -42,7 +43,7 @@ export function ScriptPicker({
             paddingVertical={8}
             {...(size ? { size } : {})}
             onPress={() => onSelect(s.id)}
-            {...(selected ? { backgroundColor: BRAND } : {})}
+            {...(selected ? { backgroundColor: accent } : {})}
           >
             {/* Explicit Text child so long topic names wrap onto multiple
                 lines instead of overflowing the fixed-width chip. */}
@@ -50,7 +51,7 @@ export function ScriptPicker({
               textAlign="center"
               fontWeight="700"
               lineHeight={18}
-              color={selected ? 'white' : BRAND}
+              color={selected ? 'white' : accent}
             >
               {locale === 'es' ? s.titleEs : s.titleEn}
             </Text>

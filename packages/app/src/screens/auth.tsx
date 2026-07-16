@@ -15,8 +15,8 @@ import {
   PrimaryButton,
   Screen,
   Title,
-  BRAND,
-  COLORS,
+  useAccent,
+  useTokens,
 } from '../components/ui';
 
 function Field({
@@ -32,9 +32,10 @@ function Field({
   secure?: boolean;
   keyboard?: 'default' | 'email-address' | 'number-pad';
 }) {
+  const tokens = useTokens();
   return (
     <YStack gap={4}>
-      <Label fontSize={13} fontWeight="700" color="#374151">
+      <Label fontSize={13} fontWeight="700" color={tokens.ink}>
         {label}
       </Label>
       <AppInput
@@ -43,8 +44,8 @@ function Field({
         secureTextEntry={secure}
         keyboardType={keyboard ?? 'default'}
         autoCapitalize="none"
-        backgroundColor="#fff"
-        borderColor={COLORS.border}
+        backgroundColor={tokens.surface}
+        borderColor={tokens.border}
       />
     </YStack>
   );
@@ -53,6 +54,8 @@ function Field({
 export function AuthScreen({ mode }: { mode: 'login' | 'register' }) {
   const { t, locale } = useI18n();
   const router = useRouter();
+  const tokens = useTokens();
+  const accent = useAccent();
   const [role, setRole] = useState<'student' | 'teacher'>('student');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -140,8 +143,8 @@ export function AuthScreen({ mode }: { mode: 'login' | 'register' }) {
                     checked={under13}
                     onCheckedChange={(v) => setUnder13(v === true)}
                     size="$4"
-                    backgroundColor="#fff"
-                    borderColor={COLORS.border}
+                    backgroundColor={tokens.surface}
+                    borderColor={tokens.border}
                   >
                     <Checkbox.Indicator>
                       <Text>✓</Text>
@@ -167,7 +170,7 @@ export function AuthScreen({ mode }: { mode: 'login' | 'register' }) {
           {mode === 'login' ? t('login') : t('register')}
         </PrimaryButton>
         <Link href={mode === 'login' ? '/register' : '/login'}>
-          <Text color={BRAND} fontWeight="700">
+          <Text color={accent} fontWeight="700">
             {mode === 'login' ? t('register') : t('login')} →
           </Text>
         </Link>

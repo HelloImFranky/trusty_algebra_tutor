@@ -7,6 +7,7 @@
  * badges.
  */
 import { useMemo, useState } from 'react';
+import { Library } from '@tamagui/lucide-icons';
 import { Text, XStack, YStack } from 'tamagui';
 import { trpc } from '../lib/trpc';
 import { useI18n } from '../lib/i18n';
@@ -15,8 +16,8 @@ import { MathText } from '../components/MathText';
 import { AnimatedEquation } from '../components/stepanim/AnimatedEquation';
 import { buildScriptForProblem } from '../components/stepanim/builders';
 import {
-  AppCard, Feedback, GhostButton, Loading, Muted, PrimaryButton, ProgressBar, Screen,
-  SubTitle, Title, BRAND, COLORS,
+  AppCard, Feedback, GhostButton, HeroCard, Loading, Muted, PrimaryButton, ProgressBar, Screen,
+  SubTitle, Title, useAccent, useFeedbackColors, useTokens, COLORS,
 } from '../components/ui';
 
 const LETTERS = ['A', 'B', 'C', 'D'];
@@ -40,18 +41,58 @@ export function ReviewScreen() {
 /** Landing page: the review-by-topic catalog. */
 function TopicCatalog({ onOpen }: { onOpen: (slug: string) => void }) {
   const { t, locale } = useI18n();
+  const accent = useAccent();
+  const tokens = useTokens();
   const catalog = trpc.regents.catalog.useQuery({ locale });
+
+  const topics = catalog.data?.topics ?? [];
+  const answered = topics.reduce((sum, tp) => sum + tp.answered, 0);
+  const correct = topics.reduce((sum, tp) => sum + tp.correct, 0);
+  const readiness = answered > 0 ? Math.round((correct / answered) * 100) : 0;
+  const weakest = [...topics]
+    .filter((tp) => tp.answered > 0)
+    .sort((a, b) => a.correct / a.total - b.correct / b.total)[0];
 
   return (
     <Screen maxWidth={980}>
-      <Title>📚 {t('review')}</Title>
+      <XStack alignItems="center" gap={8}>
+        <Library size={20} color={tokens.ink} />
+        <Title>{t('review')}</Title>
+      </XStack>
       <Muted size={14}>
         {t('reviewIntro')} {t('oneTryHint')}
       </Muted>
       {catalog.error && <Feedback kind="bad">{catalog.error.message}</Feedback>}
       {catalog.isLoading && <Loading />}
+
+      {answered > 0 && (
+        <HeroCard>
+          <Text color="#ff9783" fontSize={10} fontWeight="800" textTransform="uppercase" letterSpacing={0.8}>
+            {t('examReadiness')}
+          </Text>
+          <XStack alignItems="baseline" gap={6}>
+            <Text color={tokens.posterInk} fontSize={30} fontWeight="800">
+              {readiness}%
+            </Text>
+            {/* Secondary caption uses a low-contrast neutral so it reads as
+                a subtitle on the poster in either mode. */}
+            <Text color={tokens.mode === 'dark' ? '#9b9797' : '#bab6b6'} fontSize={12}>
+              {t('questionsAnsweredLabel')}
+            </Text>
+          </XStack>
+          <XStack height={8} backgroundColor={tokens.mode === 'dark' ? '#4a4646' : '#444141'} borderRadius={999} overflow="hidden">
+            <XStack width={`${readiness}%`} height="100%" backgroundColor={accent} borderRadius={999} />
+          </XStack>
+        </HeroCard>
+      )}
+      {weakest && (
+        <PrimaryButton justifyContent="center" onPress={() => onOpen(weakest.slug)}>
+          {t('startReviewSet')}
+        </PrimaryButton>
+      )}
+
       <XStack flexWrap="wrap" gap={12}>
-        {catalog.data?.topics.map((topic) => {
+        {topics.map((topic) => {
           const done = topic.answered >= topic.total;
           const perfect = done && topic.correct === topic.total;
           return (
@@ -61,14 +102,17 @@ function TopicCatalog({ onOpen }: { onOpen: (slug: string) => void }) {
               flexGrow={1}
               gap={8}
               cursor="pointer"
-              hoverStyle={{ borderColor: BRAND }}
-              pressStyle={{ backgroundColor: '#f3f5fd' }}
+              pressStyle={{ opacity: 0.85 }}
               onPress={() => onOpen(topic.slug)}
             >
               <XStack gap={10} alignItems="center">
-                <Text fontSize={30}>{topic.icon}</Text>
+                {/* topic.icon is the same emoji Progress uses for the
+                    Regents-review stat row — keep the visual consistent
+                    across surfaces so students recognise a topic at a
+                    glance from either page. */}
+                <Text fontSize={22}>{topic.icon}</Text>
                 <YStack flexShrink={1}>
-                  <Text fontSize={16} fontWeight="800">
+                  <Text fontSize={16} fontWeight="800" color={tokens.ink}>
                     {topic.title}
                   </Text>
                   <Muted>{topic.blurb}</Muted>
@@ -79,14 +123,14 @@ function TopicCatalog({ onOpen }: { onOpen: (slug: string) => void }) {
                 {topic.extraRounds > 0 && <Muted size={12}>🔄 ×{topic.extraRounds}</Muted>}
                 {done ? (
                   <XStack
-                    backgroundColor={perfect ? COLORS.goodBg : '#eef1fd'}
+                    backgroundColor={perfect ? COLORS.goodBg : tokens.subtle}
                     borderRadius={999}
                     paddingHorizontal={10}
                     paddingVertical={3}
                     gap={4}
                     alignItems="center"
                   >
-                    <Text fontSize={12} fontWeight="800" color={perfect ? COLORS.good : BRAND}>
+                    <Text fontSize={12} fontWeight="800" color={perfect ? COLORS.good : accent}>
                       {perfect ? '🌟' : '✓'} {topic.correct}/{topic.total}
                     </Text>
                   </XStack>
@@ -97,7 +141,7 @@ function TopicCatalog({ onOpen }: { onOpen: (slug: string) => void }) {
                 )}
               </XStack>
               <XStack>
-                <Text fontSize={13} fontWeight="800" color={BRAND}>
+                <Text fontSize={13} fontWeight="800" color={accent}>
                   {done ? t('completeLabel') : topic.answered > 0 ? `${t('resumeTopic')} →` : `${t('startTopic')} →`}
                 </Text>
               </XStack>
@@ -120,6 +164,10 @@ interface AnsweredState {
 /** One topic's quiz: question-by-question, single try each. */
 function TopicQuiz({ slug, onExit }: { slug: string; onExit: () => void }) {
   const { t, locale } = useI18n();
+  const accent = useAccent();
+  const tokens = useTokens();
+  const goodBg = useFeedbackColors('good');
+  const badBg = useFeedbackColors('bad');
   const utils = trpc.useUtils();
   // undefined = let the server pick the student's latest round; renewing a
   // finished round requests the next one, which is generated on the fly.
@@ -195,7 +243,7 @@ function TopicQuiz({ slug, onExit }: { slug: string; onExit: () => void }) {
               🔄 {t('roundLabel')} {servedRound + 1}
             </Muted>
           )}
-          <Text fontSize={30} fontWeight="900" color={perfect ? COLORS.good : BRAND}>
+          <Text fontSize={30} fontWeight="900" color={perfect ? COLORS.good : accent}>
             {score} / {questions.length}
           </Text>
           <XStack gap={8} marginTop={6}>
@@ -253,23 +301,45 @@ function TopicQuiz({ slug, onExit }: { slug: string; onExit: () => void }) {
 
   return (
     <Screen maxWidth={720}>
-      <XStack justifyContent="space-between" alignItems="center">
-        <Title>
+      <XStack justifyContent="space-between" alignItems="center" gap={8}>
+        {/* flexShrink so the title yields room to the Back button, and
+            numberOfLines={1} so long topic names ("Exponents & Radicals",
+            "Solving Linear Equations") never wrap to two lines. Slightly
+            smaller than the shared Title to keep the header compact. */}
+        <Text
+          flexShrink={1}
+          fontSize={20}
+          fontWeight="800"
+          color={tokens.ink}
+          numberOfLines={1}
+          marginVertical={4}
+        >
           {topic.data.icon} {topic.data.title}
-        </Title>
-        <GhostButton size="$2" onPress={onExit}>
+        </Text>
+        <GhostButton size="$2" onPress={onExit} flexShrink={0}>
           ← {t('backToTopics')}
         </GhostButton>
       </XStack>
 
-      <AppCard gap={14}>
-        <XStack justifyContent="space-between" alignItems="center">
-          <Muted>
-            {t('question')} {index + 1} {t('of')} {questions.length}
-            {servedRound > 0 ? ` · 🔄 ${t('roundLabel')} ${servedRound + 1}` : ''}
-          </Muted>
-          {!answered && <Muted>{t('oneTryHint')}</Muted>}
-        </XStack>
+      {/* Question meta lives above the answer card so the card itself is
+          just the prompt + choices + submit. Two aligned columns: left
+          shows question number and round, right shows the "one try" tip
+          (only while the question is unanswered). paddingHorizontal
+          matches the card's padding so the columns line up with the
+          card's inner edges. */}
+      <XStack
+        justifyContent="space-between"
+        alignItems="center"
+        paddingHorizontal={16}
+      >
+        <Muted>
+          {t('question')} {index + 1} {t('of')} {questions.length}
+          {servedRound > 0 ? ` · 🔄 ${t('roundLabel')} ${servedRound + 1}` : ''}
+        </Muted>
+        {!answered && <Muted>{t('oneTryHint')}</Muted>}
+      </XStack>
+
+      <AppCard gap={14} borderRadius={22}>
         <MathText text={q.prompt} size={17} />
 
         <YStack gap={8}>
@@ -277,20 +347,25 @@ function TopicQuiz({ slug, onExit }: { slug: string; onExit: () => void }) {
             const isPick = answered ? answered.choiceIndex === i : selected === i;
             const isRight = answered ? answered.correctIndex === i : false;
             const showWrongPick = answered && isPick && !isRight;
-            const borderColor = isRight && answered ? COLORS.good : showWrongPick ? COLORS.bad : isPick ? BRAND : COLORS.border;
-            const backgroundColor = isRight && answered ? COLORS.goodBg : showWrongPick ? COLORS.badBg : isPick ? '#eef1fd' : '#ffffff';
+            // Border stays saturated (COLORS.good / COLORS.bad) in both
+            // modes — a bright ring reads correctly on the deep-color bg in
+            // dark mode. Only the bg shifts to the mode-correct deep tone
+            // so the MathText inside (which follows tokens.ink) has real
+            // contrast.
+            const borderColor = isRight && answered ? COLORS.good : showWrongPick ? COLORS.bad : isPick ? accent : tokens.border;
+            const backgroundColor = isRight && answered ? goodBg.bg : showWrongPick ? badBg.bg : isPick ? tokens.subtle : tokens.surface;
             return (
               <XStack
                 key={i}
                 gap={10}
                 alignItems="center"
                 padding={12}
-                borderRadius={12}
+                borderRadius={14}
                 borderWidth={2}
                 borderColor={borderColor}
                 backgroundColor={backgroundColor}
                 cursor={answered ? 'default' : 'pointer'}
-                hoverStyle={answered ? undefined : { borderColor: BRAND }}
+                pressStyle={answered ? undefined : { opacity: 0.85 }}
                 onPress={() => {
                   if (!answered && !answerMut.isPending) setSelected(i);
                 }}
@@ -301,9 +376,9 @@ function TopicQuiz({ slug, onExit }: { slug: string; onExit: () => void }) {
                   borderRadius={999}
                   alignItems="center"
                   justifyContent="center"
-                  backgroundColor={isRight && answered ? COLORS.good : showWrongPick ? COLORS.bad : isPick ? BRAND : '#eef1f5'}
+                  backgroundColor={isRight && answered ? COLORS.good : showWrongPick ? COLORS.bad : isPick ? accent : tokens.subtle}
                 >
-                  <Text fontWeight="900" fontSize={14} color={isPick || (isRight && answered) ? 'white' : COLORS.muted}>
+                  <Text fontWeight="900" fontSize={14} color={isPick || (isRight && answered) ? 'white' : tokens.muted}>
                     {answered ? (isRight ? '✓' : showWrongPick ? '✗' : LETTERS[i]) : LETTERS[i]}
                   </Text>
                 </XStack>
@@ -330,20 +405,20 @@ function TopicQuiz({ slug, onExit }: { slug: string; onExit: () => void }) {
                   {answered.correct ? '✓' : '✗'}
                 </Text>
               </XStack>
-              <Text fontSize={17} fontWeight="800" color={answered.correct ? COLORS.good : COLORS.bad}>
+              <Text fontSize={17} fontWeight="800" color={answered.correct ? goodBg.ink : badBg.ink}>
                 {answered.correct ? t('correct') : t('notQuite')}
               </Text>
             </XStack>
             {!answered.correct && (
               <YStack
-                backgroundColor={COLORS.badBg}
+                backgroundColor={badBg.bg}
                 borderLeftWidth={4}
                 borderLeftColor={COLORS.bad}
-                borderRadius={10}
+                borderRadius={14}
                 padding={12}
                 gap={6}
               >
-                <Text fontSize={13} fontWeight="800" color={COLORS.bad}>
+                <Text fontSize={13} fontWeight="800" color={badBg.ink}>
                   💡 {t('howToSolve')}
                 </Text>
                 <MathText text={answered.explanation} size={14.5} />

@@ -18,6 +18,7 @@ export { AdminScreen } from './screens/admin';
 export { CalculatorScreen } from './screens/calculator';
 export { ExamplesScreen } from './screens/examples';
 export { SettingsScreen } from './screens/settings';
+export { AppearanceScreen } from './screens/appearance';
 export { AnimatedEquation } from './components/stepanim/AnimatedEquation';
 export { demoScripts, type EqScript, type EqStep, type EqToken } from './components/stepanim/model';
 export { AppChrome } from './components/AppChrome';

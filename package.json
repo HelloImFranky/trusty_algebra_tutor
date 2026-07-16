@@ -12,7 +12,8 @@
     "dev": "turbo dev --filter=@tutor/web",
     "dev:native": "turbo dev --filter=@tutor/native",
     "build": "turbo build",
-    "test": "turbo test",
+    "test": "turbo test && ./scripts/theme-baseline.sh",
+    "theme:baseline": "./scripts/theme-baseline.sh",
     "typecheck": "turbo typecheck",
     "seed": "npm run seed --workspace @tutor/db",
     "migrate": "npm run migrate --workspace @tutor/db",
@@ -29,6 +30,9 @@
   "overrides": {
     "react": "19.1.0",
     "react-dom": "19.1.0",
-    "@types/react": "~19.1.0"
+    "@types/react": "~19.1.0",
+    "react-native-reanimated": "~4.1.0",
+    "react-native-gesture-handler": "~2.28.0",
+    "react-native": "0.81.5"
   }
 }

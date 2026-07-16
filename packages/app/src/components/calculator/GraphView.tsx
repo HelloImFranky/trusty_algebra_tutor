@@ -4,7 +4,7 @@
  * intersections) — the same structured data an AI tutor explanation can use.
  */
 import { useMemo, useRef, useState } from 'react';
-import { Platform, type TextInput } from 'react-native';
+import { Platform, useWindowDimensions, type TextInput } from 'react-native';
 import { Button, Text, XStack, YStack } from 'tamagui';
 import {
   findIntersections,
@@ -14,7 +14,7 @@ import {
   type Point,
 } from '@tutor/core';
 import { useI18n } from '../../lib/i18n';
-import { AppInput, GhostButton, Muted, SecondaryButton, COLORS } from '../ui';
+import { AppInput, GhostButton, Muted, SecondaryButton, useTokens, COLORS } from '../ui';
 import { GraphPlot } from './GraphPlot';
 import { MAX_EXPRESSIONS, useCalculatorStore } from './store';
 import { useCompiledFns } from './useCompiledFns';
@@ -35,8 +35,10 @@ const QUICK_KEYS: { label: string; insert: string; aria: string }[] = [
   { label: '|x|', insert: 'abs(', aria: 'absolute value' },
 ];
 
-export function GraphView() {
+export function GraphView({ compact = false }: { compact?: boolean } = {}) {
   const { t } = useI18n();
+  const tokens = useTokens();
+  const { width: viewportW } = useWindowDimensions();
   const window = useCalculatorStore((s) => s.window);
   const { setExpression, addExpression, removeExpression, setWindow, resetWindow } =
     useCalculatorStore();
@@ -119,7 +121,7 @@ export function GraphView() {
         <YStack key={i} gap={2}>
           <XStack alignItems="center" gap={8}>
             <YStack width={10} height={10} borderRadius={5} backgroundColor={row.color} />
-            <Text fontWeight="700" width={34} color="#111827">
+            <Text fontWeight="700" width={34} color={tokens.ink}>
               y{i + 1} =
             </Text>
             <AppInput
@@ -137,8 +139,9 @@ export function GraphView() {
               autoCapitalize="none"
               autoCorrect={false}
               spellCheck={false}
-              backgroundColor="#fff"
-              borderColor={row.fn && !row.fn.ok ? COLORS.bad : COLORS.border}
+              color={tokens.ink}
+              backgroundColor={tokens.surface}
+              borderColor={row.fn && !row.fn.ok ? COLORS.bad : tokens.border}
               aria-label={`y${i + 1}`}
             />
             {rows.length > 1 && (
@@ -211,7 +214,19 @@ export function GraphView() {
         </GhostButton>
       </XStack>
 
-      <GraphPlot fns={plotted} window={window} onWindowChange={setWindow} markers={markers} />
+      {/* Compact mode (sheet render): height scales with the viewport so
+          the plot is visually well-proportioned at any width — narrow
+          mobile widths get a shorter plot (avoids a tall skinny box);
+          desktop-width sheets get up to 360px tall so curves still show
+          some room above/below the origin. Clamp keeps the plot
+          readable at every size. */}
+      <GraphPlot
+        fns={plotted}
+        window={window}
+        onWindowChange={setWindow}
+        markers={markers}
+        {...(compact ? { height: Math.max(220, Math.min(360, viewportW * 0.65)) } : {})}
+      />
       {Platform.OS === 'web' && <Muted>{t('graphHint')}</Muted>}
 
       {plotted.length > 0 && (
@@ -220,7 +235,7 @@ export function GraphView() {
             <YStack key={i} gap={4}>
               <XStack gap={6} alignItems="center" flexWrap="wrap">
                 <YStack width={8} height={8} borderRadius={4} backgroundColor={r.color} />
-                <Text fontSize={13} color={COLORS.muted}>
+                <Text fontSize={13} color={tokens.muted}>
                   {t('xIntercepts')}:{' '}
                   {r.xs.length
                     ? r.xs.map((x) => `x = ${formatNumber(Number(x.toPrecision(6)))}`).join(',  ')
@@ -229,7 +244,7 @@ export function GraphView() {
               </XStack>
               <XStack gap={6} alignItems="center" flexWrap="wrap">
                 <YStack width={8} height={8} borderRadius={4} backgroundColor={r.color} />
-                <Text fontSize={13} color={COLORS.muted}>
+                <Text fontSize={13} color={tokens.muted}>
                   {t('yIntercept')}:{' '}
                   {Number.isFinite(r.yIntercept)
                     ? `y = ${formatNumber(Number(r.yIntercept.toPrecision(6)))}`
@@ -239,7 +254,7 @@ export function GraphView() {
             </YStack>
           ))}
           {plotted.length > 1 && (
-            <Text fontSize={13} color={COLORS.muted}>
+            <Text fontSize={13} color={tokens.muted}>
               {t('intersections')}:{' '}
               {analysis.intersections.length
                 ? analysis.intersections

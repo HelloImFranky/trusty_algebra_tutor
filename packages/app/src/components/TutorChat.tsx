@@ -10,7 +10,7 @@ import { client } from '../lib/trpc';
 import { useI18n } from '../lib/i18n';
 import { MathText } from './MathText';
 import { parseAnimMarker } from './stepanim/model';
-import { AppCard, AppInput, GhostButton, PrimaryButton, SubTitle, COLORS } from './ui';
+import { AppCard, AppInput, GhostButton, PrimaryButton, SubTitle, useAccent, useTokens } from './ui';
 
 interface Msg {
   role: 'user' | 'assistant';
@@ -31,6 +31,8 @@ export function TutorChat({
   onOpenAnim?: (step: number) => void;
 }) {
   const { t, locale } = useI18n();
+  const accent = useAccent();
+  const tokens = useTokens();
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
@@ -97,7 +99,16 @@ export function TutorChat({
               <YStack
                 key={i}
                 alignSelf={m.role === 'user' ? 'flex-end' : 'flex-start'}
-                backgroundColor={m.role === 'user' ? '#eef1fd' : '#f8f9fa'}
+                // User bubble carries an accent-colored border so it reads
+                // as "yours" without picking a bg color that clashes with
+                // the theme; assistant bubble uses tokens.subtle for a
+                // neutral chat surface. Both use tokens so text stays
+                // legible in either mode.
+                backgroundColor={tokens.subtle}
+                borderLeftWidth={m.role === 'user' ? 0 : 3}
+                borderRightWidth={m.role === 'user' ? 3 : 0}
+                borderLeftColor={accent}
+                borderRightColor={accent}
                 borderRadius={12}
                 padding={10}
                 maxWidth="88%"
@@ -122,15 +133,16 @@ export function TutorChat({
           onChangeText={setInput}
           onSubmitEditing={send}
           editable={!busy}
-          borderColor={COLORS.border}
-          backgroundColor="#fff"
+          color={tokens.ink}
+          borderColor={tokens.border}
+          backgroundColor={tokens.surface}
         />
         <PrimaryButton onPress={send} disabled={busy || !input.trim()}>
           ➤
         </PrimaryButton>
       </XStack>
       {!busy && messages.length === 0 && (
-        <Text fontSize={12} color={COLORS.muted} marginTop={6}>
+        <Text fontSize={12} color={tokens.muted} marginTop={6}>
           {t('tutorPlaceholder')}
         </Text>
       )}

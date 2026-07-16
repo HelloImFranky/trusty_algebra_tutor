@@ -17,8 +17,8 @@ import {
   Screen,
   SubTitle,
   Title,
-  BRAND,
-  COLORS,
+  useAccent,
+  useTokens,
 } from '../components/ui';
 
 export function ClassesScreen() {
@@ -27,6 +27,8 @@ export function ClassesScreen() {
   const role = useAuth((s) => s.auth?.user.role);
   const status = useAuth((s) => s.auth?.user.status);
   const utils = trpc.useUtils();
+  const accent = useAccent();
+  const tokens = useTokens();
   const [name, setName] = useState('');
 
   const list = trpc.teacher.classes.list.useQuery(undefined, {
@@ -74,8 +76,8 @@ export function ClassesScreen() {
               value={name}
               onChangeText={setName}
               placeholder={t('className')}
-              backgroundColor="#fff"
-              borderColor={COLORS.border}
+              backgroundColor={tokens.surface}
+              borderColor={tokens.border}
             />
           </YStack>
           <PrimaryButton
@@ -96,7 +98,7 @@ export function ClassesScreen() {
       <YStack gap={10}>
         {list.data?.classes.map((c) => (
           <Link key={c.id} href={`/classes/${c.id}`}>
-            <AppCard gap={6} hoverStyle={{ borderColor: BRAND }}>
+            <AppCard gap={6} hoverStyle={{ borderColor: accent }}>
               <XStack justifyContent="space-between" alignItems="center" gap={8}>
                 <SubTitle>{c.name}</SubTitle>
                 <Muted>
@@ -105,7 +107,7 @@ export function ClassesScreen() {
               </XStack>
               <XStack gap={8} alignItems="center">
                 <Muted>{t('joinCode')}:</Muted>
-                <Text fontWeight="800" fontSize={16} letterSpacing={2} color={BRAND}>
+                <Text fontWeight="800" fontSize={16} letterSpacing={2} color={accent}>
                   {c.joinCode}
                 </Text>
               </XStack>

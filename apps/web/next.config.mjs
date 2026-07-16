@@ -19,6 +19,9 @@ const config = {
   transpilePackages: [
     'react-native',
     'react-native-web',
+    'react-native-reanimated',
+    'react-native-gesture-handler',
+    'reanimated-color-picker',
     'solito',
     'tamagui',
     '@tutor/app',
