@@ -15,7 +15,7 @@ import {
   PrimaryButton,
   Screen,
   Title,
-  BRAND,
+  useAccent,
   useTokens,
 } from '../components/ui';
 
@@ -55,6 +55,7 @@ export function AuthScreen({ mode }: { mode: 'login' | 'register' }) {
   const { t, locale } = useI18n();
   const router = useRouter();
   const tokens = useTokens();
+  const accent = useAccent();
   const [role, setRole] = useState<'student' | 'teacher'>('student');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -169,7 +170,7 @@ export function AuthScreen({ mode }: { mode: 'login' | 'register' }) {
           {mode === 'login' ? t('login') : t('register')}
         </PrimaryButton>
         <Link href={mode === 'login' ? '/register' : '/login'}>
-          <Text color={BRAND} fontWeight="700">
+          <Text color={accent} fontWeight="700">
             {mode === 'login' ? t('register') : t('login')} →
           </Text>
         </Link>

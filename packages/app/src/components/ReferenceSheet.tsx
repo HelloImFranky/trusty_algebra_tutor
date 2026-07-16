@@ -12,8 +12,9 @@ import { SubTitle, useAccent, useTokens } from './ui';
  * Top-bar pill that opens the reference sheet. Lives in the AppChrome top bar
  * so it never covers screen content; `compact` (phone widths) shows the icon
  * only. All colors route through tokens so the pill + sheet flip cleanly in
- * dark mode — the previous hard-coded NEUTRAL[200] + INK made the pill read
- * as a bright white chip on the dark chrome (see docs/dark-mode-audit-plan).
+ * dark mode — before this migration the pill was pinned to the light-mode
+ * subtle-surface + near-black-ink pair, which read as a bright white chip
+ * on the dark chrome (see docs/dark-mode-audit-plan for the full audit).
  */
 export function ReferenceSheetButton({ compact = false }: { compact?: boolean }) {
   const { t, locale } = useI18n();
