@@ -4,8 +4,8 @@
  * 937947b2-2ad0-4187-ba61-c2e54cc33dd6, variant 3): warm neutral surfaces,
  * near-black ink, a themeable accent (see ../lib/theme.tsx), heavy rounding.
  */
-import type { ReactNode } from 'react';
-import { ScrollView } from 'react-native';
+import { forwardRef, type ComponentProps, type ReactNode } from 'react';
+import { ScrollView, type TextInput } from 'react-native';
 import { Button, Card, Input, Spinner, Text, XStack, YStack, styled } from 'tamagui';
 import { DEFAULT_ACCENT, useAccent, useResolvedMode, type Hex } from '../lib/theme';
 
@@ -202,15 +202,42 @@ export function Screen({ children, maxWidth = 760 }: { children: ReactNode; maxW
 /**
  * Text input with a 16px floor: mobile Safari auto-zooms the page when a
  * focused field's text is smaller than 16px, so every free-text input should
- * use this (or set fontSize >= 16 explicitly). Callers that want a light-on-
- * dark input in a card override backgroundColor/color explicitly.
+ * use this (or set fontSize >= 16 explicitly).
+ *
+ * Owns its theming — this is a hook-owning function wrapper rather than
+ * `styled(Input, {...})` so it can call `useTokens()` at render time and
+ * pick up the current light/dark mode. Every color prop routes through a
+ * `?? tokens.*` fallback, so callers get correct light + dark styling with
+ * zero prop plumbing (`<AppInput value=… onChangeText=… />` just works),
+ * and can still override any individual color when they need to (e.g. a
+ * feedback-colored input on the answer card). See docs/theme-tokens.md.
+ *
+ * Historical note: the previous `styled(Input, { backgroundColor: NEUTRAL[200] })`
+ * baked a light-only bg into the type, so every callsite had to remember to
+ * override backgroundColor + color + borderColor to be dark-mode-safe —
+ * missing any one of the three (as the login `Field` helper did with `color`)
+ * quietly broke a screen. The wrapper form makes the default the safe one.
  */
-export const AppInput = styled(Input, {
-  fontSize: 16,
-  backgroundColor: NEUTRAL[200],
-  borderColor: 'transparent',
-  borderRadius: RADIUS.control,
-});
+export const AppInput = forwardRef<TextInput, ComponentProps<typeof Input>>(
+  function AppInput(
+    { color, backgroundColor, borderColor, placeholderTextColor, fontSize, borderRadius, ...rest },
+    ref,
+  ) {
+    const tokens = useTokens();
+    return (
+      <Input
+        ref={ref as never}
+        fontSize={fontSize ?? 16}
+        borderRadius={borderRadius ?? RADIUS.control}
+        color={color ?? tokens.ink}
+        backgroundColor={backgroundColor ?? tokens.surface}
+        borderColor={borderColor ?? tokens.border}
+        placeholderTextColor={placeholderTextColor ?? tokens.muted}
+        {...rest}
+      />
+    );
+  },
+);
 
 /** Raised card surface. Background/shadow adapt to light/dark; the card
  * itself owns its shape and elevation but not its children's colors. */

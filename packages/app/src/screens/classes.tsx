@@ -76,8 +76,6 @@ export function ClassesScreen() {
               value={name}
               onChangeText={setName}
               placeholder={t('className')}
-              backgroundColor={tokens.surface}
-              borderColor={tokens.border}
             />
           </YStack>
           <PrimaryButton

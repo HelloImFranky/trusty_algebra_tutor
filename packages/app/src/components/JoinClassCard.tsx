@@ -29,8 +29,6 @@ export function JoinClassCard() {
             placeholder={t('enterCode')}
             autoCapitalize="characters"
             autoCorrect={false}
-            backgroundColor={tokens.surface}
-            borderColor={tokens.border}
           />
         </YStack>
         <PrimaryButton

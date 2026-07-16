@@ -44,8 +44,6 @@ function Field({
         secureTextEntry={secure}
         keyboardType={keyboard ?? 'default'}
         autoCapitalize="none"
-        backgroundColor={tokens.surface}
-        borderColor={tokens.border}
       />
     </YStack>
   );
@@ -147,10 +145,12 @@ export function AuthScreen({ mode }: { mode: 'login' | 'register' }) {
                     borderColor={tokens.border}
                   >
                     <Checkbox.Indicator>
-                      <Text>✓</Text>
+                      <Text color={tokens.ink}>✓</Text>
                     </Checkbox.Indicator>
                   </Checkbox>
-                  <Label onPress={() => setUnder13(!under13)}>{t('under13')}</Label>
+                  <Label color={tokens.ink} onPress={() => setUnder13(!under13)}>
+                    {t('under13')}
+                  </Label>
                 </XStack>
                 {under13 && (
                   <Field
