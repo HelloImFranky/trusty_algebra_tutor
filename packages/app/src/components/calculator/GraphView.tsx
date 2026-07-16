@@ -4,7 +4,7 @@
  * intersections) — the same structured data an AI tutor explanation can use.
  */
 import { useMemo, useRef, useState } from 'react';
-import { Platform, type TextInput } from 'react-native';
+import { Platform, useWindowDimensions, type TextInput } from 'react-native';
 import { Button, Text, XStack, YStack } from 'tamagui';
 import {
   findIntersections,
@@ -38,6 +38,7 @@ const QUICK_KEYS: { label: string; insert: string; aria: string }[] = [
 export function GraphView({ compact = false }: { compact?: boolean } = {}) {
   const { t } = useI18n();
   const tokens = useTokens();
+  const { width: viewportW } = useWindowDimensions();
   const window = useCalculatorStore((s) => s.window);
   const { setExpression, addExpression, removeExpression, setWindow, resetWindow } =
     useCalculatorStore();
@@ -213,17 +214,18 @@ export function GraphView({ compact = false }: { compact?: boolean } = {}) {
         </GhostButton>
       </XStack>
 
-      {/* Compact mode (sheet render): plot is 320 tall — enough vertical
-          room that the pixel scale on the y axis is close to the x axis
-          scale at the sheet's ~500px inner width, so curves don't look
-          horizontally stretched. Any shorter and a parabola like y=x²
-          reads as a squashed U. */}
+      {/* Compact mode (sheet render): height scales with the viewport so
+          the plot is visually well-proportioned at any width — narrow
+          mobile widths get a shorter plot (avoids a tall skinny box);
+          desktop-width sheets get up to 360px tall so curves still show
+          some room above/below the origin. Clamp keeps the plot
+          readable at every size. */}
       <GraphPlot
         fns={plotted}
         window={window}
         onWindowChange={setWindow}
         markers={markers}
-        {...(compact ? { height: 320 } : {})}
+        {...(compact ? { height: Math.max(220, Math.min(360, viewportW * 0.65)) } : {})}
       />
       {Platform.OS === 'web' && <Muted>{t('graphHint')}</Muted>}
 

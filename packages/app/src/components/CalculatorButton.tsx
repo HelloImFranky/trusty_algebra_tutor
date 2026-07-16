@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { Platform } from 'react-native';
 import { Calculator as CalculatorIcon } from '@tamagui/lucide-icons';
-import { Button, Sheet, XStack } from 'tamagui';
+import { Button, Sheet, XStack, YStack } from 'tamagui';
 import { useI18n } from '../lib/i18n';
 import { Calculator } from './calculator/Calculator';
 import { SubTitle, useTokens } from './ui';
@@ -68,12 +68,16 @@ export function CalculatorButton() {
                 apart at desktop sheet widths. `compact` shortens sci /
                 main button rows and shrinks the graph plot height so the
                 whole calc fits without the ScrollView having to scroll on
-                a typical laptop viewport. */}
-            <XStack paddingHorizontal={8} paddingTop={8} paddingBottom={28}>
-              <XStack flex={1} maxWidth={560} marginHorizontal="auto">
+                a typical laptop viewport.
+                width='100%' + overflow='hidden' on the wrapper enforces
+                the container width on mobile (400 CSS px). Without them
+                Tamagui's flex-with-maxWidth lets intrinsic-width children
+                (the 6-column sci pad) push past the sheet edge. */}
+            <YStack width="100%" paddingHorizontal={8} paddingTop={8} paddingBottom={28} overflow="hidden">
+              <YStack width="100%" maxWidth={560} marginHorizontal="auto" overflow="hidden">
                 <Calculator compact />
-              </XStack>
-            </XStack>
+              </YStack>
+            </YStack>
           </Sheet.ScrollView>
         </Sheet.Frame>
       </Sheet>
