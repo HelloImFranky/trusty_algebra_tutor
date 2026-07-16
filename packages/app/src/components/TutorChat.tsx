@@ -133,9 +133,6 @@ export function TutorChat({
           onChangeText={setInput}
           onSubmitEditing={send}
           editable={!busy}
-          color={tokens.ink}
-          borderColor={tokens.border}
-          backgroundColor={tokens.surface}
         />
         <PrimaryButton onPress={send} disabled={busy || !input.trim()}>
           ➤

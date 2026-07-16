@@ -139,8 +139,6 @@ export function GraphView({ compact = false }: { compact?: boolean } = {}) {
               autoCapitalize="none"
               autoCorrect={false}
               spellCheck={false}
-              color={tokens.ink}
-              backgroundColor={tokens.surface}
               borderColor={row.fn && !row.fn.ok ? COLORS.bad : tokens.border}
               aria-label={`y${i + 1}`}
             />

@@ -180,9 +180,6 @@ export function SettingsScreen() {
           value={displayName}
           onChangeText={setDisplayName}
           placeholder={t('displayNameLabel')}
-          color={tokens.ink}
-          backgroundColor={tokens.surface}
-          borderColor={tokens.border}
         />
         <Muted>{t('username')}</Muted>
         <AppInput
@@ -190,9 +187,6 @@ export function SettingsScreen() {
           onChangeText={setUsername}
           autoCapitalize="none"
           placeholder={t('username')}
-          color={tokens.ink}
-          backgroundColor={tokens.surface}
-          borderColor={tokens.border}
         />
         <PrimaryButton
           disabled={profile.isPending || !profileDirty || !profileValid}
@@ -225,9 +219,6 @@ export function SettingsScreen() {
               secureTextEntry
               autoCapitalize="none"
               placeholder={t('currentPassword')}
-              color={tokens.ink}
-              backgroundColor={tokens.surface}
-              borderColor={tokens.border}
             />
             <AppInput
               value={newPassword}
@@ -235,9 +226,6 @@ export function SettingsScreen() {
               secureTextEntry
               autoCapitalize="none"
               placeholder={t('newPassword')}
-              color={tokens.ink}
-              backgroundColor={tokens.surface}
-              borderColor={tokens.border}
             />
             {newPassword.length > 0 && newPassword.length < 8 && (
               <Muted>{t('passwordTooShort')}</Muted>

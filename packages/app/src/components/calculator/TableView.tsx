@@ -66,9 +66,6 @@ export function TableView() {
                 setTable(num(v, start), step);
               }}
               inputMode="numeric"
-              color={tokens.ink}
-              backgroundColor={tokens.surface}
-              borderColor={tokens.border}
               aria-label={t('startAt')}
             />
           </XStack>
@@ -84,9 +81,6 @@ export function TableView() {
                 setTable(start, num(v, step) || 1);
               }}
               inputMode="numeric"
-              color={tokens.ink}
-              backgroundColor={tokens.surface}
-              borderColor={tokens.border}
               aria-label="Δx"
             />
           </XStack>
