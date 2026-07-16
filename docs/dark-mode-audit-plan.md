@@ -104,18 +104,19 @@ in a single reviewable commit per file.
    - Row divider `COLORS.border` → `tokens.border`
    - Row text `"#374151"` → `tokens.muted` (or `tokens.ink` if we
      want higher contrast)
-2. Migrate the calculator chassis: introduce `useCalcTokens()` in
-   `components/calculator/palette.ts` returning `{ tabBg, tabActive,
-   tabInactive, sciBg, utilBg, digitBg, opBg, ... }` that switches
-   on `useResolvedMode()`. Wire `Calculator.tsx`, `CalcView.tsx`,
-   `GraphView.tsx` and `graphSvg.ts` to consume it (SVG takes the
-   palette as an argument so no hooks inside a pure function).
+2. ~~Migrate the calculator chassis~~ — **skipped**. The light-iOS
+   chassis reads as intentional physical-calculator design in both
+   themes; no migration.
 3. Migrate `TutorChat.tsx` — chat bubble bg + border.
 4. Migrate `MathInput.tsx` — surface + placeholder.
 5. Migrate `classRoster.tsx` — teacher roster surface.
-6. Design an `emphasis` palette for `AnimatedEquation.tsx` — dark-
-   mode variants of `apply` yellow, `focus` blue-tint, `cancel` gray
-   so step animations read on both surfaces.
+6. Add a dark-mode-aware `emphasis` palette to
+   `AnimatedEquation.tsx` — dark variants for `apply` yellow (deep
+   mustard tint) and `cancel` gray (lighter neutral so struck-out
+   terms stay legible). **`focus` keeps its current pale-blue bg
+   `#eef1fd` in both modes** — deliberate: the pale-blue focus tint
+   reads as a highlight even on dark bg, and swapping it out shifts
+   the storyboard's mental model of "look here".
 
 **Done when.** `grep -R "NEUTRAL\|INK\b\|COLORS\.muted\|COLORS\.border"
 packages/app/src` returns only `components/ui.tsx` and the intentional

@@ -17,14 +17,16 @@ import {
   SecondaryButton,
   Screen,
   Title,
-  BRAND,
+  useAccent,
+  useTokens,
 } from '../components/ui';
 
 function StatChip({ icon, value, label }: { icon: string; value: number | string; label: string }) {
+  const tokens = useTokens();
   return (
     <XStack gap={4} alignItems="center">
       <Text fontSize={14}>{icon}</Text>
-      <Text fontSize={13} fontWeight="800">
+      <Text fontSize={13} fontWeight="800" color={tokens.ink}>
         {value}
       </Text>
       <Muted size={12}>{label}</Muted>
@@ -38,6 +40,7 @@ export function ClassRosterScreen({ classId }: { classId: number }) {
   const role = useAuth((s) => s.auth?.user.role);
   const router = useRouter();
   const utils = trpc.useUtils();
+  const accent = useAccent();
   const [copied, setCopied] = useState(false);
 
   const roster = trpc.teacher.classes.roster.useQuery(
@@ -66,7 +69,7 @@ export function ClassRosterScreen({ classId }: { classId: number }) {
       <Screen>
         <Feedback kind="bad">{roster.error.message}</Feedback>
         <Link href="/classes">
-          <Text color={BRAND} fontWeight="700">
+          <Text color={accent} fontWeight="700">
             ← {t('myClasses')}
           </Text>
         </Link>
@@ -89,7 +92,7 @@ export function ClassRosterScreen({ classId }: { classId: number }) {
   return (
     <Screen maxWidth={900}>
       <Link href="/classes">
-        <Text color={BRAND} fontWeight="700">
+        <Text color={accent} fontWeight="700">
           ← {t('myClasses')}
         </Text>
       </Link>
@@ -98,7 +101,7 @@ export function ClassRosterScreen({ classId }: { classId: number }) {
       <AppCard gap={8}>
         <XStack gap={8} alignItems="center" flexWrap="wrap">
           <Muted>{t('joinCode')}:</Muted>
-          <Text fontWeight="800" fontSize={20} letterSpacing={3} color={BRAND}>
+          <Text fontWeight="800" fontSize={20} letterSpacing={3} color={accent}>
             {code}
           </Text>
           {Platform.OS === 'web' && (
@@ -126,7 +129,7 @@ export function ClassRosterScreen({ classId }: { classId: number }) {
           <AppCard key={s.id} gap={8}>
             <XStack justifyContent="space-between" alignItems="center" gap={8} flexWrap="wrap">
               <Link href={`/progress/${s.id}`}>
-                <Text fontSize={16} fontWeight="800" color={BRAND}>
+                <Text fontSize={16} fontWeight="800" color={accent}>
                   {s.displayName} →
                 </Text>
               </Link>

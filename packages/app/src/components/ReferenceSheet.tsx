@@ -6,16 +6,19 @@ import { Button, Separator, Sheet, Text, XStack, YStack } from 'tamagui';
 import { trpc } from '../lib/trpc';
 import { useI18n } from '../lib/i18n';
 import { Katex } from './Katex';
-import { COLORS, INK, NEUTRAL, useAccent, SubTitle } from './ui';
+import { SubTitle, useAccent, useTokens } from './ui';
 
 /**
  * Top-bar pill that opens the reference sheet. Lives in the AppChrome top bar
  * so it never covers screen content; `compact` (phone widths) shows the icon
- * only.
+ * only. All colors route through tokens so the pill + sheet flip cleanly in
+ * dark mode — the previous hard-coded NEUTRAL[200] + INK made the pill read
+ * as a bright white chip on the dark chrome (see docs/dark-mode-audit-plan).
  */
 export function ReferenceSheetButton({ compact = false }: { compact?: boolean }) {
   const { t, locale } = useI18n();
   const accent = useAccent();
+  const tokens = useTokens();
   const [open, setOpen] = useState(false);
   const sheet = trpc.curriculum.referenceSheet.useQuery({ locale }, { enabled: open });
 
@@ -24,13 +27,13 @@ export function ReferenceSheetButton({ compact = false }: { compact?: boolean })
       <Button
         id="ref-sheet-btn"
         size="$2"
-        backgroundColor={NEUTRAL[200]}
-        color={INK}
+        backgroundColor={tokens.subtle}
+        color={tokens.ink}
         fontWeight="800"
         borderRadius={999}
         onPress={() => setOpen(true)}
         aria-label={t('referenceSheet')}
-        icon={<BookMarked size={15} color={INK} />}
+        icon={<BookMarked size={15} color={tokens.ink} />}
       >
         {compact ? null : t('referenceSheetShort')}
       </Button>
@@ -46,8 +49,8 @@ export function ReferenceSheetButton({ compact = false }: { compact?: boolean })
         // and ✕ button dismiss there instead.
         disableDrag={Platform.OS === 'web'}
       >
-        <Sheet.Overlay backgroundColor="rgba(0,0,0,0.3)" />
-        <Sheet.Frame backgroundColor="#fff" borderTopLeftRadius={18} borderTopRightRadius={18}>
+        <Sheet.Overlay backgroundColor="rgba(0,0,0,0.4)" />
+        <Sheet.Frame backgroundColor={tokens.bg} borderTopLeftRadius={18} borderTopRightRadius={18}>
           <XStack
             justifyContent="space-between"
             alignItems="center"
@@ -55,10 +58,10 @@ export function ReferenceSheetButton({ compact = false }: { compact?: boolean })
             paddingTop={14}
             paddingBottom={8}
             borderBottomWidth={1}
-            borderBottomColor={COLORS.border}
+            borderBottomColor={tokens.chromeBorder}
           >
             <SubTitle>{t('referenceSheet')}</SubTitle>
-            <Button size="$2" chromeless onPress={() => setOpen(false)} aria-label="close">
+            <Button size="$2" chromeless onPress={() => setOpen(false)} aria-label="close" color={tokens.ink}>
               ✕
             </Button>
           </XStack>
@@ -69,10 +72,10 @@ export function ReferenceSheetButton({ compact = false }: { compact?: boolean })
                   <Text fontWeight="800" fontSize={15} color={accent} marginTop={8}>
                     {s.title}
                   </Text>
-                  <Separator borderColor={COLORS.border} />
+                  <Separator borderColor={tokens.border} />
                   {s.rows.map((r) => (
                     <XStack key={r.label} justifyContent="space-between" gap={12} paddingVertical={3}>
-                      <Text fontSize={14} color="#374151" flexShrink={1}>
+                      <Text fontSize={14} color={tokens.ink} flexShrink={1}>
                         {r.label}
                       </Text>
                       <Katex tex={r.latex} />

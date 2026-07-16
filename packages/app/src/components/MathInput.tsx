@@ -10,7 +10,7 @@ import { TextInput } from 'react-native';
 import { Button, Input, Text, XStack, YStack } from 'tamagui';
 import { Katex } from './Katex';
 import { useI18n } from '../lib/i18n';
-import { COLORS } from './ui';
+import { useAccent, useTokens } from './ui';
 
 const BUTTONS: { label: string; insert: string; caret?: number }[] = [
   { label: 'x²', insert: '^2' },
@@ -52,6 +52,8 @@ export function MathInput({
   placeholder?: string;
 }) {
   const { t } = useI18n();
+  const accent = useAccent();
+  const tokens = useTokens();
   const ref = useRef<TextInput>(null);
   const selection = useRef({ start: value.length, end: value.length });
 
@@ -71,8 +73,8 @@ export function MathInput({
             key={b.label}
             size="$2"
             disabled={disabled}
-            backgroundColor="#eef1fd"
-            color="#3b5bdb"
+            backgroundColor={tokens.subtle}
+            color={accent}
             fontWeight="700"
             borderRadius={8}
             minWidth={40}
@@ -99,8 +101,9 @@ export function MathInput({
         spellCheck={false}
         enterKeyHint="go"
         fontSize={17}
-        borderColor={COLORS.border}
-        backgroundColor="#fff"
+        color={tokens.ink}
+        borderColor={tokens.border}
+        backgroundColor={tokens.surface}
       />
       <YStack minHeight={26} paddingHorizontal={4} aria-live="polite">
         {value ? <Katex tex={toPreviewTex(value)} /> : <Text> </Text>}
