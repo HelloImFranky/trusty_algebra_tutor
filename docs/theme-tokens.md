@@ -119,9 +119,12 @@ triggers the check. Existing pinned callsites:
   cue; see Phase A.6 exclusion.
 - **Streak flame** on Curriculum + Progress: `#ec3013` hard-pinned
   so the fire signal doesn't shift with the accent.
-- **Medal tier metal** on Progress (`#b08d57` bronze, `#97a2b0`
-  silver, `#e6a817` gold) — medallions represent literal metal, not
-  themed surfaces.
+- **Medal tier metal** on Progress — one triple per tier in the
+  stacking ladder: bronze (`#b08d57`), silver (`#97a2b0`), gold
+  (`#e6a817`), platinum (`#8a99ad`), mathematician (`#7c3aed`), math
+  wizard (`#c026d3`). Medallions represent literal metal /
+  prestige regalia, not themed surfaces — they stay the same in
+  light and dark so a gold badge is always visibly gold.
 - **HeroCard accent-tint pinks** (`#ff9783`) on Curriculum + Review
   CONTINUE captions — a fixed warm-pink tint so the caption reads
   consistently across every accent choice.
