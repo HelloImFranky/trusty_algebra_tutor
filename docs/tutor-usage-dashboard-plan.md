@@ -10,7 +10,29 @@ This doc plans **Option 2**: pull the numbers from Anthropic's **Admin
 API** and render them natively in `/admin`, so an admin sees token usage
 and spend without leaving the app. It is **additive** — if the admin key
 is unset or the API errors, the view falls back to the existing link-out
-card. Status: **planning only — no code yet.**
+card.
+
+Status: **implemented** (P1–P4). Decisions taken at sign-off:
+- **Charts are in scope and insight-first**: stat tiles (spend + avg/day,
+  tokens + output split, cache-hit rate = caching savings), a tappable
+  daily-spend bar chart with peak callout, and a per-model split that
+  doubles as the table view.
+- **Numbers are scoped to the tutor's dedicated workspace** via
+  `ANTHROPIC_TUTOR_WORKSPACE_ID` (unset = org-wide totals).
+
+Endpoints were verified against the live Admin API reference during
+implementation: `GET /v1/organizations/usage_report/messages` (1d
+buckets, `group_by[]=model`, native `workspace_ids[]` filter) and
+`GET /v1/organizations/cost_report` (1d only, amounts as decimal-string
+cents). One notable finding: **the cost endpoint has no workspace
+filter** — it only *groups* by `workspace_id` — so cost rows are grouped
+and then filtered server-side to the tutor workspace. The Default
+workspace reports `workspace_id: null`, so the tutor workspace must be a
+real (non-default) workspace for scoping to work.
+
+Code: `packages/core/src/admin/usage.ts` (+tests) · `admin.usage.summary`
+in `packages/api/src/routers/admin.ts` (10-min cache) ·
+`packages/app/src/components/UsageDashboard.tsx` + the `/admin` card.
 
 ---
 

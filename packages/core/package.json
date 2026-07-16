@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./content": "./src/content/index.ts",
-    "./tutor": "./src/tutor/index.ts"
+    "./tutor": "./src/tutor/index.ts",
+    "./admin": "./src/admin/index.ts"
   },
   "scripts": {
     "test": "vitest run",
