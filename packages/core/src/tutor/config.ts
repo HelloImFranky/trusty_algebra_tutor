@@ -9,7 +9,11 @@
 export const tutorConfig = {
   tutorProvider: (process.env.TUTOR_PROVIDER ?? '').trim().toLowerCase(),
   anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? '',
-  anthropicModel: process.env.ANTHROPIC_MODEL ?? 'claude-opus-4-8',
+  // Haiku 4.5 is the tutor default: fast + cheap, and plenty for guiding a
+  // student through a hint (grading stays in the deterministic math engine).
+  // Override with ANTHROPIC_MODEL to run a larger model. See
+  // docs/tutor-anthropic-haiku-plan.md.
+  anthropicModel: process.env.ANTHROPIC_MODEL ?? 'claude-haiku-4-5',
   // OpenAI-compatible endpoint. Defaults to the Hugging Face router; point it
   // at http://localhost:11434/v1 for a self-hosted Ollama model, etc.
   tutorBaseUrl: (process.env.TUTOR_BASE_URL ?? 'https://router.huggingface.co/v1').replace(/\/+$/, ''),

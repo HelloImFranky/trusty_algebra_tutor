@@ -140,6 +140,10 @@ const dict = {
     disable: 'Disable',
     noPending: 'No teachers waiting for approval.',
     adminsOnly: 'This area is for administrators.',
+    usageBillingTitle: 'AI tutor usage & billing',
+    usageBillingNote:
+      'Token usage and spend for the "Ask the Tutor" chatbot are tracked in the Anthropic Console. Open it to see statistics, billing, and per-model token usage.',
+    openAnthropicConsole: 'Open Anthropic Console →',
     statusActive: 'Active',
     statusPending: 'Pending',
     statusDisabled: 'Disabled',
@@ -324,6 +328,10 @@ const dict = {
     disable: 'Deshabilitar',
     noPending: 'No hay maestros esperando aprobación.',
     adminsOnly: 'Esta sección es para administradores.',
+    usageBillingTitle: 'Uso y facturación del tutor de IA',
+    usageBillingNote:
+      'El uso de tokens y el gasto del chatbot "Pregúntale al tutor" se registran en la Consola de Anthropic. Ábrela para ver estadísticas, facturación y uso de tokens por modelo.',
+    openAnthropicConsole: 'Abrir la Consola de Anthropic →',
     statusActive: 'Activo',
     statusPending: 'Pendiente',
     statusDisabled: 'Deshabilitado',
