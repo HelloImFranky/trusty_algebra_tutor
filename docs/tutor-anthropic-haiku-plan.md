@@ -226,6 +226,9 @@ admin-facing stats with zero new secret to secure. Move to Option 2 only
 if you want the numbers rendered inside the app, and treat the admin key
 as a higher-sensitivity credential than the tutor key when you do.
 
+> Option 2 is planned in detail in **`docs/tutor-usage-dashboard-plan.md`**
+> (architecture, the admin-key security controls, phasing, and rollout).
+
 ---
 
 ## Pricing per token, by model
