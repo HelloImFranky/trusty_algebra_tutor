@@ -28,7 +28,7 @@ import { LessonAnimations } from '../components/stepanim/LessonAnimations';
 import { TutorChat } from '../components/TutorChat';
 import {
   AppCard, GhostButton, HINT, Loading, Muted, PrimaryButton, Screen,
-  useAccent, useTokens,
+  useAccent, useFeedbackColors, useTokens,
 } from '../components/ui';
 
 /** Save the scaffold to the device: a real download on web, the system
@@ -95,6 +95,7 @@ export function LessonScreen({ id }: { id: number }) {
   const authed = useRequireAuth();
   const accent = useAccent();
   const tokens = useTokens();
+  const hint = useFeedbackColors('hint');
   const lesson = trpc.curriculum.lesson.useQuery({ id, locale }, { enabled: authed && !!id });
   const [revealed, setRevealed] = useState(1);
   const [openScaffold, setOpenScaffold] = useState<string | null>(null);
@@ -116,9 +117,15 @@ export function LessonScreen({ id }: { id: number }) {
       </Link>
 
       {l.mnemonic && (
-        <XStack backgroundColor={tokens.subtle} borderRadius={16} padding={12} alignItems="center" gap={8}>
-          <Lightbulb size={17} color={accent} />
-          <Text fontSize={13.5} color={tokens.ink}>
+        // The "Remember:" strip is a hint by nature — pin it to the HINT
+        // palette so it reads as a yellow reminder in both themes. The
+        // lightbulb uses HINT.fg (a darker mustard yellow), which reads
+        // as "darker shade of yellow" against the pale HINT.bg in light
+        // mode and stays a clear yellow signal on the deep HINT.bgDark in
+        // dark mode. Same aesthetic as the practice-hint bubble.
+        <XStack backgroundColor={hint.bg} borderRadius={16} padding={12} alignItems="center" gap={8}>
+          <Lightbulb size={17} color={HINT.fg} />
+          <Text fontSize={13.5} color={hint.ink}>
             <Text fontWeight="800">{t('mnemonic')}:</Text> {l.mnemonic}
           </Text>
         </XStack>
