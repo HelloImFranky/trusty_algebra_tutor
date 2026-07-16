@@ -4,7 +4,7 @@
  * trace curve values. All coordinate math is local; the window state lives
  * in the calculator store.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { formatNumber, type GraphWindow, type Point } from '@tutor/core';
 import { renderGraphSvg, type PlottedFunction } from './graphSvg';
 
@@ -18,7 +18,10 @@ export interface GraphPlotProps {
 
 export function GraphPlot({ fns, window: win, onWindowChange, markers, height = 380 }: GraphPlotProps) {
   const host = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(640);
+  // width starts at 0 so the very first paint is a skipped render (see the
+  // "if (width === 0) …" placeholder below), not a mis-sized 640-wide SVG
+  // that briefly overflows a narrower container (chrome popover sheet).
+  const [width, setWidth] = useState(0);
   const [trace, setTrace] = useState<{ x: number; values: { color: string; y: number }[] } | null>(
     null,
   );
@@ -28,10 +31,22 @@ export function GraphPlot({ fns, window: win, onWindowChange, markers, height = 
   const winRef = useRef(win);
   winRef.current = win;
 
+  // useLayoutEffect measures synchronously after DOM insertion so the width
+  // is set BEFORE the first paint of the SVG — otherwise the initial frame
+  // used a stale fallback width and the graph looked squashed / offset.
+  useLayoutEffect(() => {
+    const el = host.current;
+    if (!el) return;
+    const w = el.clientWidth;
+    if (w > 0) setWidth(w);
+  }, []);
   useEffect(() => {
     const el = host.current;
     if (!el) return;
-    const measure = () => setWidth(Math.max(240, el.clientWidth));
+    const measure = () => {
+      const w = el.clientWidth;
+      if (w > 0) setWidth(w);
+    };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);

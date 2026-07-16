@@ -213,15 +213,17 @@ export function GraphView({ compact = false }: { compact?: boolean } = {}) {
         </GhostButton>
       </XStack>
 
-      {/* Compact mode (sheet render): shorter plot so the whole graph
-          view — inputs + quick-keys + zoom row + plot + analysis —
-          fits without the popover having to scroll. */}
+      {/* Compact mode (sheet render): plot is 320 tall — enough vertical
+          room that the pixel scale on the y axis is close to the x axis
+          scale at the sheet's ~500px inner width, so curves don't look
+          horizontally stretched. Any shorter and a parabola like y=x²
+          reads as a squashed U. */}
       <GraphPlot
         fns={plotted}
         window={window}
         onWindowChange={setWindow}
         markers={markers}
-        {...(compact ? { height: 240 } : {})}
+        {...(compact ? { height: 320 } : {})}
       />
       {Platform.OS === 'web' && <Muted>{t('graphHint')}</Muted>}
 
