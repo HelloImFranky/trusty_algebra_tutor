@@ -638,6 +638,18 @@ describe('regents review', () => {
     });
   });
 
+  it('refuses to ANSWER a question in a round that was never unlocked', async () => {
+    // The write path must gate the same way the read path does — posting an
+    // answer straight into a locked round used to inflate the counters.
+    await expect(
+      as(student).regents.answer({ questionId: 'linear-equations:r2:q1', choiceIndex: 0 }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    // An untouched topic can't be answered past round 0 either.
+    await expect(
+      as(student).regents.answer({ questionId: 'systems:r1:q1', choiceIndex: 0 }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
   it('keeps first-run badge stats separate from extra practice rounds', async () => {
     const res = await as(student).progress.me();
     const perTopic = res.regents.topics.find((t) => t.slug === 'linear-equations');

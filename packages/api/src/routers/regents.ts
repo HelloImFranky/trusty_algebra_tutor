@@ -65,6 +65,20 @@ function resolveQuestion(
 }
 
 /**
+ * Whether `round` is unlocked given the student's per-round answer counts.
+ * A round is reachable if it's one they've already started (`<= maxRound`) or
+ * the very next one, and only once the current latest round is finished. This
+ * is the single source of truth for round gating, enforced on both the read
+ * (`topic`) and the write (`answer`) path so a client can't POST answers into
+ * a round it never legitimately opened.
+ */
+function roundUnlocked(perRound: Map<number, number>, round: number): boolean {
+  const maxRound = Math.max(0, ...perRound.keys());
+  const maxRoundDone = (perRound.get(maxRound) ?? 0) >= REGENTS_ROUND_SIZE;
+  return round <= maxRound || (round === maxRound + 1 && maxRoundDone);
+}
+
+/**
  * Questions served for one round. Round 0 starts with the handwritten bank
  * and is topped up to REGENTS_ROUND_SIZE with generated questions (slots
  * after the bank); later rounds are fully generated.
@@ -142,9 +156,8 @@ export const regentsRouter = router({
       const perRound = new Map<number, number>();
       for (const a of answers) perRound.set(a.round, (perRound.get(a.round) ?? 0) + 1);
       const maxRound = Math.max(0, ...perRound.keys());
-      const maxRoundDone = (perRound.get(maxRound) ?? 0) >= REGENTS_ROUND_SIZE;
       const round = input.round ?? maxRound;
-      if (round > maxRound && !(round === maxRound + 1 && maxRoundDone)) {
+      if (!roundUnlocked(perRound, round)) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
           message: 'finish the current set before starting a new one',
@@ -190,6 +203,24 @@ export const regentsRouter = router({
       if (!entry) throw new TRPCError({ code: 'NOT_FOUND', message: 'question not found' });
       const { topic, question, round } = entry;
       const correct = input.choiceIndex === question.correctIndex;
+
+      // Gate the WRITE by the same round-reachability rule the read path uses:
+      // resolveQuestion accepts any parseable round id (up to r9999), so
+      // without this a client could POST answers straight into a round it
+      // never opened and inflate achievement/dashboard counters.
+      const topicAnswers = await prisma.regentsAnswer.findMany({
+        where: { userId: BigInt(ctx.user.id), topicSlug: topic.slug },
+        select: { round: true },
+      });
+      const perRound = new Map<number, number>();
+      for (const a of topicAnswers) perRound.set(a.round, (perRound.get(a.round) ?? 0) + 1);
+      if (!roundUnlocked(perRound, round)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'finish the current set before starting a new one',
+        });
+      }
+
       const prior = await prisma.regentsAnswer.findUnique({
         where: {
           userId_questionId: { userId: BigInt(ctx.user.id), questionId: input.questionId },
