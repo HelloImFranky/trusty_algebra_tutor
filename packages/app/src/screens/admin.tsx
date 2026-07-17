@@ -25,6 +25,7 @@ import {
   SubTitle,
   Title,
   useAccent,
+  useTokens,
 } from '../components/ui';
 
 // Console root — lands on the dashboard where usage, billing, and per-model
@@ -41,6 +42,7 @@ const STATUS_KEY: Record<string, I18nKey> = {
 export function AdminScreen() {
   const { t } = useI18n();
   const accent = useAccent();
+  const tokens = useTokens();
   const authed = useRequireAuth();
   const role = useAuth((s) => s.auth?.user.role);
   const isAdmin = authed && role === 'admin';
@@ -81,7 +83,7 @@ export function AdminScreen() {
         {pending.data?.teachers.map((tt) => (
           <XStack key={tt.id} justifyContent="space-between" alignItems="center" gap={8} flexWrap="wrap">
             <YStack>
-              <Text fontWeight="800">{tt.displayName}</Text>
+              <Text fontWeight="800" color={tokens.ink}>{tt.displayName}</Text>
               <Muted size={12}>
                 @{tt.username}
                 {tt.email ? ` · ${tt.email}` : ''}
@@ -106,7 +108,7 @@ export function AdminScreen() {
         {all.data?.teachers.map((tt) => (
           <XStack key={tt.id} justifyContent="space-between" alignItems="center" gap={8} flexWrap="wrap">
             <YStack>
-              <Text fontWeight="800">{tt.displayName}</Text>
+              <Text fontWeight="800" color={tokens.ink}>{tt.displayName}</Text>
               <Muted size={12}>@{tt.username}</Muted>
             </YStack>
             <XStack gap={8} alignItems="center">
