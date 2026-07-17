@@ -480,12 +480,13 @@ export function Badge({ label, text }: { label: string; text?: string }) {
   const accent = useAccent();
   const tokens = useTokens();
   const hintBg = useHintBg();
+  const bad = useFeedbackColors('bad');
   const tier = TIER_BY_LABEL[label] ?? 'neutral';
   const styles: Record<MasteryTier, TierStyle> = {
     accent: { bg: tokens.subtle, fg: accent, border: 'transparent' },
     outline: { bg: 'transparent', fg: accent, border: accent },
     warn: { bg: hintBg, fg: HINT.fg, border: 'transparent' },
-    bad: { bg: COLORS.badBg, fg: COLORS.bad, border: 'transparent' },
+    bad: { bg: bad.bg, fg: bad.ink, border: 'transparent' },
     neutral: { bg: tokens.subtle, fg: tokens.ink, border: 'transparent' },
   };
   const style = styles[tier];
