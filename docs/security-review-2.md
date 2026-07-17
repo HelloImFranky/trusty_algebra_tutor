@@ -60,6 +60,28 @@ enrollment) behind consent is a broader product decision, scoped as a
 follow-up (📝) — the tutor is fixed first because it is the external
 data-sharing boundary.
 
+### H4 — Unescaped fallback in the web KaTeX renderer (XSS) ✅
+`packages/app/src/components/Katex.web.tsx`
+
+`Katex` renders LaTeX with `katex.renderToString(tex, { throwOnError: false })`
+into `dangerouslySetInnerHTML`. On the happy path KaTeX emits its own escaped
+HTML (and with the default `trust: false` it won't emit `\href`/raw HTML), so
+that path is safe. But the `catch` fell back to `return tex` — the **raw,
+unescaped** input — and `renderToString` can still throw on some inputs even
+with `throwOnError: false`.
+
+This component renders untrusted text: `TutorChat` passes both assistant
+(model) replies and the student's own messages through `MathText`, which routes
+every `$…$` segment to `Katex`. On the OpenAI-compatible provider path
+(self-hosted / Hugging Face), model output is not trustworthy; a crafted `$…$`
+segment that forces a KaTeX throw would have injected its raw contents as HTML
+in the student's browser — stored XSS via the persisted transcript.
+
+**Fix:** the fallback now HTML-escapes the string before it reaches
+`innerHTML`, so a render failure degrades to literal text, never markup. Native
+(`Katex.tsx`) renders through a React Native `<Text>` node and was never
+affected.
+
 ---
 
 ## Medium
