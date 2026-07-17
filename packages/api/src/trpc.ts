@@ -25,11 +25,24 @@ export interface Context {
   cookies?: string[];
 }
 
-/** First hop of X-Forwarded-For (set by Vercel/most proxies), else X-Real-IP. */
+/**
+ * Best-effort client IP for rate-limiting. `X-Real-IP` is set by the trusted
+ * proxy (Vercel/most reverse proxies) to the real client and cannot be spoofed
+ * past it, so prefer it. Otherwise fall back to the RIGHTMOST `X-Forwarded-For`
+ * hop — the one our proxy appended — never the leftmost, which is whatever the
+ * client sent. Trusting the leftmost value would let an attacker rotate a fake
+ * IP per request and land each in a fresh rate-limit bucket, defeating the
+ * unauthenticated-endpoint throttles.
+ */
 function clientIp(headers: Headers): string | null {
+  const real = headers.get('x-real-ip')?.trim();
+  if (real) return real;
   const fwd = headers.get('x-forwarded-for');
-  if (fwd) return fwd.split(',')[0]!.trim() || null;
-  return headers.get('x-real-ip');
+  if (fwd) {
+    const hops = fwd.split(',').map((h) => h.trim()).filter(Boolean);
+    return hops.length ? hops[hops.length - 1]! : null;
+  }
+  return null;
 }
 
 /** https behind a proxy sets X-Forwarded-Proto; plain localhost dev doesn't. */
