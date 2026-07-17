@@ -135,4 +135,18 @@ describe('grade()', () => {
   it('solution pairs', () => {
     expect(grade('(-3, 2)', '(-3,2)', 'exact').correct).toBe(true);
   });
+
+  it('never allocates on a matrix/range submission (DoS hardening)', () => {
+    // These would otherwise allocate gigabytes server-side. They must be
+    // rejected cheaply (not thrown, not hung) — grade() catches the disabled
+    // stub error and returns incorrect. The huge sizes stay well under the
+    // 2000-char input cap.
+    const started = Date.now();
+    expect(grade('ones(30000,30000)', '4', 'numeric_tolerance', 0.05).correct).toBe(false);
+    expect(grade('zeros(30000,30000)', '4', 'exact').correct).toBe(false);
+    expect(grade('range(1,200000000)', '4', 'exact').correct).toBe(false);
+    expect(grade('1:200000000', '4', 'numeric_tolerance', 0.05).correct).toBe(false);
+    // The whole set resolves near-instantly because nothing is allocated.
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
 });

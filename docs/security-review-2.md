@@ -123,6 +123,34 @@ login rate-limit bucket (keyed on `toLowerCase()`) from the DB lookup
 at the database, and registration / login / profile-rename now compare
 case-insensitively.
 
+### M4 — Server-side DoS via unbounded mathjs allocation in grading ✅
+`packages/core/src/math/engine.ts`, `packages/core/src/math/harden.ts`
+
+`grade()` runs on the server for every `practice.attempt` (a `protectedProcedure`
+with **no rate limit**), and for `exact` / `numeric_tolerance` modes it calls
+`math.evaluate(normalizeInput(submitted))` on the student's raw answer with no
+scope. The full mathjs instance (`create(all, {})`) exposes matrix/range
+constructors whose memory use scales with their arguments. A submission like
+`ones(30000,30000)` or `range(1,2e8)` — a few dozen characters, far under the
+2000-char input cap — allocates gigabytes and OOM-kills the serverless
+function. Measured locally: `range(1,2e6)` alone adds ~59 MB, `ones(4000,4000)`
+~67 MB; the exponents scale linearly with the (attacker-chosen) arguments.
+mathjs 13 blocks the classic `constructor` RCE at the parser, so this is
+resource exhaustion (CWE-400), not code execution.
+
+**Fix:** a shared `hardenMathInstance()` disables the expression-reachable
+allocation/creation functions (`matrix`, `ones`, `zeros`, `identity`, `range`
+— which also closes the `a:b` range operator — `diag`, `kron`, `concat`,
+`resize`, `reshape`, `fill`, `flatten`, `rotate`, the `random*` family) plus the
+config-mutating `import` / `createUnit`, by overriding them with throwing
+stubs. It's a denylist of things a middle-school algebra answer never contains,
+applied to the grading engine and both calculator instances (the calculator
+runs client-side, but this also stops a malicious saved session from OOMing the
+author's browser). The JS-level APIs the code relies on (`math.parse`,
+`math.evaluate`, `node.compile`, `math.format`) are untouched. A regression
+test asserts a matrix/range submission is rejected in well under a second with
+no allocation.
+
 ---
 
 ## Low / latent

@@ -11,8 +11,12 @@
  *  - numeric_tolerance: |student - key| <= tolerance
  */
 import { create, all, type MathNode } from 'mathjs';
+import { hardenMathInstance } from './harden.js';
 
 const math = create(all, {});
+// Grading evaluates student input server-side; disable the memory-allocating
+// matrix/range constructors so a crafted answer can't OOM the process.
+hardenMathInstance(math);
 
 export type GradingMode =
   | 'equivalent'
