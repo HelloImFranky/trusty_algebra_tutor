@@ -1,6 +1,6 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
-import { prisma } from '@tutor/db';
+import { Prisma, prisma } from '@tutor/db';
 import {
   equalizeLoginTiming,
   hashPassword,
@@ -98,29 +98,45 @@ export const authRouter = router({
         message: 'Students under 13 need a parent or guardian email to sign up.',
       });
     }
-    const exists = await prisma.user.findUnique({ where: { username: input.username } });
+    // Case-insensitive: 'Alice' and 'alice' are the same account (a
+    // lower(username) unique index backs this up against races — see below).
+    const exists = await prisma.user.findFirst({
+      where: { username: { equals: input.username, mode: 'insensitive' } },
+      select: { id: true },
+    });
     if (exists) throw new TRPCError({ code: 'CONFLICT', message: 'username taken' });
 
-    const created = await prisma.user.create({
-      data: {
-        role: input.role,
-        username: input.username,
-        passwordHash: await hashPassword(input.password),
-        displayName: input.displayName,
-        locale: input.locale,
-        grade: input.grade ?? null,
-        email: input.role === 'student' ? null : input.email ?? null,
-        // Teachers must be approved by an admin before they can do anything;
-        // students and guardians are active immediately.
-        status: input.role === 'teacher' ? 'pending' : 'active',
-        // COPPA (§9): consent is NEVER granted from an unverified email at
-        // signup. Guardians and 13+ students don't require it; an under-13
-        // student starts with consent PENDING (false) until a guardian
-        // actually verifies out-of-band. Supplying a guardianEmail only
-        // initiates that flow (link below) — it does not certify consent.
-        guardianConsent: input.role !== 'student' || !input.under13,
-      },
-    });
+    let created: { id: bigint };
+    try {
+      created = await prisma.user.create({
+        data: {
+          role: input.role,
+          username: input.username,
+          passwordHash: await hashPassword(input.password),
+          displayName: input.displayName,
+          locale: input.locale,
+          grade: input.grade ?? null,
+          email: input.role === 'student' ? null : input.email ?? null,
+          // Teachers must be approved by an admin before they can do anything;
+          // students and guardians are active immediately.
+          status: input.role === 'teacher' ? 'pending' : 'active',
+          // COPPA (§9): consent is NEVER granted from an unverified email at
+          // signup. Guardians and 13+ students don't require it; an under-13
+          // student starts with consent PENDING (false) until a guardian
+          // actually verifies out-of-band. Supplying a guardianEmail only
+          // initiates that flow (link below) — it does not certify consent.
+          guardianConsent: input.role !== 'student' || !input.under13,
+        },
+        select: { id: true },
+      });
+    } catch (err) {
+      // The lower(username) unique index catches a case-insensitive collision
+      // that raced past the check above.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new TRPCError({ code: 'CONFLICT', message: 'username taken' });
+      }
+      throw err;
+    }
     if (input.role === 'student' && input.guardianEmail) {
       const guardian = await prisma.user.findFirst({
         where: { role: 'guardian', email: input.guardianEmail },
@@ -147,8 +163,9 @@ export const authRouter = router({
     .input(z.object({ username: z.string().max(32), password: z.string().max(128) }))
     .mutation(async ({ ctx, input }) => {
       throttle(loginRate, `${ipKey(ctx)}|${input.username.toLowerCase()}`);
-      const row = await prisma.user.findUnique({
-        where: { username: input.username },
+      // Case-insensitive: log in with whatever casing; the account is the same.
+      const row = await prisma.user.findFirst({
+        where: { username: { equals: input.username, mode: 'insensitive' } },
         select: { id: true, passwordHash: true },
       });
       if (!row) {
@@ -223,20 +240,32 @@ export const authRouter = router({
       if (input.displayName === undefined && input.username === undefined) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'nothing to update' });
       }
-      if (input.username && input.username !== ctx.user.username) {
-        const taken = await prisma.user.findUnique({
-          where: { username: input.username },
+      if (input.username && input.username.toLowerCase() !== ctx.user.username.toLowerCase()) {
+        // Case-insensitive collision against anyone but the caller (so a user
+        // can still re-case their own name).
+        const taken = await prisma.user.findFirst({
+          where: {
+            username: { equals: input.username, mode: 'insensitive' },
+            NOT: { id: BigInt(ctx.user.id) },
+          },
           select: { id: true },
         });
         if (taken) throw new TRPCError({ code: 'CONFLICT', message: 'username taken' });
       }
-      await prisma.user.update({
-        where: { id: BigInt(ctx.user.id) },
-        data: {
-          ...(input.displayName !== undefined ? { displayName: input.displayName } : {}),
-          ...(input.username !== undefined ? { username: input.username } : {}),
-        },
-      });
+      try {
+        await prisma.user.update({
+          where: { id: BigInt(ctx.user.id) },
+          data: {
+            ...(input.displayName !== undefined ? { displayName: input.displayName } : {}),
+            ...(input.username !== undefined ? { username: input.username } : {}),
+          },
+        });
+      } catch (err) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+          throw new TRPCError({ code: 'CONFLICT', message: 'username taken' });
+        }
+        throw err;
+      }
       const user = (await loadUser(ctx.user.id)) as AuthUser;
       return { user, accessToken: signAccessToken(user) };
     }),

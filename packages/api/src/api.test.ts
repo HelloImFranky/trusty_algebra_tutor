@@ -115,6 +115,29 @@ describe('auth (COPPA-aware)', () => {
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 
+  it('treats usernames case-insensitively (no look-alike accounts)', async () => {
+    await anon.auth.register({
+      role: 'guardian',
+      username: 'CaseUser',
+      password: 'password123',
+      displayName: 'Case User',
+      email: 'case@example.com',
+    });
+    // A different-case variant can't be registered as a second account.
+    await expect(
+      anon.auth.register({
+        role: 'guardian',
+        username: 'caseuser',
+        password: 'password123',
+        displayName: 'Impostor',
+        email: 'impostor@example.com',
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    // ...and login accepts any casing.
+    const login = await anon.auth.login({ username: 'CASEUSER', password: 'password123' });
+    expect(login.accessToken).toBeTruthy();
+  });
+
   it('logs in and refreshes tokens (with rotation)', async () => {
     const login = await anon.auth.login({ username: 'student1', password: 'password123' });
     expect(login.accessToken).toBeTruthy();
