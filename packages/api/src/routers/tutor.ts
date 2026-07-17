@@ -16,6 +16,29 @@ import { loc, rateLimited, router } from '../trpc.js';
 // escalation path, so keep the budget tight.
 const tutorProcedure = rateLimited(10);
 
+/**
+ * COPPA (§9): the tutor is the one place a student's text leaves for a
+ * third-party inference API, so an under-13 student without verified guardian
+ * consent must not reach it. 13+ students and non-student roles are created
+ * with guardianConsent = true, so this only blocks the unconsented under-13
+ * case. Read fresh from the DB (the access token doesn't carry consent, and it
+ * can be granted mid-session).
+ */
+async function assertTutorConsent(userId: number, role: string): Promise<void> {
+  if (role !== 'student') return;
+  const row = await prisma.user.findUnique({
+    where: { id: BigInt(userId) },
+    select: { guardianConsent: true },
+  });
+  if (!row?.guardianConsent) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message:
+        'Ask your parent or guardian to confirm consent before using the chat tutor. The step-by-step hints still work in the meantime.',
+    });
+  }
+}
+
 async function loadTutorContext(
   locale: 'en' | 'es',
   lessonId?: number | null,
@@ -78,6 +101,7 @@ export const tutorRouter = router({
   createSession: tutorProcedure
     .input(z.object({ lessonId: z.number().optional(), problemId: z.number().optional() }))
     .mutation(async ({ ctx, input }) => {
+      await assertTutorConsent(ctx.user.id, ctx.user.role);
       const row = await prisma.tutorSession.create({
         data: {
           userId: BigInt(ctx.user.id),
@@ -103,6 +127,7 @@ export const tutorRouter = router({
       }),
     )
     .mutation(async function* ({ ctx, input }) {
+      await assertTutorConsent(ctx.user.id, ctx.user.role);
       const s = await prisma.tutorSession.findUnique({ where: { id: BigInt(input.sessionId) } });
       if (!s || Number(s.userId) !== ctx.user.id) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'session not found' });

@@ -143,6 +143,13 @@ export const authRouter = router({
         select: { id: true },
       });
       if (guardian) {
+        // The guardian's email was never verified at their signup, so an
+        // unverified match must NOT grant access to a child's records
+        // (FERPA/COPPA). Create the link PENDING; it only initiates the
+        // consent flow. progress.student fails closed on any non-active link,
+        // so nothing is exposed until the link is activated out-of-band (the
+        // same verification step that flips guardianConsent). Never downgrade
+        // an already-active link on a re-register race, hence the empty update.
         await prisma.guardianLink.upsert({
           where: {
             guardianUserId_studentUserId: {
@@ -151,7 +158,7 @@ export const authRouter = router({
             },
           },
           update: {},
-          create: { guardianUserId: guardian.id, studentUserId: created.id, status: 'active' },
+          create: { guardianUserId: guardian.id, studentUserId: created.id, status: 'pending' },
         });
       }
     }

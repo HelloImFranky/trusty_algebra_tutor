@@ -707,7 +707,34 @@ describe('progress & FERPA scoping', () => {
     expect(res.skills.length).toBeGreaterThan(0);
   });
 
-  it('lets the linked guardian view the student, read-only', async () => {
+  it('keeps the guardian link PENDING from an unverified email, blocking access', async () => {
+    // The link created at signup from an unverified guardian email must not
+    // grant access on its own (FERPA/COPPA) — it starts pending.
+    const link = await prisma.guardianLink.findUnique({
+      where: {
+        guardianUserId_studentUserId: {
+          guardianUserId: BigInt(guardian.id),
+          studentUserId: BigInt(student.id),
+        },
+      },
+    });
+    expect(link?.status).toBe('pending');
+    await expect(
+      as(guardian).progress.student({ studentId: student.id }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('lets the guardian view the student once the link is verified (activated)', async () => {
+    // Simulate the out-of-band verification that activates the link.
+    await prisma.guardianLink.update({
+      where: {
+        guardianUserId_studentUserId: {
+          guardianUserId: BigInt(guardian.id),
+          studentUserId: BigInt(student.id),
+        },
+      },
+      data: { status: 'active' },
+    });
     const res = await as(guardian).progress.student({ studentId: student.id });
     expect(res.student.displayName).toBe('Student One');
   });
@@ -949,7 +976,26 @@ describe('admin approval (teacher provisioning)', () => {
 });
 
 describe('tutor sessions', () => {
+  it('blocks an under-13 student without verified guardian consent', async () => {
+    const kid = await anon.auth.register({
+      role: 'student',
+      username: 'unconsented_kid',
+      password: 'password123',
+      displayName: 'Kid',
+      under13: true,
+      guardianEmail: 'noparent@example.com',
+    });
+    // consent is pending → the tutor (external LLM/PII path) is closed
+    await expect(as(kid.user).tutor.createSession({})).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
   it('opens a session and reports availability', async () => {
+    // student1 is under-13; simulate the guardian verification that grants
+    // consent so the happy-path tutor flow is reachable.
+    await prisma.user.update({
+      where: { id: BigInt(student.id) },
+      data: { guardianConsent: true },
+    });
     const res = await as(student).tutor.createSession({});
     expect(res.sessionId).toBeTruthy();
     expect(typeof res.available).toBe('boolean');
