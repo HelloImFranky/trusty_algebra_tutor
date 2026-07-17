@@ -270,9 +270,23 @@ export const authRouter = router({
       return issueSession(ctx, ctx.user);
     }),
 
-  /** FERPA (§9): account + data deletion. */
-  deleteAccount: protectedProcedure.mutation(async ({ ctx }) => {
-    await prisma.user.delete({ where: { id: BigInt(ctx.user.id) } });
-    return { deleted: true };
-  }),
+  /**
+   * FERPA (§9): account + data deletion. Irreversible, and for a teacher it
+   * cascades to every class they own and every enrollment in it, so it must
+   * not be reachable from a stolen access token alone: re-verify the current
+   * password and rate-limit it.
+   */
+  deleteAccount: rateLimited(5)
+    .input(z.object({ password: z.string().max(128) }))
+    .mutation(async ({ ctx, input }) => {
+      const row = await prisma.user.findUnique({
+        where: { id: BigInt(ctx.user.id) },
+        select: { passwordHash: true },
+      });
+      if (!row || !(await verifyPassword(input.password, row.passwordHash))) {
+        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'password is incorrect' });
+      }
+      await prisma.user.delete({ where: { id: BigInt(ctx.user.id) } });
+      return { deleted: true };
+    }),
 });

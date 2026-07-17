@@ -298,6 +298,29 @@ describe('account settings (self-service profile + password)', () => {
     const relogin = await anon.auth.login({ username: 'pw_user', password: 'newpassword123' });
     expect(relogin.accessToken).toBeTruthy();
   });
+
+  it('deletes an account only after the current password is re-verified', async () => {
+    const reg = await anon.auth.register({
+      role: 'guardian',
+      username: 'delete_me',
+      password: 'password123',
+      displayName: 'Delete Me',
+      email: 'delete@example.com',
+    });
+    const caller = as(reg.user);
+
+    // A stolen access token alone is not enough — the wrong password is rejected
+    // and the account survives.
+    await expect(caller.auth.deleteAccount({ password: 'wrongpass' })).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    });
+    expect(await prisma.user.findUnique({ where: { id: BigInt(reg.user.id) } })).not.toBeNull();
+
+    // The correct password deletes it.
+    const res = await caller.auth.deleteAccount({ password: 'password123' });
+    expect(res.deleted).toBe(true);
+    expect(await prisma.user.findUnique({ where: { id: BigInt(reg.user.id) } })).toBeNull();
+  });
 });
 
 describe('curriculum', () => {
