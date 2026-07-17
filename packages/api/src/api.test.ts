@@ -115,6 +115,29 @@ describe('auth (COPPA-aware)', () => {
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 
+  it('treats usernames case-insensitively (no look-alike accounts)', async () => {
+    await anon.auth.register({
+      role: 'guardian',
+      username: 'CaseUser',
+      password: 'password123',
+      displayName: 'Case User',
+      email: 'case@example.com',
+    });
+    // A different-case variant can't be registered as a second account.
+    await expect(
+      anon.auth.register({
+        role: 'guardian',
+        username: 'caseuser',
+        password: 'password123',
+        displayName: 'Impostor',
+        email: 'impostor@example.com',
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+    // ...and login accepts any casing.
+    const login = await anon.auth.login({ username: 'CASEUSER', password: 'password123' });
+    expect(login.accessToken).toBeTruthy();
+  });
+
   it('logs in and refreshes tokens (with rotation)', async () => {
     const login = await anon.auth.login({ username: 'student1', password: 'password123' });
     expect(login.accessToken).toBeTruthy();
@@ -297,6 +320,29 @@ describe('account settings (self-service profile + password)', () => {
     );
     const relogin = await anon.auth.login({ username: 'pw_user', password: 'newpassword123' });
     expect(relogin.accessToken).toBeTruthy();
+  });
+
+  it('deletes an account only after the current password is re-verified', async () => {
+    const reg = await anon.auth.register({
+      role: 'guardian',
+      username: 'delete_me',
+      password: 'password123',
+      displayName: 'Delete Me',
+      email: 'delete@example.com',
+    });
+    const caller = as(reg.user);
+
+    // A stolen access token alone is not enough — the wrong password is rejected
+    // and the account survives.
+    await expect(caller.auth.deleteAccount({ password: 'wrongpass' })).rejects.toMatchObject({
+      code: 'UNAUTHORIZED',
+    });
+    expect(await prisma.user.findUnique({ where: { id: BigInt(reg.user.id) } })).not.toBeNull();
+
+    // The correct password deletes it.
+    const res = await caller.auth.deleteAccount({ password: 'password123' });
+    expect(res.deleted).toBe(true);
+    expect(await prisma.user.findUnique({ where: { id: BigInt(reg.user.id) } })).toBeNull();
   });
 });
 
@@ -615,6 +661,18 @@ describe('regents review', () => {
     });
   });
 
+  it('refuses to ANSWER a question in a round that was never unlocked', async () => {
+    // The write path must gate the same way the read path does — posting an
+    // answer straight into a locked round used to inflate the counters.
+    await expect(
+      as(student).regents.answer({ questionId: 'linear-equations:r2:q1', choiceIndex: 0 }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    // An untouched topic can't be answered past round 0 either.
+    await expect(
+      as(student).regents.answer({ questionId: 'systems:r1:q1', choiceIndex: 0 }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
   it('keeps first-run badge stats separate from extra practice rounds', async () => {
     const res = await as(student).progress.me();
     const perTopic = res.regents.topics.find((t) => t.slug === 'linear-equations');
@@ -649,7 +707,34 @@ describe('progress & FERPA scoping', () => {
     expect(res.skills.length).toBeGreaterThan(0);
   });
 
-  it('lets the linked guardian view the student, read-only', async () => {
+  it('keeps the guardian link PENDING from an unverified email, blocking access', async () => {
+    // The link created at signup from an unverified guardian email must not
+    // grant access on its own (FERPA/COPPA) — it starts pending.
+    const link = await prisma.guardianLink.findUnique({
+      where: {
+        guardianUserId_studentUserId: {
+          guardianUserId: BigInt(guardian.id),
+          studentUserId: BigInt(student.id),
+        },
+      },
+    });
+    expect(link?.status).toBe('pending');
+    await expect(
+      as(guardian).progress.student({ studentId: student.id }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('lets the guardian view the student once the link is verified (activated)', async () => {
+    // Simulate the out-of-band verification that activates the link.
+    await prisma.guardianLink.update({
+      where: {
+        guardianUserId_studentUserId: {
+          guardianUserId: BigInt(guardian.id),
+          studentUserId: BigInt(student.id),
+        },
+      },
+      data: { status: 'active' },
+    });
     const res = await as(guardian).progress.student({ studentId: student.id });
     expect(res.student.displayName).toBe('Student One');
   });
@@ -891,7 +976,26 @@ describe('admin approval (teacher provisioning)', () => {
 });
 
 describe('tutor sessions', () => {
+  it('blocks an under-13 student without verified guardian consent', async () => {
+    const kid = await anon.auth.register({
+      role: 'student',
+      username: 'unconsented_kid',
+      password: 'password123',
+      displayName: 'Kid',
+      under13: true,
+      guardianEmail: 'noparent@example.com',
+    });
+    // consent is pending → the tutor (external LLM/PII path) is closed
+    await expect(as(kid.user).tutor.createSession({})).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
   it('opens a session and reports availability', async () => {
+    // student1 is under-13; simulate the guardian verification that grants
+    // consent so the happy-path tutor flow is reachable.
+    await prisma.user.update({
+      where: { id: BigInt(student.id) },
+      data: { guardianConsent: true },
+    });
     const res = await as(student).tutor.createSession({});
     expect(res.sessionId).toBeTruthy();
     expect(typeof res.available).toBe('boolean');

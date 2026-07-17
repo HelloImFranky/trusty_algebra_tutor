@@ -29,12 +29,24 @@ function resolveJwtSecret(): string {
     console.log(`generated a JWT secret and saved it to ${secretFile}`);
     return generated;
   } catch (err) {
+    // In a serverless/production deploy the data dir is typically not
+    // writable AND each instance is a fresh process, so an ephemeral secret
+    // means tokens signed by one instance are rejected by the next — a
+    // silent, intermittent auth outage. Fail hard so the misconfiguration is
+    // caught at startup instead of degrading login in production.
+    const isProd = process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL);
+    if (isProd) {
+      throw new Error(
+        'JWT_SECRET is not set and no secret could be persisted (data dir not writable). ' +
+          'Set JWT_SECRET in the environment' +
+          (process.env.VERCEL
+            ? ' (on Vercel: Settings → Environment Variables — npm run deploy sets it for you).'
+            : '.'),
+      );
+    }
     console.warn(
       'could not persist a JWT secret (data dir not writable); using an ephemeral one. ' +
-        'Set JWT_SECRET to keep logins valid across restarts' +
-        (process.env.VERCEL
-          ? ' (on Vercel: Settings → Environment Variables — npm run deploy sets it for you).'
-          : '.'),
+        'Set JWT_SECRET to keep logins valid across restarts.',
       err instanceof Error ? err.message : err,
     );
     return crypto.randomBytes(48).toString('hex');

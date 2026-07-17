@@ -10,6 +10,7 @@
  */
 import { create, all } from 'mathjs';
 import { normalizeInput } from './engine.js';
+import { hardenMathInstance } from './harden.js';
 
 export type AngleMode = 'rad' | 'deg';
 
@@ -32,6 +33,13 @@ degMath.import(
   },
   { override: true },
 );
+
+// Disable memory-allocating matrix/range constructors on both instances. Runs
+// AFTER the degree-trig import above (hardening also disables `import`). The
+// calculator evaluates client-side, but this keeps a malicious saved session
+// from OOMing the author's own browser and matches the engine's grading path.
+hardenMathInstance(radMath);
+hardenMathInstance(degMath);
 
 function mathFor(mode: AngleMode) {
   return mode === 'deg' ? degMath : radMath;

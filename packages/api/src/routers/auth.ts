@@ -1,6 +1,6 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
-import { prisma } from '@tutor/db';
+import { Prisma, prisma } from '@tutor/db';
 import {
   equalizeLoginTiming,
   hashPassword,
@@ -33,6 +33,11 @@ import {
 const loginRate = fixedWindowLimiter(10);
 const registerRate = fixedWindowLimiter(20);
 const refreshRate = fixedWindowLimiter(60);
+const logoutRate = fixedWindowLimiter(30);
+
+// Refresh tokens are 64 hex chars; cap well above that so a huge body can't be
+// pushed through the public refresh/logout endpoints.
+const refreshTokenSchema = z.string().max(256);
 
 const TOO_MANY = 'Too many attempts. Please wait a minute and try again.';
 
@@ -93,35 +98,58 @@ export const authRouter = router({
         message: 'Students under 13 need a parent or guardian email to sign up.',
       });
     }
-    const exists = await prisma.user.findUnique({ where: { username: input.username } });
+    // Case-insensitive: 'Alice' and 'alice' are the same account (a
+    // lower(username) unique index backs this up against races — see below).
+    const exists = await prisma.user.findFirst({
+      where: { username: { equals: input.username, mode: 'insensitive' } },
+      select: { id: true },
+    });
     if (exists) throw new TRPCError({ code: 'CONFLICT', message: 'username taken' });
 
-    const created = await prisma.user.create({
-      data: {
-        role: input.role,
-        username: input.username,
-        passwordHash: await hashPassword(input.password),
-        displayName: input.displayName,
-        locale: input.locale,
-        grade: input.grade ?? null,
-        email: input.role === 'student' ? null : input.email ?? null,
-        // Teachers must be approved by an admin before they can do anything;
-        // students and guardians are active immediately.
-        status: input.role === 'teacher' ? 'pending' : 'active',
-        // COPPA (§9): consent is NEVER granted from an unverified email at
-        // signup. Guardians and 13+ students don't require it; an under-13
-        // student starts with consent PENDING (false) until a guardian
-        // actually verifies out-of-band. Supplying a guardianEmail only
-        // initiates that flow (link below) — it does not certify consent.
-        guardianConsent: input.role !== 'student' || !input.under13,
-      },
-    });
+    let created: { id: bigint };
+    try {
+      created = await prisma.user.create({
+        data: {
+          role: input.role,
+          username: input.username,
+          passwordHash: await hashPassword(input.password),
+          displayName: input.displayName,
+          locale: input.locale,
+          grade: input.grade ?? null,
+          email: input.role === 'student' ? null : input.email ?? null,
+          // Teachers must be approved by an admin before they can do anything;
+          // students and guardians are active immediately.
+          status: input.role === 'teacher' ? 'pending' : 'active',
+          // COPPA (§9): consent is NEVER granted from an unverified email at
+          // signup. Guardians and 13+ students don't require it; an under-13
+          // student starts with consent PENDING (false) until a guardian
+          // actually verifies out-of-band. Supplying a guardianEmail only
+          // initiates that flow (link below) — it does not certify consent.
+          guardianConsent: input.role !== 'student' || !input.under13,
+        },
+        select: { id: true },
+      });
+    } catch (err) {
+      // The lower(username) unique index catches a case-insensitive collision
+      // that raced past the check above.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new TRPCError({ code: 'CONFLICT', message: 'username taken' });
+      }
+      throw err;
+    }
     if (input.role === 'student' && input.guardianEmail) {
       const guardian = await prisma.user.findFirst({
         where: { role: 'guardian', email: input.guardianEmail },
         select: { id: true },
       });
       if (guardian) {
+        // The guardian's email was never verified at their signup, so an
+        // unverified match must NOT grant access to a child's records
+        // (FERPA/COPPA). Create the link PENDING; it only initiates the
+        // consent flow. progress.student fails closed on any non-active link,
+        // so nothing is exposed until the link is activated out-of-band (the
+        // same verification step that flips guardianConsent). Never downgrade
+        // an already-active link on a re-register race, hence the empty update.
         await prisma.guardianLink.upsert({
           where: {
             guardianUserId_studentUserId: {
@@ -130,7 +158,7 @@ export const authRouter = router({
             },
           },
           update: {},
-          create: { guardianUserId: guardian.id, studentUserId: created.id, status: 'active' },
+          create: { guardianUserId: guardian.id, studentUserId: created.id, status: 'pending' },
         });
       }
     }
@@ -139,11 +167,12 @@ export const authRouter = router({
   }),
 
   login: publicProcedure
-    .input(z.object({ username: z.string(), password: z.string() }))
+    .input(z.object({ username: z.string().max(32), password: z.string().max(128) }))
     .mutation(async ({ ctx, input }) => {
       throttle(loginRate, `${ipKey(ctx)}|${input.username.toLowerCase()}`);
-      const row = await prisma.user.findUnique({
-        where: { username: input.username },
+      // Case-insensitive: log in with whatever casing; the account is the same.
+      const row = await prisma.user.findFirst({
+        where: { username: { equals: input.username, mode: 'insensitive' } },
         select: { id: true, passwordHash: true },
       });
       if (!row) {
@@ -161,7 +190,7 @@ export const authRouter = router({
   refresh: publicProcedure
     // Native sends the refresh token in the body; web omits it and the server
     // reads it from the httpOnly cookie instead (hence optional).
-    .input(z.object({ refreshToken: z.string().optional() }))
+    .input(z.object({ refreshToken: refreshTokenSchema.optional() }))
     .mutation(async ({ ctx, input }) => {
       throttle(refreshRate, ipKey(ctx));
       const token = ctx.cookieTransport ? ctx.refreshCookie : input.refreshToken;
@@ -180,8 +209,9 @@ export const authRouter = router({
    * access token may already be expired at logout time.
    */
   logout: publicProcedure
-    .input(z.object({ refreshToken: z.string().optional() }))
+    .input(z.object({ refreshToken: refreshTokenSchema.optional() }))
     .mutation(async ({ ctx, input }) => {
+      throttle(logoutRate, ipKey(ctx));
       const token = ctx.cookieTransport ? ctx.refreshCookie : input.refreshToken;
       if (token) await revokeRefreshToken(token);
       if (ctx.cookieTransport) (ctx.cookies ??= []).push(clearRefreshCookie(ctx.secure ?? false));
@@ -217,20 +247,32 @@ export const authRouter = router({
       if (input.displayName === undefined && input.username === undefined) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'nothing to update' });
       }
-      if (input.username && input.username !== ctx.user.username) {
-        const taken = await prisma.user.findUnique({
-          where: { username: input.username },
+      if (input.username && input.username.toLowerCase() !== ctx.user.username.toLowerCase()) {
+        // Case-insensitive collision against anyone but the caller (so a user
+        // can still re-case their own name).
+        const taken = await prisma.user.findFirst({
+          where: {
+            username: { equals: input.username, mode: 'insensitive' },
+            NOT: { id: BigInt(ctx.user.id) },
+          },
           select: { id: true },
         });
         if (taken) throw new TRPCError({ code: 'CONFLICT', message: 'username taken' });
       }
-      await prisma.user.update({
-        where: { id: BigInt(ctx.user.id) },
-        data: {
-          ...(input.displayName !== undefined ? { displayName: input.displayName } : {}),
-          ...(input.username !== undefined ? { username: input.username } : {}),
-        },
-      });
+      try {
+        await prisma.user.update({
+          where: { id: BigInt(ctx.user.id) },
+          data: {
+            ...(input.displayName !== undefined ? { displayName: input.displayName } : {}),
+            ...(input.username !== undefined ? { username: input.username } : {}),
+          },
+        });
+      } catch (err) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+          throw new TRPCError({ code: 'CONFLICT', message: 'username taken' });
+        }
+        throw err;
+      }
       const user = (await loadUser(ctx.user.id)) as AuthUser;
       return { user, accessToken: signAccessToken(user) };
     }),
@@ -244,7 +286,7 @@ export const authRouter = router({
   changePassword: rateLimited(10)
     .input(
       z.object({
-        currentPassword: z.string(),
+        currentPassword: z.string().max(128),
         newPassword: z.string().min(8).max(128),
       }),
     )
@@ -264,9 +306,23 @@ export const authRouter = router({
       return issueSession(ctx, ctx.user);
     }),
 
-  /** FERPA (§9): account + data deletion. */
-  deleteAccount: protectedProcedure.mutation(async ({ ctx }) => {
-    await prisma.user.delete({ where: { id: BigInt(ctx.user.id) } });
-    return { deleted: true };
-  }),
+  /**
+   * FERPA (§9): account + data deletion. Irreversible, and for a teacher it
+   * cascades to every class they own and every enrollment in it, so it must
+   * not be reachable from a stolen access token alone: re-verify the current
+   * password and rate-limit it.
+   */
+  deleteAccount: rateLimited(5)
+    .input(z.object({ password: z.string().max(128) }))
+    .mutation(async ({ ctx, input }) => {
+      const row = await prisma.user.findUnique({
+        where: { id: BigInt(ctx.user.id) },
+        select: { passwordHash: true },
+      });
+      if (!row || !(await verifyPassword(input.password, row.passwordHash))) {
+        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'password is incorrect' });
+      }
+      await prisma.user.delete({ where: { id: BigInt(ctx.user.id) } });
+      return { deleted: true };
+    }),
 });
