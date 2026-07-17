@@ -12,11 +12,16 @@
  * every cache written by older workers. Attempts to POST while offline are
  * queued by the app layer (append-only log) and replayed on reconnect.
  */
-const VERSION = 'v2';
+const VERSION = 'v3';
 const SHELL_CACHE = `shell-${VERSION}`;
 const CONTENT_CACHE = `content-${VERSION}`;
 const SHELL = ['/', '/manifest.webmanifest', '/icon.svg'];
-const CACHEABLE_API = /\/api\/(curriculum|lessons\/|reference-sheet)/;
+// Only cache genuinely public, user-INDEPENDENT API responses. The reference
+// sheet is the same for everyone. Never add a per-user endpoint here: this
+// cache is shared across every user of the device, so a personalized response
+// (mastery, progress, roster) cached for one account would be served to the
+// next — a cross-user data leak. Per-user data must stay network-only.
+const CACHEABLE_API = /\/api\/reference-sheet(\/|$|\?)/;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(SHELL_CACHE).then((c) => c.addAll(SHELL)));

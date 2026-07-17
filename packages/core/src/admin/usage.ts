@@ -132,9 +132,13 @@ async function fetchAllPages<R>(
       },
     });
     if (!res.ok) {
-      const detail = await res.text().catch(() => '');
-      // Deliberately does NOT include the key; detail is Anthropic's error body.
-      throw new Error(`admin usage API HTTP ${res.status}: ${detail.slice(0, 300)}`);
+      // Do NOT include the upstream response body in the thrown message: it is
+      // logged by the API layer, and while Anthropic does not echo the API key
+      // today, any field they add later (workspace ids, account emails) would
+      // land verbatim in our logs. Status + a static label is enough to
+      // diagnose; the full body stays out of the log.
+      await res.body?.cancel().catch(() => {});
+      throw new Error(`admin usage API HTTP ${res.status}`);
     }
     const body = (await res.json()) as ReportPage<R>;
     buckets.push(...body.data);
