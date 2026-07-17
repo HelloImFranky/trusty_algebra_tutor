@@ -33,6 +33,11 @@ import {
 const loginRate = fixedWindowLimiter(10);
 const registerRate = fixedWindowLimiter(20);
 const refreshRate = fixedWindowLimiter(60);
+const logoutRate = fixedWindowLimiter(30);
+
+// Refresh tokens are 64 hex chars; cap well above that so a huge body can't be
+// pushed through the public refresh/logout endpoints.
+const refreshTokenSchema = z.string().max(256);
 
 const TOO_MANY = 'Too many attempts. Please wait a minute and try again.';
 
@@ -139,7 +144,7 @@ export const authRouter = router({
   }),
 
   login: publicProcedure
-    .input(z.object({ username: z.string(), password: z.string() }))
+    .input(z.object({ username: z.string().max(32), password: z.string().max(128) }))
     .mutation(async ({ ctx, input }) => {
       throttle(loginRate, `${ipKey(ctx)}|${input.username.toLowerCase()}`);
       const row = await prisma.user.findUnique({
@@ -161,7 +166,7 @@ export const authRouter = router({
   refresh: publicProcedure
     // Native sends the refresh token in the body; web omits it and the server
     // reads it from the httpOnly cookie instead (hence optional).
-    .input(z.object({ refreshToken: z.string().optional() }))
+    .input(z.object({ refreshToken: refreshTokenSchema.optional() }))
     .mutation(async ({ ctx, input }) => {
       throttle(refreshRate, ipKey(ctx));
       const token = ctx.cookieTransport ? ctx.refreshCookie : input.refreshToken;
@@ -180,8 +185,9 @@ export const authRouter = router({
    * access token may already be expired at logout time.
    */
   logout: publicProcedure
-    .input(z.object({ refreshToken: z.string().optional() }))
+    .input(z.object({ refreshToken: refreshTokenSchema.optional() }))
     .mutation(async ({ ctx, input }) => {
+      throttle(logoutRate, ipKey(ctx));
       const token = ctx.cookieTransport ? ctx.refreshCookie : input.refreshToken;
       if (token) await revokeRefreshToken(token);
       if (ctx.cookieTransport) (ctx.cookies ??= []).push(clearRefreshCookie(ctx.secure ?? false));
@@ -244,7 +250,7 @@ export const authRouter = router({
   changePassword: rateLimited(10)
     .input(
       z.object({
-        currentPassword: z.string(),
+        currentPassword: z.string().max(128),
         newPassword: z.string().min(8).max(128),
       }),
     )
