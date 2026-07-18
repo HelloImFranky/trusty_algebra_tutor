@@ -41,6 +41,7 @@ model User {
   guardians        GuardianLink[] @relation("student")
   classesTaught    Class[]           @relation("teacher")
   enrollments      ClassEnrollment[] @relation("student")
+  guardianConsents GuardianConsent[] @relation("consentStudent")
 
   @@map("users")
 }
@@ -94,6 +95,22 @@ model GuardianLink {
 
   @@id([guardianUserId, studentUserId])
   @@map("guardian_links")
+}
+
+model GuardianConsent {
+  id              BigInt    @id @default(autoincrement())
+  studentUserId   BigInt    @map("student_user_id")
+  method          String
+  grantedByUserId BigInt?   @map("granted_by_user_id")
+  guardianEmail   String?   @map("guardian_email")
+  note            String?
+  status          String    @default("active")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  revokedAt       DateTime? @map("revoked_at")
+  student         User      @relation("consentStudent", fields: [studentUserId], references: [id], onDelete: Cascade)
+
+  @@index([studentUserId], map: "idx_guardian_consents_student")
+  @@map("guardian_consents")
 }
 
 model Unit {

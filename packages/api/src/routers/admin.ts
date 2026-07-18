@@ -3,12 +3,16 @@ import { z } from 'zod';
 import { prisma } from '@tutor/db';
 import { adminUsageAvailable, fetchUsageSummary, type UsageSummary } from '@tutor/core/admin';
 import { adminProcedure, router } from '../trpc.js';
+import { recordGuardianConsent } from '../authz.js';
 
 /**
  * Admin console (docs/teacher-dashboard-plan.md, Stage 2). Least privilege:
- * every endpoint operates on teacher accounts only (WHERE role = 'teacher'),
- * so an admin can approve/reject/disable teachers but cannot reach student
- * records, other admins, or guardians through here.
+ * endpoints operate on teacher accounts only (WHERE role = 'teacher'), so an
+ * admin can approve/reject/disable teachers but cannot reach student records,
+ * other admins, or guardians through here — with ONE deliberate, audited
+ * exception: `verifyGuardianConsent` (break-glass guardian-consent attestation,
+ * docs/guardian-consent-plan.md, Tier 0), which writes a student's consent flag
+ * plus an audit row and requires a `note`.
  */
 
 function teacherView(u: {
@@ -99,6 +103,26 @@ export const adminRouter = router({
         return { ok: true };
       }),
   }),
+
+  /**
+   * Break-glass guardian-consent attestation (docs/guardian-consent-plan.md,
+   * Tier 0). The teacher path is primary; this is the governance fallback for
+   * students not on any roster, staff turnover, or corrections. This is the one
+   * deliberate exception to the admin router's "never touch student records"
+   * rule (see file header), so the `note` is REQUIRED — every break-glass use
+   * is explained in the audit row.
+   */
+  verifyGuardianConsent: adminProcedure
+    .input(z.object({ studentId: z.number().int(), note: z.string().min(1).max(500) }))
+    .mutation(async ({ ctx, input }) => {
+      await recordGuardianConsent({
+        studentId: input.studentId,
+        method: 'admin_manual',
+        grantedByUserId: ctx.user.id,
+        note: input.note,
+      });
+      return { ok: true };
+    }),
 
   usage: router({
     /**

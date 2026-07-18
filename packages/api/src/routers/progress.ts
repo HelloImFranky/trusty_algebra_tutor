@@ -9,6 +9,7 @@ import {
   regentsTopics,
 } from '@tutor/core';
 import { protectedProcedure, router } from '../trpc.js';
+import { teacherCanSeeStudent } from '../authz.js';
 
 async function buildProgress(userId: number) {
   const mastery = await prisma.mastery.findMany({
@@ -170,15 +171,7 @@ export const progressRouter = router({
       } else if (ctx.user.role === 'teacher') {
         // A teacher may view a student only through an active enrollment in a
         // class they own (FERPA §9). Fail closed — no shared class, no access.
-        const enrolled = await prisma.classEnrollment.findFirst({
-          where: {
-            studentUserId: BigInt(input.studentId),
-            status: 'active',
-            class: { teacherUserId: BigInt(ctx.user.id), archived: false },
-          },
-          select: { classId: true },
-        });
-        if (!enrolled) {
+        if (!(await teacherCanSeeStudent(ctx.user.id, input.studentId))) {
           throw new TRPCError({ code: 'FORBIDDEN', message: 'not linked to this student' });
         }
       } else {

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { Prisma, prisma } from '@tutor/db';
 import { decayedScore, masteryLabel } from '@tutor/core';
 import { fixedWindowLimiter, router, studentProcedure, teacherProcedure } from '../trpc.js';
+import { recordGuardianConsent, teacherCanSeeStudent } from '../authz.js';
 
 /**
  * Teacher dashboard (docs/teacher-dashboard-plan.md, Stage 1). A teacher owns
@@ -181,7 +182,9 @@ export const teacherRouter = router({
         const cls = await ownedClass(BigInt(ctx.user.id), input.classId);
         const enrollments = await prisma.classEnrollment.findMany({
           where: { classId: cls.id, status: 'active' },
-          include: { student: { select: { id: true, displayName: true, grade: true } } },
+          include: {
+            student: { select: { id: true, displayName: true, grade: true, guardianConsent: true } },
+          },
           orderBy: { joinedAt: 'asc' },
         });
         const summaries = await rosterSummaries(enrollments.map((e) => e.studentUserId));
@@ -191,6 +194,9 @@ export const teacherRouter = router({
             id: Number(e.student.id),
             displayName: e.student.displayName,
             grade: e.student.grade,
+            // Under-13 students start guardianConsent=false; surface it so the
+            // roster can badge "needs consent" and offer the attest action.
+            consentPending: !e.student.guardianConsent,
             joinedAt: e.joinedAt.toISOString(),
             ...(summaries.get(String(e.studentUserId)) ?? {
               streakDays: 0,
@@ -266,4 +272,27 @@ export const teacherRouter = router({
         return { classId: Number(cls.id), name: cls.name };
       }),
   }),
+
+  /**
+   * Record that the school obtained parental consent for a student
+   * (docs/guardian-consent-plan.md, Tier 0). School-consent path: attests on
+   * the parent's behalf, unblocking the student's tutor access. Scoped to the
+   * caller's own roster — a teacher can only attest for a student actively
+   * enrolled in a class they own. Does NOT activate any guardian *link* (that
+   * requires the guardian's own verified account — Tier 1).
+   */
+  verifyGuardianConsent: teacherProcedure
+    .input(z.object({ studentId: z.number().int(), note: z.string().max(500).optional() }))
+    .mutation(async ({ ctx, input }) => {
+      if (!(await teacherCanSeeStudent(ctx.user.id, input.studentId))) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: 'not linked to this student' });
+      }
+      await recordGuardianConsent({
+        studentId: input.studentId,
+        method: 'school',
+        grantedByUserId: ctx.user.id,
+        note: input.note,
+      });
+      return { ok: true };
+    }),
 });
