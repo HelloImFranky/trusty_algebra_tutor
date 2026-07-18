@@ -26,7 +26,7 @@ import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { CalculatorButton } from './CalculatorButton';
 import { ReferenceSheetButton } from './ReferenceSheet';
-import { NEUTRAL, useAccent, useTokens, type Hex } from './ui';
+import { useAccent, useTokens, type Hex } from './ui';
 
 function TabIcon({
   icon: Icon,
@@ -50,7 +50,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
   const tokens = useTokens();
   const CHROME_BTN = { backgroundColor: tokens.subtle, color: tokens.ink, borderRadius: 999 } as const;
   // Mid-neutral for inactive tab items — same visual weight in either mode.
-  const inactive: Hex = tokens.mode === 'dark' ? '#bab6b6' : NEUTRAL[700];
+  const inactive: Hex = tokens.muted;
 
   // Admins get the governance console; teachers get the class dashboard;
   // students/guardians get the learner tabs. Calculator has moved out of
