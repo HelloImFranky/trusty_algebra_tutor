@@ -883,6 +883,111 @@ describe('teacher classes (roster + scoping)', () => {
   });
 });
 
+describe('guardian consent (Tier 0 attestation)', () => {
+  const mkUser = async (role: string, username: string): Promise<AuthUser> => {
+    const row = await prisma.user.create({
+      data: { role, username, passwordHash: 'x', displayName: username },
+      select: { id: true },
+    });
+    return { id: Number(row.id), role: role as AuthUser['role'], username, displayName: username, locale: 'en', status: 'active' };
+  };
+
+  let teacher: AuthUser;
+  let admin: AuthUser;
+  let kid: AuthUser; // under-13, enrolled in teacher's class
+  let outsider: AuthUser; // under-13, NOT in teacher's class
+  let classId = 0;
+
+  beforeAll(async () => {
+    teacher = await mkUser('teacher', 'consent_teacher');
+    admin = await mkUser('admin', 'consent_admin');
+    const reg = await anon.auth.register({
+      role: 'student', username: 'consent_kid', password: 'password123',
+      displayName: 'Consent Kid', under13: true, guardianEmail: 'g1@example.com',
+    });
+    kid = reg.user;
+    const reg2 = await anon.auth.register({
+      role: 'student', username: 'consent_outsider', password: 'password123',
+      displayName: 'Outsider', under13: true, guardianEmail: 'g2@example.com',
+    });
+    outsider = reg2.user;
+    const cls = await as(teacher).teacher.classes.create({ name: 'Consent Class' });
+    classId = cls.id;
+    await as(kid).teacher.classes.join({ code: cls.joinCode });
+  });
+
+  it('starts with consent pending and the tutor blocked', async () => {
+    const roster = await as(teacher).teacher.classes.roster({ classId });
+    expect(roster.students.find((s) => s.id === kid.id)?.consentPending).toBe(true);
+    await expect(as(kid).tutor.createSession({})).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('lets the owning teacher attest, unblocking the tutor and writing an audit row', async () => {
+    const res = await as(teacher).teacher.verifyGuardianConsent({
+      studentId: kid.id, note: 'signed form on file',
+    });
+    expect(res.ok).toBe(true);
+
+    const row = await prisma.user.findUnique({
+      where: { id: BigInt(kid.id) }, select: { guardianConsent: true },
+    });
+    expect(row?.guardianConsent).toBe(true);
+
+    const records = await prisma.guardianConsent.findMany({ where: { studentUserId: BigInt(kid.id) } });
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({ method: 'school', grantedByUserId: BigInt(teacher.id) });
+
+    // roster now shows consent satisfied, and the tutor opens
+    const roster = await as(teacher).teacher.classes.roster({ classId });
+    expect(roster.students.find((s) => s.id === kid.id)?.consentPending).toBe(false);
+    const session = await as(kid).tutor.createSession({});
+    expect(session.sessionId).toBeTruthy();
+  });
+
+  it('is idempotent: re-attesting appends an audit row and stays consented', async () => {
+    await as(teacher).teacher.verifyGuardianConsent({ studentId: kid.id });
+    const records = await prisma.guardianConsent.findMany({ where: { studentUserId: BigInt(kid.id) } });
+    expect(records.length).toBe(2);
+  });
+
+  it('refuses a teacher attesting for a student not in their roster', async () => {
+    await expect(
+      as(teacher).teacher.verifyGuardianConsent({ studentId: outsider.id }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    const row = await prisma.user.findUnique({
+      where: { id: BigInt(outsider.id) }, select: { guardianConsent: true },
+    });
+    expect(row?.guardianConsent).toBe(false);
+  });
+
+  it('refuses a non-teacher (the student) attesting', async () => {
+    await expect(
+      as(kid).teacher.verifyGuardianConsent({ studentId: kid.id }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('lets an admin break-glass attest for an out-of-roster student (note required)', async () => {
+    // The note is required on the admin path.
+    await expect(
+      // @ts-expect-error — note is required for the admin endpoint
+      as(admin).admin.verifyGuardianConsent({ studentId: outsider.id }),
+    ).rejects.toBeDefined();
+
+    const res = await as(admin).admin.verifyGuardianConsent({
+      studentId: outsider.id, note: 'principal confirmed paper consent',
+    });
+    expect(res.ok).toBe(true);
+    const records = await prisma.guardianConsent.findMany({ where: { studentUserId: BigInt(outsider.id) } });
+    expect(records[0]).toMatchObject({ method: 'admin_manual', grantedByUserId: BigInt(admin.id) });
+  });
+
+  it('404s when attesting for a non-student', async () => {
+    await expect(
+      as(admin).admin.verifyGuardianConsent({ studentId: teacher.id, note: 'nope' }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
 describe('admin approval (teacher provisioning)', () => {
   let admin: AuthUser;
   let pendingTeacher: AuthUser;
