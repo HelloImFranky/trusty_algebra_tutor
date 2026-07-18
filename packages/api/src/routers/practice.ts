@@ -160,6 +160,9 @@ export const practiceRouter = router({
       correct: result.correct,
       equivalentButNotCanonical: result.equivalentButNotCanonical ?? false,
       misconceptionId: misconception?.id ?? null,
+      // Reveal the target answer only after the attempt has been graded and
+      // recorded — so the sprint review can show "your answer vs correct".
+      correctAnswer: result.correct ? null : prob.answerLatex,
       message: result.correct
         ? null
         : result.equivalentButNotCanonical

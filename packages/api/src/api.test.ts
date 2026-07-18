@@ -395,11 +395,15 @@ describe('practice loop', () => {
   });
 
   it('grades a wrong answer', async () => {
+    const key = await prisma.problem.findUnique({ where: { id: BigInt(problem.id) } });
     const res = await as(student).practice.attempt({
       problemId: problem.id,
       submittedLatex: '99999999',
     });
     expect(res.correct).toBe(false);
+    // Wrong answers surface the correct value so the sprint review can
+    // show "you wrote X · correct answer Y" side-by-side.
+    expect(res.correctAnswer).toBe(key!.answerLatex);
   });
 
   it('grades the correct answer', async () => {
@@ -410,6 +414,8 @@ describe('practice loop', () => {
       hintsUsed: 1,
     });
     expect(res.correct).toBe(true);
+    // Correct submissions don't need to echo the answer back.
+    expect(res.correctAnswer).toBeNull();
   });
 
   it('records animation views on the attempt row', async () => {
