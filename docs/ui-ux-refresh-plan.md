@@ -1,5 +1,10 @@
 # UI/UX Refresh — Plan (branch `ui-ux-redesign-v1.0`)
 
+> [!NOTE]
+> **✅ SHIPPED — historical design record.** The refresh (including light/dark
+> mode) landed. The phase breakdown below is history. Status index:
+> [`README.md`](README.md).
+
 Follow-up polish pass on top of the "modern but round" redesign
 (commits `866bc1a` → `f193897`). Five phases, ordered so each ships
 independently and the branch stays reviewable.

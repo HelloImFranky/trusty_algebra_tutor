@@ -1,5 +1,12 @@
 # Guardian Consent — Design & Implementation Plan
 
+> [!IMPORTANT]
+> **🚧 PARTIALLY SHIPPED.** Tier 0 (school / admin-manual attestation) is
+> built — migration `013_guardian_consent.sql`, `authz.ts`, and the
+> teacher/admin routers. **Tiers 1–2** (email-plus, guardian accounts) are
+> scoped here but **not built**. Verify against code before actioning any
+> section. Status index: [`README.md`](README.md).
+
 Follow-up to `docs/security-review-2.md` **H1** (guardian links are created
 `pending` from an unverified email) and **H3** (the tutor is gated on
 `guardianConsent`). Those fixes closed the *hole* — nothing grants access from

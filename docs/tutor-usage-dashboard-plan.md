@@ -1,5 +1,12 @@
 # Plan (Option 2): render AI-tutor usage & billing inside the admin view
 
+> [!NOTE]
+> **✅ SHIPPED — historical design record.** Option 2 is implemented:
+> `UsageDashboard.tsx`, `core/admin/usage.ts`, and Admin-API numbers rendered
+> in `/admin`. Kept because code comments cite it
+> (`docs/tutor-usage-dashboard-plan.md, Option 2`). Status index:
+> [`README.md`](README.md).
+
 Companion to `docs/tutor-anthropic-haiku-plan.md`, which introduced the
 admin-view choice. That doc's **Option 1** (link out to the Anthropic
 Console) is already shipped: the `/admin` screen has an "AI tutor usage &

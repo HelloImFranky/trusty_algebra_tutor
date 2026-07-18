@@ -4,6 +4,12 @@ Status: **planning only — no code changed yet.** This doc covers the model
 switch, the security model for the API key, and pricing. Implementation is
 gated on sign-off (see "Rollout checklist" at the end).
 
+> [!IMPORTANT]
+> **🚧 NOT BUILT — awaiting sign-off.** The model switch described here is
+> unimplemented. (The separate link-out and the usage dashboard —
+> [`tutor-usage-dashboard-plan.md`](tutor-usage-dashboard-plan.md) — did
+> ship.) Status index: [`README.md`](README.md).
+
 ---
 
 ## TL;DR

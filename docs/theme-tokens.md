@@ -1,5 +1,10 @@
 # Theme tokens
 
+> [!NOTE]
+> **📗 Living reference — current.** This is the authoritative token palette,
+> kept in sync with `components/ui.tsx` and enforced by
+> `scripts/theme-baseline.sh`. Status index: [`README.md`](README.md).
+
 Every UI color in `packages/app/` comes from one of these five hooks /
 constants. If you're writing a `color=` or `backgroundColor=` prop, this
 is the palette you reach for. **Never inline a hex or reach for a raw

@@ -1,5 +1,10 @@
 # Visual snapshot suite
 
+> [!NOTE]
+> **📗 Living reference — current.** Runbook for the Playwright
+> visual-regression suite under `apps/web/e2e/`. Status index:
+> [`README.md`](README.md).
+
 Playwright-based visual-regression suite for the web app. Sibling to the
 `theme-baseline.sh` grep guard (`docs/theme-tokens.md`) — the grep says
 "did anyone write a new hex literal", these snapshots say "did the
