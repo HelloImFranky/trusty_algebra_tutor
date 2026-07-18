@@ -1,5 +1,12 @@
 # Teacher Dashboard — Design & Implementation Plan
 
+> [!NOTE]
+> **✅ SHIPPED — historical design record.** Stages 1–2 are implemented
+> (classes / join-codes / roster + admin-approval provisioning). Kept because
+> code comments cite it (`docs/teacher-dashboard-plan.md, Stage 2`). The
+> sections below describe what was built. Status index:
+> [`README.md`](README.md).
+
 Scheduled follow-up to the branch `claude/repo-security-review-stw5sn`
 (security review, 2026-07-14). That branch fixed the access-control and
 COPPA issues; this doc plans the teacher-facing feature those fixes cleared

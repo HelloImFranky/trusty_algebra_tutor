@@ -1,5 +1,11 @@
 # Step Animator — Implementation Plan for Remaining Work
 
+> [!NOTE]
+> **✅ MOSTLY SHIPPED — historical design record.** Phases 1–5 landed. Only
+> Phase 6 (the native-device pass + conditional Reanimated swap) remains, and
+> it needs a local simulator/device — it cannot run in a cloud container.
+> Status index: [`README.md`](README.md).
+
 Companion to `stepanim-next-steps.md` (items A–H). That doc describes
 *what* remains; this one sequences it, sizes it, and pins down the design
 decisions so each phase can be picked up by a fresh session. Written on

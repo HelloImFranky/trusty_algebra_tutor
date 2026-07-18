@@ -1,5 +1,14 @@
 # Dark-mode audit + robust theming plan
 
+> [!NOTE]
+> **✅ SHIPPED — historical design record.** Phases A/B/C landed. The
+> "Current state (audit as of `1ebaff7`)" table below is **point-in-time and
+> now stale** — the flagged files (ReferenceSheet, TutorChat, MathInput,
+> classRoster) were migrated, and `AnimatedEquation` already ships a dark
+> variant. For the live color-literal count, run `scripts/theme-baseline.sh`;
+> for the token contract see [`theme-tokens.md`](theme-tokens.md). Status
+> index: [`README.md`](README.md).
+
 ## Why this exists
 
 The UI/UX refresh (branch `ui-ux-redesign-v1.0`) shipped light/dark

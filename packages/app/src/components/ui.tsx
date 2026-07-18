@@ -74,7 +74,16 @@ export interface ThemeTokens {
   /** Top-bar / bottom-tab separator. 8-digit hex encodes ~12% alpha
    * (`1f` = 31/255) so the divider reads as a subtle line in either mode. */
   chromeBorder: Hex;
+  /** Text / icon color sitting ON the live accent (PrimaryButton label,
+   * selected chip). White in both modes — the accent stays saturated in
+   * light and dark, so white reads on it either way. Named so components
+   * route through the token system instead of hard-coding `#ffffff`. */
+  onAccent: Hex;
 }
+
+/** White for text/icons on the accent — see ThemeTokens.onAccent. Defined
+ * once so both mode token sets share the single source. */
+const ON_ACCENT: Hex = '#ffffff';
 
 const LIGHT_TOKENS: ThemeTokens = {
   mode: 'light',
@@ -88,6 +97,7 @@ const LIGHT_TOKENS: ThemeTokens = {
   posterInk: '#f3f2f2',
   posterBorder: INK, // same as bg — no visible stroke needed in light
   chromeBorder: '#201e1d1f',
+  onAccent: ON_ACCENT,
 };
 
 const DARK_TOKENS: ThemeTokens = {
@@ -102,6 +112,7 @@ const DARK_TOKENS: ThemeTokens = {
   posterInk: DARK_INK,
   posterBorder: DARK_NEUTRAL[400],
   chromeBorder: '#f3f2f224',
+  onAccent: ON_ACCENT,
 };
 
 export function useTokens(): ThemeTokens {
@@ -317,10 +328,11 @@ export function HeroCard({
 
 export function PrimaryButton(props: React.ComponentProps<typeof Button>) {
   const accent = useAccent();
+  const tokens = useTokens();
   return (
     <Button
       backgroundColor={accent}
-      color="#ffffff"
+      color={tokens.onAccent}
       fontWeight="800"
       borderRadius={RADIUS.control}
       pressStyle={{ opacity: 0.85 }}

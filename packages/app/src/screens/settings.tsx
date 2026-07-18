@@ -53,7 +53,7 @@ function SegmentedOption<T extends string>({
       flex={1}
       size="$3"
       backgroundColor={active ? accent : tokens.subtle}
-      color={active ? '#ffffff' : tokens.ink}
+      color={active ? tokens.onAccent : tokens.ink}
       fontWeight="800"
       borderRadius={RADIUS.control}
       pressStyle={{ opacity: 0.85 }}

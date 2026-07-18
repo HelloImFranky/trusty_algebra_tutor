@@ -1,5 +1,12 @@
 # Security Review #2 — Follow-up Findings
 
+> [!IMPORTANT]
+> **🚧 MIXED STATUS — verify before acting.** Findings marked ✅ in the
+> status column landed on the review branch; 📝 items were scoped as
+> follow-ups and may still be open. This is a security record — confirm each
+> item against the current code rather than assuming. Status index:
+> [`README.md`](README.md).
+
 A second pass over the codebase, after the first review branch
 (`claude/repo-security-review-stw5sn`) closed items #1–#5 (self-registration
 privilege escalation, teacher scoping, tokens in web storage, unthrottled

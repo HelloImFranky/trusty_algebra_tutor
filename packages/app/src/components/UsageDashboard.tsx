@@ -224,7 +224,7 @@ export function UsageWindowPicker({
             paddingHorizontal={10}
             borderRadius={999}
             backgroundColor={active ? accent : tokens.subtle}
-            color={active ? '#ffffff' : tokens.ink}
+            color={active ? tokens.onAccent : tokens.ink}
             cursor="pointer"
             pressStyle={{ opacity: 0.85 }}
             onPress={() => onChange(w)}

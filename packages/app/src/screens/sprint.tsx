@@ -79,7 +79,7 @@ function PickChip({
       paddingVertical={6}
       pressStyle={{ opacity: 0.8 }}
     >
-      <Text color={selected ? '#ffffff' : tokens.ink} fontSize={13} fontWeight="700">
+      <Text color={selected ? tokens.onAccent : tokens.ink} fontSize={13} fontWeight="700">
         {children}
       </Text>
     </XStack>

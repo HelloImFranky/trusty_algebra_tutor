@@ -9,8 +9,10 @@
 # went from X to Y" and ask whether the new literal is intentional
 # (medal metal, brand-invariant, etc.) or should have been a token.
 #
-# Rationale + which existing literals are intentional-invariant vs
-# migration-target: see docs/dark-mode-audit-plan.md § "Current state".
+# Which literals are intentional-invariant: see docs/theme-tokens.md
+# § "Intentional exceptions" (current). Historical rationale for the guard
+# lives in docs/dark-mode-audit-plan.md — note its "Current state" table is
+# point-in-time/stale; see docs/README.md for authoritative status.
 #
 # Usage:
 #   scripts/theme-baseline.sh              # check against baseline

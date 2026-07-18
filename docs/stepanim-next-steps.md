@@ -1,5 +1,12 @@
 # Step Animator — Status & Next Steps
 
+> [!NOTE]
+> **✅ MOSTLY SHIPPED — historical status doc.** The tracked items (D, E, F,
+> G and the C scripts) shipped; the sequencing lives in
+> [`stepanim-plan.md`](stepanim-plan.md), whose only remaining item is the
+> native-device Phase 6. The "Current state" / "next steps" below are
+> point-in-time. Status index: [`README.md`](README.md).
+
 Roadmap for the token-morphing step animator ("stepanim"). Written so a
 fresh session can implement any item without re-deriving context. Last
 updated on branch `claude/stepanim-next-steps-plan-tn1jrj` (2026-07-14):
