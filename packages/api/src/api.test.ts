@@ -540,12 +540,45 @@ describe('practice loop', () => {
 
   it('mixes a full round from several chosen topics', async () => {
     const chosen = ['exponents-perfect-squares', 'properties-real-numbers'];
-    // 20 > the 12 drill problems either topic has per tier, so a full round
-    // is only possible by drawing from BOTH chosen topics — and never others.
+    // 20 > the 12 seeded drill problems either topic starts with, so a full
+    // round draws from BOTH chosen topics — and never others.
     const res = await as(student).practice.sprint({ count: 20, skillSlugs: chosen });
     expect(res.problems.length).toBe(20);
     const seen = new Set(res.problems.map((p) => p.skillSlug));
     expect([...seen].sort()).toEqual([...chosen].sort());
+  });
+
+  it('generates fresh drill variants on demand — the pool grows each round', async () => {
+    const skill = await prisma.skill.findUnique({ where: { slug: 'properties-real-numbers' } });
+    const poolSize = () =>
+      prisma.problem.count({ where: { skillId: skill!.id, tier: 'standard', isSprint: true } });
+    const before = await poolSize();
+    await as(student).practice.sprint({ count: 12, skillSlugs: ['properties-real-numbers'] });
+    // integer-ops has a huge variant space, so the top-up lands new rows
+    expect(await poolSize()).toBeGreaterThan(before);
+  });
+
+  it('serves a fresh round: problems the student attempted are not repeated', async () => {
+    const first = await as(student).practice.sprint({
+      count: 12,
+      skillSlugs: ['properties-real-numbers'],
+    });
+    const attempted = first.problems.slice(0, 3);
+    for (const p of attempted) {
+      await as(student).practice.attempt({
+        problemId: p.id,
+        submittedLatex: '12345678',
+        context: 'sprint',
+      });
+    }
+    // Never-attempted problems sample first, and the top-up guarantees more
+    // than 12 unattempted variants exist — so none of the 3 can reappear.
+    const second = await as(student).practice.sprint({
+      count: 12,
+      skillSlugs: ['properties-real-numbers'],
+    });
+    const secondIds = new Set(second.problems.map((p) => p.id));
+    for (const p of attempted) expect(secondIds.has(p.id)).toBe(false);
   });
 
   it('records completed sprints per difficulty and unlocks the badge ladder', async () => {
