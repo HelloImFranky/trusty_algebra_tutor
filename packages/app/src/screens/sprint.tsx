@@ -104,7 +104,8 @@ export function SprintScreen() {
   const [animOpenId, setAnimOpenId] = useState<number | null>(null);
   const [difficulty, setDifficulty] = useState<Difficulty>('standard');
   const [topics, setTopics] = useState<SprintTopic[]>([]);
-  const [topicSlug, setTopicSlug] = useState<string | null>(null); // null = all topics
+  // Multi-select: the round draws from every chosen topic. Empty = all topics.
+  const [topicSlugs, setTopicSlugs] = useState<string[]>([]);
   // Grades still in flight — the completion report waits for them so the
   // recorded score can't miss a submit that raced the timer.
   const [inFlight, setInFlight] = useState(0);
@@ -124,13 +125,18 @@ export function SprintScreen() {
 
   const topicName = (s: SprintTopic) => (locale === 'es' ? s.nameEs : s.nameEn);
 
-  const start = async (slugOverride?: string | null) => {
-    const slug = slugOverride === undefined ? topicSlug : slugOverride;
+  const toggleTopic = (slug: string) =>
+    setTopicSlugs((cur) =>
+      cur.includes(slug) ? cur.filter((s) => s !== slug) : [...cur, slug],
+    );
+
+  const start = async (slugsOverride?: string[]) => {
+    const slugs = slugsOverride ?? topicSlugs;
     const r = await client.practice.sprint.query({
       count: 20,
       locale,
       difficulty,
-      skillSlug: slug ?? undefined,
+      skillSlugs: slugs.length ? slugs : undefined,
     });
     setProblems(r.problems);
     setIndex(0);
@@ -147,10 +153,10 @@ export function SprintScreen() {
 
   /** 🎲 pick a random topic, show it as selected, and launch right away. */
   const startRandom = () => {
-    if (!topics.length) return void start(null);
+    if (!topics.length) return void start([]);
     const pick = topics[Math.floor(Math.random() * topics.length)];
-    setTopicSlug(pick.slug);
-    void start(pick.slug);
+    setTopicSlugs([pick.slug]);
+    void start([pick.slug]);
   };
 
   useEffect(() => {
@@ -183,15 +189,21 @@ export function SprintScreen() {
   }, [seconds, running, index, problems]);
 
   // Round over (and no grade still in flight): record the completed sprint
-  // so the per-difficulty badge ladders on Progress can count it.
+  // so the per-difficulty badge ladders on Progress can count it. A round
+  // over several topics is recorded as mixed (null slug), same as "all".
   useEffect(() => {
     if (running || index < 0 || inFlight > 0 || attempted === 0) return;
     if (reportedRound.current) return;
     reportedRound.current = true;
     client.practice.sprintComplete
-      .mutate({ difficulty, skillSlug: topicSlug, total: attempted, correct: score })
+      .mutate({
+        difficulty,
+        skillSlug: topicSlugs.length === 1 ? topicSlugs[0] : null,
+        total: attempted,
+        correct: score,
+      })
       .catch(() => {});
-  }, [running, index, inFlight, attempted, score, difficulty, topicSlug]);
+  }, [running, index, inFlight, attempted, score, difficulty, topicSlugs]);
 
   const submit = async () => {
     if (!answer.trim() || !running) return;
@@ -222,11 +234,15 @@ export function SprintScreen() {
     else setRunning(false);
   };
 
-  const selectedTopic = topics.find((s) => s.slug === topicSlug) ?? null;
   const difficultyDef = DIFFICULTIES.find((d) => d.key === difficulty)!;
-  const roundLabel = `${difficultyDef.icon} ${t(difficultyDef.label)} · ${
-    selectedTopic ? topicName(selectedTopic) : t('sprintAllTopics')
-  }`;
+  const selected = topics.filter((s) => topicSlugs.includes(s.slug));
+  const topicLabel =
+    selected.length === 0
+      ? t('sprintAllTopics')
+      : selected.length === 1
+        ? topicName(selected[0])
+        : `${selected.length} ${t('sprintTopicsSelected')}`;
+  const roundLabel = `${difficultyDef.icon} ${t(difficultyDef.label)} · ${topicLabel}`;
 
   return (
     <Screen maxWidth={560}>
@@ -248,14 +264,17 @@ export function SprintScreen() {
             <YStack gap={6}>
               <Muted size={12}>{t('sprintTopicLabel')}</Muted>
               <XStack gap={8} flexWrap="wrap">
-                <PickChip selected={topicSlug === null} onPress={() => setTopicSlug(null)}>
+                <PickChip selected={topicSlugs.length === 0} onPress={() => setTopicSlugs([])}>
                   {t('sprintAllTopics')}
                 </PickChip>
-                {topics.map((s) => (
-                  <PickChip key={s.slug} selected={topicSlug === s.slug} onPress={() => setTopicSlug(s.slug)}>
-                    {topicName(s)}
-                  </PickChip>
-                ))}
+                {topics.map((s) => {
+                  const on = topicSlugs.includes(s.slug);
+                  return (
+                    <PickChip key={s.slug} selected={on} onPress={() => toggleTopic(s.slug)}>
+                      {on ? '✓ ' : ''}{topicName(s)}
+                    </PickChip>
+                  );
+                })}
               </XStack>
             </YStack>
           )}

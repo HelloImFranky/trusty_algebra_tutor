@@ -504,13 +504,24 @@ describe('practice loop', () => {
     }
   });
 
-  it('filters sprint problems by topic (skill slug)', async () => {
+  it('filters sprint problems by a single topic (skill slug)', async () => {
     const { topics } = await as(student).practice.sprintTopics();
     expect(topics.length).toBeGreaterThanOrEqual(3);
     const slug = topics[0].slug;
-    const res = await as(student).practice.sprint({ count: 5, skillSlug: slug });
+    const res = await as(student).practice.sprint({ count: 5, skillSlugs: [slug] });
     expect(res.problems.length).toBeGreaterThan(0);
     for (const p of res.problems) expect(p.skillSlug).toBe(slug);
+  });
+
+  it('mixes a full round from several chosen topics', async () => {
+    const { topics } = await as(student).practice.sprintTopics();
+    const chosen = topics.slice(0, 2).map((s) => s.slug);
+    // 20 > the 12 problems any one topic has per tier, so a full round is
+    // only possible by drawing from BOTH chosen topics — and never others.
+    const res = await as(student).practice.sprint({ count: 20, skillSlugs: chosen });
+    expect(res.problems.length).toBe(20);
+    const seen = new Set(res.problems.map((p) => p.skillSlug));
+    expect([...seen].sort()).toEqual([...chosen].sort());
   });
 
   it('records completed sprints per difficulty and unlocks the badge ladder', async () => {

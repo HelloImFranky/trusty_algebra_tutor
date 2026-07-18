@@ -1,6 +1,6 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
-import { prisma } from '@tutor/db';
+import { prisma, Prisma } from '@tutor/db';
 import { decayedScore, tierForScore, grade, diagnoseMisconception } from '@tutor/core';
 import type { GradingMode, Misconception } from '@tutor/core';
 import { loc, protectedProcedure, router } from '../trpc.js';
@@ -212,21 +212,27 @@ export const practiceRouter = router({
 
   /**
    * Sprints (§4.4): short timed fluency drills from the Sprints folder.
-   * Optional difficulty (problem tier) and topic (skill slug) filters power
-   * the start-screen pickers; when a database predates the tiered sprint
-   * content and has nothing at the requested tier, the query falls back to
-   * ignoring the tier rather than serving an empty round.
+   * Optional difficulty (problem tier) and topic (skill slugs) filters power
+   * the start-screen pickers — students can mix any number of topics into
+   * one randomized round (empty/omitted = all topics). When a database
+   * predates the tiered sprint content and has nothing at the requested
+   * tier, the query falls back to ignoring the tier rather than serving an
+   * empty round.
    */
   sprint: protectedProcedure
     .input(
       localeInput.extend({
         count: z.number().int().min(1).max(20).default(10),
         difficulty: z.enum(['modified', 'standard', 'challenge']).default('standard'),
-        skillSlug: z.string().max(100).optional(),
+        skillSlugs: z.array(z.string().max(100)).max(50).optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
       const locale = loc(ctx, input.locale);
+      const slugs = input.skillSlugs ?? [];
+      const topicFilter = slugs.length
+        ? Prisma.sql`AND s.slug IN (${Prisma.join(slugs)})`
+        : Prisma.empty;
       // params + skill slug ride along so the post-round review can offer an
       // animated walkthrough of any miss a stepanim builder understands.
       const pick = (withTier: boolean) => prisma.$queryRaw<
@@ -239,7 +245,7 @@ export const practiceRouter = router({
         FROM problems p JOIN skills s ON s.id = p.skill_id
         WHERE p.is_sprint
           AND (${!withTier} OR p.tier = ${input.difficulty})
-          AND (${!input.skillSlug} OR s.slug = ${input.skillSlug ?? ''})
+          ${topicFilter}
         ORDER BY random() LIMIT ${input.count}`;
       let rows = await pick(true);
       if (!rows.length) rows = await pick(false);
