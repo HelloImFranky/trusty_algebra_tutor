@@ -304,6 +304,14 @@ model SprintSession {
   @@map("sprint_sessions")
 }
 
+model AppSecret {
+  name      String   @id
+  value     String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  @@map("app_secrets")
+}
+
 model CalculatorSession {
   userId    BigInt   @id @map("user_id")
   state     Json
