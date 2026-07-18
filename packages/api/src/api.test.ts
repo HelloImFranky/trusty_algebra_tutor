@@ -494,6 +494,56 @@ describe('practice loop', () => {
     }
   });
 
+  it('filters sprint problems by difficulty tier', async () => {
+    for (const difficulty of ['modified', 'standard', 'challenge'] as const) {
+      const res = await as(student).practice.sprint({ count: 5, difficulty });
+      expect(res.problems.length).toBeGreaterThan(0);
+      const ids = res.problems.map((p) => BigInt(p.id));
+      const rows = await prisma.problem.findMany({ where: { id: { in: ids } } });
+      for (const row of rows) expect(row.tier).toBe(difficulty);
+    }
+  });
+
+  it('filters sprint problems by topic (skill slug)', async () => {
+    const { topics } = await as(student).practice.sprintTopics();
+    expect(topics.length).toBeGreaterThanOrEqual(3);
+    const slug = topics[0].slug;
+    const res = await as(student).practice.sprint({ count: 5, skillSlug: slug });
+    expect(res.problems.length).toBeGreaterThan(0);
+    for (const p of res.problems) expect(p.skillSlug).toBe(slug);
+  });
+
+  it('records completed sprints per difficulty and unlocks the badge ladder', async () => {
+    for (let i = 0; i < 5; i++) {
+      await as(student).practice.sprintComplete({
+        difficulty: 'modified',
+        total: 10,
+        correct: 7,
+      });
+    }
+    const last = await as(student).practice.sprintComplete({
+      difficulty: 'challenge',
+      skillSlug: 'multi-step-equations',
+      total: 12,
+      correct: 12,
+    });
+    expect(last.completions.modified).toBe(5);
+    expect(last.completions.challenge).toBe(1);
+
+    const progress = await as(student).progress.me();
+    const warmup = progress.achievements.find((a) => a.id === 'sprint-warmup-5');
+    expect(warmup?.earned).toBe(true);
+    const challenge = progress.achievements.find((a) => a.id === 'sprint-challenge-5');
+    expect(challenge?.earned).toBe(false);
+    expect(challenge?.value).toBe(1);
+  });
+
+  it('rejects a sprint completion claiming more correct than attempted', async () => {
+    await expect(
+      as(student).practice.sprintComplete({ difficulty: 'standard', total: 3, correct: 4 }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+  });
+
   it('assembles a review session from practiced skills', async () => {
     const res = await as(student).practice.reviewSession({});
     expect(res.problems.length).toBeGreaterThan(0);

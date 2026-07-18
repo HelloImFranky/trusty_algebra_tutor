@@ -15,9 +15,12 @@ import {
   GhostButton,
   Muted,
   PrimaryButton,
+  RADIUS,
   Screen,
+  SecondaryButton,
   SubTitle,
   Title,
+  useAccent,
   useFeedbackColors,
   useTokens,
 } from '../components/ui';
@@ -29,6 +32,13 @@ interface SprintProblem {
   skillSlug?: string | null;
 }
 
+interface SprintTopic {
+  slug: string;
+  nameEn: string;
+  nameEs: string;
+  problems: number;
+}
+
 /** One item in the post-round review: a problem the student got wrong or
  * never got to answer, paired with what they wrote and the correct target. */
 interface MissRecord {
@@ -38,7 +48,44 @@ interface MissRecord {
   skipped?: boolean;
 }
 
+type Difficulty = 'modified' | 'standard' | 'challenge';
+
 const SPRINT_SECONDS = 90;
+
+const DIFFICULTIES: { key: Difficulty; icon: string; label: 'sprintWarmup' | 'sprintStandard' | 'sprintChallenge' }[] = [
+  { key: 'modified', icon: '🌱', label: 'sprintWarmup' },
+  { key: 'standard', icon: '⚡', label: 'sprintStandard' },
+  { key: 'challenge', icon: '🚀', label: 'sprintChallenge' },
+];
+
+/** Small selectable pill for the difficulty / topic pickers. */
+function PickChip({
+  selected,
+  onPress,
+  children,
+}: {
+  selected: boolean;
+  onPress: () => void;
+  children: React.ReactNode;
+}) {
+  const accent = useAccent();
+  const tokens = useTokens();
+  return (
+    <XStack
+      onPress={onPress}
+      cursor="pointer"
+      backgroundColor={selected ? accent : tokens.subtle}
+      borderRadius={RADIUS.pill}
+      paddingHorizontal={12}
+      paddingVertical={6}
+      pressStyle={{ opacity: 0.8 }}
+    >
+      <Text color={selected ? '#ffffff' : tokens.ink} fontSize={13} fontWeight="700">
+        {children}
+      </Text>
+    </XStack>
+  );
+}
 
 export function SprintScreen() {
   const { t, locale } = useI18n();
@@ -55,14 +102,36 @@ export function SprintScreen() {
   const [running, setRunning] = useState(false);
   const [misses, setMisses] = useState<MissRecord[]>([]);
   const [animOpenId, setAnimOpenId] = useState<number | null>(null);
+  const [difficulty, setDifficulty] = useState<Difficulty>('standard');
+  const [topics, setTopics] = useState<SprintTopic[]>([]);
+  const [topicSlug, setTopicSlug] = useState<string | null>(null); // null = all topics
+  // Grades still in flight — the completion report waits for them so the
+  // recorded score can't miss a submit that raced the timer.
+  const [inFlight, setInFlight] = useState(0);
   const timer = useRef<ReturnType<typeof setInterval>>(undefined);
   // Highest index for which submit() started grading — protects against the
   // timer expiring mid-await and double-counting that problem as both
   // "skipped" (by the time-out effect) and graded (by the returning submit).
   const submittingIndex = useRef<number>(-1);
+  const reportedRound = useRef(false);
 
-  const start = async () => {
-    const r = await client.practice.sprint.query({ count: 20, locale });
+  useEffect(() => {
+    client.practice.sprintTopics
+      .query()
+      .then((r) => setTopics(r.topics))
+      .catch(() => {});
+  }, []);
+
+  const topicName = (s: SprintTopic) => (locale === 'es' ? s.nameEs : s.nameEn);
+
+  const start = async (slugOverride?: string | null) => {
+    const slug = slugOverride === undefined ? topicSlug : slugOverride;
+    const r = await client.practice.sprint.query({
+      count: 20,
+      locale,
+      difficulty,
+      skillSlug: slug ?? undefined,
+    });
     setProblems(r.problems);
     setIndex(0);
     setScore(0);
@@ -72,7 +141,16 @@ export function SprintScreen() {
     setSeconds(SPRINT_SECONDS);
     setAnswer('');
     submittingIndex.current = -1;
+    reportedRound.current = false;
     setRunning(true);
+  };
+
+  /** 🎲 pick a random topic, show it as selected, and launch right away. */
+  const startRandom = () => {
+    if (!topics.length) return void start(null);
+    const pick = topics[Math.floor(Math.random() * topics.length)];
+    setTopicSlug(pick.slug);
+    void start(pick.slug);
   };
 
   useEffect(() => {
@@ -104,44 +182,99 @@ export function SprintScreen() {
     }
   }, [seconds, running, index, problems]);
 
+  // Round over (and no grade still in flight): record the completed sprint
+  // so the per-difficulty badge ladders on Progress can count it.
+  useEffect(() => {
+    if (running || index < 0 || inFlight > 0 || attempted === 0) return;
+    if (reportedRound.current) return;
+    reportedRound.current = true;
+    client.practice.sprintComplete
+      .mutate({ difficulty, skillSlug: topicSlug, total: attempted, correct: score })
+      .catch(() => {});
+  }, [running, index, inFlight, attempted, score, difficulty, topicSlug]);
+
   const submit = async () => {
     if (!answer.trim() || !running) return;
     const p = problems[index];
     const submitted = answer;
     submittingIndex.current = index;
     setAttempted((a) => a + 1);
-    const res = await attemptOrQueue({
-      problemId: p.id,
-      submittedLatex: submitted,
-      context: 'sprint',
-    });
-    if (!res.queued && res.correct) {
-      setScore((s) => s + 1);
-    } else if (!res.queued) {
-      setMisses((m) => [
-        ...m,
-        { problem: p, submitted, correct: res.correctAnswer ?? null },
-      ]);
+    setInFlight((n) => n + 1);
+    try {
+      const res = await attemptOrQueue({
+        problemId: p.id,
+        submittedLatex: submitted,
+        context: 'sprint',
+      });
+      if (!res.queued && res.correct) {
+        setScore((s) => s + 1);
+      } else if (!res.queued) {
+        setMisses((m) => [
+          ...m,
+          { problem: p, submitted, correct: res.correctAnswer ?? null },
+        ]);
+      }
+    } finally {
+      setInFlight((n) => n - 1);
     }
     setAnswer('');
     if (index + 1 < problems.length) setIndex((i) => i + 1);
     else setRunning(false);
   };
 
+  const selectedTopic = topics.find((s) => s.slug === topicSlug) ?? null;
+  const difficultyDef = DIFFICULTIES.find((d) => d.key === difficulty)!;
+  const roundLabel = `${difficultyDef.icon} ${t(difficultyDef.label)} · ${
+    selectedTopic ? topicName(selectedTopic) : t('sprintAllTopics')
+  }`;
+
   return (
     <Screen maxWidth={560}>
       <Title>⚡ {t('sprint')}</Title>
       {!running && index === -1 && (
-        <AppCard alignItems="center" gap={10}>
-          <Text fontSize={16} color={tokens.ink}>90s · 20 ❓</Text>
-          <PrimaryButton onPress={start}>{t('sprintGo')}</PrimaryButton>
+        <AppCard gap={14}>
+          <Text fontSize={16} color={tokens.ink} textAlign="center">90s · 20 ❓</Text>
+          <YStack gap={6}>
+            <Muted size={12}>{t('sprintDifficulty')}</Muted>
+            <XStack gap={8} flexWrap="wrap">
+              {DIFFICULTIES.map((d) => (
+                <PickChip key={d.key} selected={difficulty === d.key} onPress={() => setDifficulty(d.key)}>
+                  {d.icon} {t(d.label)}
+                </PickChip>
+              ))}
+            </XStack>
+          </YStack>
+          {topics.length > 0 && (
+            <YStack gap={6}>
+              <Muted size={12}>{t('sprintTopicLabel')}</Muted>
+              <XStack gap={8} flexWrap="wrap">
+                <PickChip selected={topicSlug === null} onPress={() => setTopicSlug(null)}>
+                  {t('sprintAllTopics')}
+                </PickChip>
+                {topics.map((s) => (
+                  <PickChip key={s.slug} selected={topicSlug === s.slug} onPress={() => setTopicSlug(s.slug)}>
+                    {topicName(s)}
+                  </PickChip>
+                ))}
+              </XStack>
+            </YStack>
+          )}
+          <YStack gap={8}>
+            <PrimaryButton onPress={() => void start()}>{t('sprintGo')}</PrimaryButton>
+            {topics.length > 1 && (
+              <SecondaryButton onPress={startRandom}>🎲 {t('sprintRandomTopic')}</SecondaryButton>
+            )}
+          </YStack>
         </AppCard>
       )}
       {running && problems[index] && (
         <AppCard gap={10}>
-          <Text fontWeight="900" fontSize={20} color={seconds <= 10 ? COLORS.bad : COLORS.warn}>
-            ⏱ {seconds}s
-          </Text>
+          <XStack justifyContent="space-between" alignItems="center">
+            <Text fontWeight="900" fontSize={20} color={seconds <= 10 ? COLORS.bad : COLORS.warn}>
+              ⏱ {seconds}s
+            </Text>
+            <Muted size={12}>{roundLabel}</Muted>
+          </XStack>
           <XStack justifyContent="center">
             <MathText text={problems[index].prompt} size={19} />
           </XStack>
@@ -153,10 +286,16 @@ export function SprintScreen() {
         <>
           <AppCard alignItems="center" gap={8}>
             <SubTitle>{t('sprintDone')}</SubTitle>
+            <Muted size={13}>{roundLabel}</Muted>
             <Text fontSize={40} fontWeight="900" color={tokens.ink}>
               {score} / {attempted}
             </Text>
-            <PrimaryButton onPress={start}>↻ {t('sprintGo')}</PrimaryButton>
+            <XStack gap={8} flexWrap="wrap" justifyContent="center">
+              <PrimaryButton onPress={() => void start()}>↻ {t('sprintGo')}</PrimaryButton>
+              {topics.length > 1 && (
+                <SecondaryButton onPress={startRandom}>🎲 {t('sprintRandomTopic')}</SecondaryButton>
+              )}
+            </XStack>
           </AppCard>
 
           {/* Post-round review: for every miss show what they wrote next to

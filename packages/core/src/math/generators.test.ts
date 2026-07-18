@@ -37,4 +37,38 @@ describe('problem generators', () => {
     const b = generateProblem('foil', makeRng(123));
     expect(a).toEqual(b);
   });
+
+  const sprintTemplates = [
+    'sprint_integer_ops',
+    'sprint_perfect_squares',
+    'sprint_one_step_equations',
+  ] as const;
+  const tiers = ['modified', 'standard', 'challenge'] as const;
+
+  it.each(sprintTemplates)('%s generates valid problems at every tier', (template) => {
+    for (const tier of tiers) {
+      const rng = makeRng(11);
+      for (let i = 0; i < 25; i++) {
+        const p = generateProblem(template, rng, tier);
+        expect(grade(p.answerLatex, p.answerLatex, p.gradingMode, p.tolerance).correct).toBe(true);
+      }
+    }
+  });
+
+  it.each(sprintTemplates)(
+    '%s standard tier matches the pre-tier rng stream (seed replay compatibility)',
+    (template) => {
+      // Already-seeded databases are synced by replaying the generator
+      // streams — the standard tier must reproduce what an untiered call
+      // produced, or the replay would stop matching existing rows.
+      const untiered = generateProblem(template, makeRng(42));
+      const standard = generateProblem(template, makeRng(42), 'standard');
+      expect(standard).toEqual(untiered);
+    },
+  );
+
+  it('sprint_one_step_equations challenge produces two-step equations', () => {
+    const p = generateProblem('sprint_one_step_equations', makeRng(5), 'challenge');
+    expect(p.params).toHaveProperty('b'); // ax + b = c shape
+  });
 });

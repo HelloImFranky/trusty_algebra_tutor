@@ -37,6 +37,7 @@ model User {
   tutorSessions    TutorSession[]
   calculatorSession CalculatorSession?
   regentsAnswers   RegentsAnswer[]
+  sprintSessions   SprintSession[]
   guardianOf       GuardianLink[] @relation("guardian")
   guardians        GuardianLink[] @relation("student")
   classesTaught    Class[]           @relation("teacher")
@@ -286,6 +287,21 @@ model RegentsAnswer {
   @@unique([userId, questionId], map: "regents_answers_user_question_key")
   @@index([userId, topicSlug], map: "idx_regents_answers_user_topic")
   @@map("regents_answers")
+}
+
+model SprintSession {
+  id         BigInt   @id @default(autoincrement())
+  userId     BigInt   @map("user_id")
+  difficulty String
+  /// NULL = mixed "all topics" sprint
+  skillSlug  String?  @map("skill_slug")
+  total      Int
+  correct    Int
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt], map: "idx_sprint_sessions_user")
+  @@map("sprint_sessions")
 }
 
 model CalculatorSession {

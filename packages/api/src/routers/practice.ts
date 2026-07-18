@@ -210,14 +210,26 @@ export const practiceRouter = router({
       };
     }),
 
-  /** Sprints (§4.4): short timed fluency drills from the Sprints folder. */
+  /**
+   * Sprints (§4.4): short timed fluency drills from the Sprints folder.
+   * Optional difficulty (problem tier) and topic (skill slug) filters power
+   * the start-screen pickers; when a database predates the tiered sprint
+   * content and has nothing at the requested tier, the query falls back to
+   * ignoring the tier rather than serving an empty round.
+   */
   sprint: protectedProcedure
-    .input(localeInput.extend({ count: z.number().int().min(1).max(20).default(10) }))
+    .input(
+      localeInput.extend({
+        count: z.number().int().min(1).max(20).default(10),
+        difficulty: z.enum(['modified', 'standard', 'challenge']).default('standard'),
+        skillSlug: z.string().max(100).optional(),
+      }),
+    )
     .query(async ({ ctx, input }) => {
       const locale = loc(ctx, input.locale);
       // params + skill slug ride along so the post-round review can offer an
       // animated walkthrough of any miss a stepanim builder understands.
-      const rows = await prisma.$queryRaw<
+      const pick = (withTier: boolean) => prisma.$queryRaw<
         (ProblemRow & { paramsJson: unknown; skillSlug: string })[]
       >`
         SELECT p.id, p.skill_id AS "skillId", p.tier,
@@ -225,7 +237,12 @@ export const practiceRouter = router({
                p.grading_mode AS "gradingMode",
                p.params_json AS "paramsJson", s.slug AS "skillSlug"
         FROM problems p JOIN skills s ON s.id = p.skill_id
-        WHERE p.is_sprint ORDER BY random() LIMIT ${input.count}`;
+        WHERE p.is_sprint
+          AND (${!withTier} OR p.tier = ${input.difficulty})
+          AND (${!input.skillSlug} OR s.slug = ${input.skillSlug ?? ''})
+        ORDER BY random() LIMIT ${input.count}`;
+      let rows = await pick(true);
+      if (!rows.length) rows = await pick(false);
       return {
         problems: rows.map((p) => ({
           id: Number(p.id),
@@ -236,6 +253,61 @@ export const practiceRouter = router({
           skillSlug: p.skillSlug ?? null,
         })),
       };
+    }),
+
+  /** Topics that have sprint problems — feeds the focused-sprint picker. */
+  sprintTopics: protectedProcedure.query(async () => {
+    const rows = await prisma.$queryRaw<
+      { slug: string; nameEn: string; nameEs: string; problems: number }[]
+    >`
+      SELECT s.slug, s.name_en AS "nameEn", s.name_es AS "nameEs",
+             count(*)::int AS problems
+      FROM problems p JOIN skills s ON s.id = p.skill_id
+      WHERE p.is_sprint
+      GROUP BY s.slug, s.name_en, s.name_es
+      ORDER BY min(s.id)`;
+    return { topics: rows };
+  }),
+
+  /**
+   * Record a finished sprint round (timer expired or all problems answered).
+   * One row per completed round; the per-difficulty completion counts drive
+   * the sprint badges on the Progress tab (5 / 15 / 30 at each difficulty).
+   */
+  sprintComplete: protectedProcedure
+    .input(
+      z.object({
+        difficulty: z.enum(['modified', 'standard', 'challenge']),
+        skillSlug: z.string().max(100).nullish(),
+        total: z.number().int().min(1).max(50),
+        correct: z.number().int().min(0),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (input.correct > input.total) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'correct exceeds total' });
+      }
+      await prisma.sprintSession.create({
+        data: {
+          userId: BigInt(ctx.user.id),
+          difficulty: input.difficulty,
+          skillSlug: input.skillSlug ?? null,
+          total: input.total,
+          correct: input.correct,
+        },
+      });
+      const counts = await prisma.sprintSession.groupBy({
+        by: ['difficulty'],
+        where: { userId: BigInt(ctx.user.id) },
+        _count: true,
+      });
+      const completions = { modified: 0, standard: 0, challenge: 0 };
+      for (const c of counts) {
+        if (c.difficulty in completions) {
+          completions[c.difficulty as keyof typeof completions] = c._count;
+        }
+      }
+      return { completions };
     }),
 
   /**

@@ -42,6 +42,12 @@ export const unit1: UnitSeed = {
         { template: 'exponent_product_rule', tier: 'standard', count: 6 },
         { template: 'exponent_product_rule', tier: 'challenge', count: 6 },
         { template: 'sprint_perfect_squares', tier: 'standard', count: 12, sprint: true },
+        // Sprint difficulty tiers appended AFTER the original specs — the
+        // per-lesson rng seed advances per spec, so inserting earlier would
+        // shift every later spec's stream and break the deterministic
+        // replay that syncs already-seeded databases.
+        { template: 'sprint_perfect_squares', tier: 'modified', count: 12, sprint: true },
+        { template: 'sprint_perfect_squares', tier: 'challenge', count: 12, sprint: true },
       ],
     },
     {
@@ -250,7 +256,12 @@ export const unit1: UnitSeed = {
           gradingMode: 'exact',
         },
       ],
-      generated: [{ template: 'sprint_integer_ops', tier: 'standard', count: 12, sprint: true }],
+      generated: [
+        { template: 'sprint_integer_ops', tier: 'standard', count: 12, sprint: true },
+        // Appended after the original spec — see the seed-order note on 1.1.
+        { template: 'sprint_integer_ops', tier: 'modified', count: 12, sprint: true },
+        { template: 'sprint_integer_ops', tier: 'challenge', count: 12, sprint: true },
+      ],
     },
   ],
 };
@@ -427,6 +438,9 @@ export const unit3: UnitSeed = {
         { template: 'multi_step_equation', tier: 'standard', count: 6 },
         { template: 'multi_step_equation', tier: 'challenge', count: 6 },
         { template: 'sprint_one_step_equations', tier: 'standard', count: 12, sprint: true },
+        // Appended after the original specs — see the seed-order note on 1.1.
+        { template: 'sprint_one_step_equations', tier: 'modified', count: 12, sprint: true },
+        { template: 'sprint_one_step_equations', tier: 'challenge', count: 12, sprint: true },
       ],
     },
     {

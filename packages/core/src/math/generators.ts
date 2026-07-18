@@ -55,7 +55,11 @@ const polyLatex = (A: number, B: number, C: number) => {
   return parts.length ? parts.join(' + ').replace(/\+ -/g, '- ') : '0';
 };
 
-type Generator = (rng: Rng) => GeneratedProblem;
+/** Difficulty knob for tier-aware templates (currently the sprint drills).
+ * Mirrors the problem tiers; generators that ignore it are unaffected. */
+export type GeneratorTier = 'modified' | 'standard' | 'challenge';
+
+type Generator = (rng: Rng, tier?: GeneratorTier) => GeneratedProblem;
 
 export const generators: Record<string, Generator> = {
   /* ---------------- Unit 1: Number Sense ---------------- */
@@ -1360,7 +1364,50 @@ export const generators: Record<string, Generator> = {
 
   /* ---------------- Sprints (fluency drills) ---------------- */
 
-  sprint_integer_ops(rng) {
+  // Each sprint template is tier-aware: 'modified' shrinks ranges (and drops
+  // the trickiest operation), 'challenge' widens them or adds a step. The
+  // 'standard' branch of each template must keep the exact rng-call sequence
+  // it had before tiers existed — the seed replays these streams
+  // deterministically to match problems already in the database.
+  sprint_integer_ops(rng, tier) {
+    if (tier === 'modified') {
+      // Positive first operand, + / − only — fluency without sign gymnastics.
+      const a = ri(rng, 1, 9);
+      const b = nz(rng, -9, 9);
+      const op = ['+', '-'][ri(rng, 0, 1)];
+      return {
+        promptEn: `$${a} ${op} (${b}) = ?$`,
+        promptEs: `$${a} ${op} (${b}) = ?$`,
+        answerLatex: String(op === '+' ? a + b : a - b),
+        gradingMode: 'exact',
+        params: { a, b, op },
+      };
+    }
+    if (tier === 'challenge') {
+      // Wider range, and division joins the mix (built as a*b ÷ b so the
+      // quotient is always a clean integer).
+      const a = nz(rng, -15, 15);
+      const b = nz(rng, -15, 15);
+      const op = ['+', '-', '*', '/'][ri(rng, 0, 3)];
+      if (op === '/') {
+        return {
+          promptEn: `$${a * b} \\div (${b}) = ?$`,
+          promptEs: `$${a * b} \\div (${b}) = ?$`,
+          answerLatex: String(a),
+          gradingMode: 'exact',
+          params: { a, b, op },
+        };
+      }
+      const answer = op === '+' ? a + b : op === '-' ? a - b : a * b;
+      const disp = op === '*' ? '\\times' : op;
+      return {
+        promptEn: `$${a} ${disp} (${b}) = ?$`,
+        promptEs: `$${a} ${disp} (${b}) = ?$`,
+        answerLatex: String(answer),
+        gradingMode: 'exact',
+        params: { a, b, op },
+      };
+    }
     const a = nz(rng, -12, 12);
     const b = nz(rng, -12, 12);
     const op = ['+', '-', '*'][ri(rng, 0, 2)];
@@ -1375,8 +1422,9 @@ export const generators: Record<string, Generator> = {
     };
   },
 
-  sprint_perfect_squares(rng) {
-    const n = ri(rng, 2, 15);
+  sprint_perfect_squares(rng, tier) {
+    const n =
+      tier === 'modified' ? ri(rng, 2, 10) : tier === 'challenge' ? ri(rng, 8, 20) : ri(rng, 2, 15);
     const forward = rng() < 0.5;
     return forward
       ? {
@@ -1395,7 +1443,33 @@ export const generators: Record<string, Generator> = {
         };
   },
 
-  sprint_one_step_equations(rng) {
+  sprint_one_step_equations(rng, tier) {
+    if (tier === 'modified') {
+      // All-positive one-step: ax = c with small friendly numbers.
+      const a = ri(rng, 2, 9);
+      const x = ri(rng, 1, 9);
+      return {
+        promptEn: `Solve: $${coeff(a, 'x')} = ${a * x}$`,
+        promptEs: `Resuelve: $${coeff(a, 'x')} = ${a * x}$`,
+        answerLatex: String(x),
+        gradingMode: 'exact',
+        params: { a, x },
+      };
+    }
+    if (tier === 'challenge') {
+      // Two-step under time pressure: ax + b = c.
+      const a = nz(rng, -9, 9);
+      const b = nz(rng, -12, 12);
+      const x = nz(rng, -9, 9);
+      const c = a * x + b;
+      return {
+        promptEn: `Solve: $${coeff(a, 'x')} ${sgn(b)} = ${c}$`,
+        promptEs: `Resuelve: $${coeff(a, 'x')} ${sgn(b)} = ${c}$`,
+        answerLatex: String(x),
+        gradingMode: 'exact',
+        params: { a, b, x },
+      };
+    }
     const a = nz(rng, -9, 9);
     const x = nz(rng, -9, 9);
     return {
@@ -1419,11 +1493,11 @@ function gcd(a: number, b: number): number {
  * Generate a validated problem: the answer key must grade correct against
  * itself and every step key against its own mode (catches template bugs).
  */
-export function generateProblem(template: string, rng: Rng): GeneratedProblem {
+export function generateProblem(template: string, rng: Rng, tier?: GeneratorTier): GeneratedProblem {
   const gen = generators[template];
   if (!gen) throw new Error(`unknown generator template: ${template}`);
   for (let attempt = 0; attempt < 10; attempt++) {
-    const p = gen(rng);
+    const p = gen(rng, tier);
     const ok =
       grade(p.answerLatex, p.answerLatex, p.gradingMode, p.tolerance).correct &&
       (p.steps ?? []).every(

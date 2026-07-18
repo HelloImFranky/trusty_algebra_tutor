@@ -137,6 +137,19 @@ async function buildProgress(userId: number) {
     correctStreakBest = Math.max(correctStreakBest, run);
   }
 
+  // Completed sprint rounds per difficulty, for the sprint badge ladders.
+  const sprintCounts = await prisma.sprintSession.groupBy({
+    by: ['difficulty'],
+    where: { userId: BigInt(userId) },
+    _count: true,
+  });
+  const sprintsByDifficulty = { modified: 0, standard: 0, challenge: 0 };
+  for (const c of sprintCounts) {
+    if (c.difficulty in sprintsByDifficulty) {
+      sprintsByDifficulty[c.difficulty as keyof typeof sprintsByDifficulty] = c._count;
+    }
+  }
+
   const achievements = computeAchievements({
     correctAnswers: correctAnswers + regents.questionsCorrect,
     correctStreakBest,
@@ -145,6 +158,9 @@ async function buildProgress(userId: number) {
     regentsCorrect: regents.questionsCorrect,
     regentsTopicsCompleted: regents.topicsCompleted,
     regentsPerfectTopics: regents.perfectTopics,
+    sprintsModified: sprintsByDifficulty.modified,
+    sprintsStandard: sprintsByDifficulty.standard,
+    sprintsChallenge: sprintsByDifficulty.challenge,
   });
 
   return {
