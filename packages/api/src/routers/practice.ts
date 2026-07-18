@@ -8,6 +8,7 @@ import {
   diagnoseMisconception,
   generateProblem,
   makeRng,
+  sprintTopicDefs,
 } from '@tutor/core';
 import type { GradingMode, Misconception } from '@tutor/core';
 import { loc, protectedProcedure, router } from '../trpc.js';
@@ -64,35 +65,35 @@ async function problemPayload(p: ProblemRow, locale: Locale) {
  * bound — and every problem stays a real row, which keeps attempts,
  * mastery, and the post-round walkthroughs working unchanged.
  *
- * The drill template for a skill is read off the existing drill rows'
- * params (params_json->>'template'), so new drill generators need no
- * registry here. A racing find-or-create between two students can insert
- * the same variant twice — harmless (both rows are valid), so no unique
- * constraint is required.
+ * Topics come from the sprintTopicDefs registry (template + host skill), so
+ * a database that predates a drill topic grows its pool from nothing on the
+ * first round that requests it. A racing find-or-create between two students
+ * can insert the same variant twice — harmless (both rows are valid), so no
+ * unique constraint is required.
  */
 async function topUpSprintDrills(
-  skillSlugs: string[],
+  topics: string[],
   difficulty: 'modified' | 'standard' | 'challenge',
   perTopic: number,
 ): Promise<void> {
-  const drills = await prisma.$queryRaw<{ skillId: bigint; template: string }[]>`
-    SELECT DISTINCT s.id AS "skillId", p.params_json->>'template' AS template
-    FROM problems p JOIN skills s ON s.id = p.skill_id
-    WHERE p.is_sprint AND p.params_json->>'template' IS NOT NULL
-      ${skillSlugs.length ? Prisma.sql`AND s.slug IN (${Prisma.join(skillSlugs)})` : Prisma.empty}`;
-  for (const d of drills) {
+  const defs = topics.length
+    ? sprintTopicDefs.filter((d) => topics.includes(d.slug))
+    : sprintTopicDefs;
+  for (const d of defs) {
+    const skill = await prisma.skill.findUnique({ where: { slug: d.skillSlug } });
+    if (!skill) continue;
     const rng = makeRng((Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0);
     const seen = new Set<string>();
     let made = 0;
     for (let i = 0; made < perTopic && i < perTopic * 6; i++) {
-      const gp = generateProblem(d.template, rng, difficulty);
+      const gp = generateProblem(d.slug, rng, difficulty);
       const key = gp.promptEn + gp.answerLatex;
       if (seen.has(key)) continue;
       seen.add(key);
       made++;
       const exists = await prisma.problem.findFirst({
         where: {
-          skillId: d.skillId,
+          skillId: skill.id,
           tier: difficulty,
           promptEn: gp.promptEn,
           answerLatex: gp.answerLatex,
@@ -103,7 +104,7 @@ async function topUpSprintDrills(
       if (exists) continue;
       await prisma.problem.create({
         data: {
-          skillId: d.skillId,
+          skillId: skill.id,
           tier: difficulty,
           promptEn: gp.promptEn,
           promptEs: gp.promptEs,
@@ -281,17 +282,15 @@ export const practiceRouter = router({
     }),
 
   /**
-   * Sprints (§4.4): short timed fluency drills. Optional difficulty
-   * (problem tier) and topic (skill slugs) filters power the start-screen
-   * pickers — students can mix any number of topics into one randomized
-   * round (empty/omitted = all topics).
-   *
-   * Problem preference per skill: dedicated sprint drills when the skill
-   * has them at the requested tier, otherwise its regular practice problems
-   * — so every curriculum topic is sprintable, not just the three with
-   * drill generators. When a database predates the tiered sprint content
-   * and the tier turns up nothing at all, the query falls back to ignoring
-   * the tier rather than serving an empty round.
+   * Sprints (§4.4): short timed fluency rounds over 6th/7th-grade skills an
+   * 8th grader already knows (the sprintTopicDefs drill registry) — never
+   * the Algebra 1 curriculum itself. The client times rounds at 1 minute
+   * per 10 questions. Optional difficulty (problem tier) and topic (drill
+   * template slugs) filters power the start-screen pickers — students can
+   * mix any number of topics into one randomized round (empty/omitted =
+   * all topics). When a database predates the tiered drill content and the
+   * tier turns up nothing at all, the query falls back to ignoring the
+   * tier rather than serving an empty round.
    *
    * Freshness: drill pools are topped up with newly generated variants at
    * round start (topUpSprintDrills), and sampling prefers problems this
@@ -302,19 +301,24 @@ export const practiceRouter = router({
   sprint: protectedProcedure
     .input(
       localeInput.extend({
-        count: z.number().int().min(1).max(20).default(10),
+        count: z.number().int().min(1).max(30).default(10),
         difficulty: z.enum(['modified', 'standard', 'challenge']).default('standard'),
-        skillSlugs: z.array(z.string().max(100)).max(50).optional(),
+        topics: z.array(z.string().max(100)).max(20).optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
       const locale = loc(ctx, input.locale);
-      const slugs = input.skillSlugs ?? [];
-      const topicFilter = slugs.length
-        ? Prisma.sql`AND s.slug IN (${Prisma.join(slugs)})`
-        : Prisma.empty;
+      // Unknown topic slugs are dropped rather than erroring — a stale
+      // client picker should still get a valid round.
+      const topics = (input.topics ?? []).filter((t) =>
+        sprintTopicDefs.some((d) => d.slug === t),
+      );
+      const templates = topics.length ? topics : sprintTopicDefs.map((d) => d.slug);
       // Freshly generated drill variants land in the bank before sampling.
-      await topUpSprintDrills(slugs, input.difficulty, Math.min(input.count, 12));
+      // Per-topic amount covers the round even when a single topic must fill
+      // it, but shrinks when an "all topics" round spreads across the registry.
+      const perTopic = Math.max(4, Math.ceil(input.count / templates.length));
+      await topUpSprintDrills(topics, input.difficulty, perTopic);
       // params + skill slug ride along so the post-round review can offer an
       // animated walkthrough of any miss a stepanim builder understands.
       // Sampling prefers never-attempted problems for THIS student, then the
@@ -332,12 +336,9 @@ export const practiceRouter = router({
           SELECT problem_id, count(*) AS n, max(created_at) AS last_attempt
           FROM attempts WHERE user_id = ${BigInt(ctx.user.id)} GROUP BY problem_id
         ) a ON a.problem_id = p.id
-        WHERE (${!withTier} OR p.tier = ${input.difficulty})
-          AND (p.is_sprint OR NOT EXISTS (
-            SELECT 1 FROM problems d
-            WHERE d.skill_id = p.skill_id AND d.is_sprint
-              AND (${!withTier} OR d.tier = ${input.difficulty})))
-          ${topicFilter}
+        WHERE p.is_sprint
+          AND (${!withTier} OR p.tier = ${input.difficulty})
+          AND p.params_json->>'template' IN (${Prisma.join(templates)})
         ORDER BY a.n NULLS FIRST, a.last_attempt NULLS FIRST, random()
         LIMIT ${input.count}`;
       let rows = await pick(true);
@@ -358,36 +359,19 @@ export const practiceRouter = router({
     }),
 
   /**
-   * Topics for the focused-sprint picker: every curriculum skill that has
-   * problems, in teaching order. Skills with dedicated sprint drills use
-   * those; the rest sprint over their regular practice problems (see the
-   * preference rule in the sprint query above).
+   * Topics for the sprint picker: the 6th/7th-grade drill registry, in a
+   * fixed friendly order. Pools for every topic are grown on demand at
+   * round start, so the whole registry is always offered.
    */
   sprintTopics: protectedProcedure.query(async () => {
-    // Unit number + localized unit titles ride along so the picker can group
-    // the (many) topics into collapsible per-unit sections.
-    const rows = await prisma.$queryRaw<
-      {
-        slug: string;
-        nameEn: string;
-        nameEs: string;
-        problems: number;
-        unitNumber: number;
-        unitTitleEn: string;
-        unitTitleEs: string;
-      }[]
-    >`
-      SELECT s.slug, s.name_en AS "nameEn", s.name_es AS "nameEs",
-             count(*)::int AS problems,
-             u.number AS "unitNumber",
-             u.title_en AS "unitTitleEn", u.title_es AS "unitTitleEs"
-      FROM problems p
-      JOIN skills s ON s.id = p.skill_id
-      JOIN lessons l ON l.id = s.lesson_id
-      JOIN units u ON u.id = l.unit_id
-      GROUP BY s.slug, s.name_en, s.name_es, u.number, u.title_en, u.title_es, l.position
-      ORDER BY u.number, l.position`;
-    return { topics: rows };
+    return {
+      topics: sprintTopicDefs.map((d) => ({
+        slug: d.slug,
+        icon: d.icon,
+        nameEn: d.nameEn,
+        nameEs: d.nameEs,
+      })),
+    };
   }),
 
   /**

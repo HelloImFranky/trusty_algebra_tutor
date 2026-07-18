@@ -14,7 +14,7 @@ PWA you open from a link.
 - **Adaptive practice** in modified / standard / challenge tiers, picked from each student's live mastery.
 - **Step-by-step grading** — a CAS math engine accepts any equivalent form and, where it matters, insists on the taught final form. It never just says "incorrect"; it walks you through the fix one step at a time.
 - **Hints & AI tutor** — a deterministic hint ladder plus an optional chat tutor that teaches the method and never gives away answers.
-- **Sprint** 90-second speed rounds, **Regents Review** with freshly generated problem sets, and a built-in **graphing calculator** + **reference sheet**.
+- **Sprint** timed speed rounds (1 minute per 10 questions) over easy 6th/7th-grade fluency skills, **Regents Review** with freshly generated problem sets, and a built-in **graphing calculator** + **reference sheet**.
 - **Progress** tracking (streaks, minutes, mastery map) visible to students, and read-only to teachers and guardians.
 - **Bilingual (EN/ES)**, **offline-capable** (answers queue on-device and sync when back online), and privacy-first (no student email; COPPA/FERPA-aware; AI chat is PII-scrubbed).
 

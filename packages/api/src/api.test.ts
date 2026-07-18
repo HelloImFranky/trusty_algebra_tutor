@@ -5,6 +5,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { TRPCError } from '@trpc/server';
+import { sprintTopicDefs } from '@tutor/core';
 import { appRouter } from './index.js';
 import type { AuthUser } from './auth.js';
 
@@ -504,47 +505,69 @@ describe('practice loop', () => {
     }
   });
 
-  it('lists every curriculum skill as a sprint topic, grouped by unit in teaching order', async () => {
+  it('lists the 6th/7th-grade drill registry as the sprint topics', async () => {
     const { topics } = await as(student).practice.sprintTopics();
-    // all seeded skills with problems — far more than the 3 drill topics
-    expect(topics.length).toBeGreaterThanOrEqual(20);
-    const slugs = topics.map((s) => s.slug);
-    expect(slugs[0]).toBe('exponents-perfect-squares'); // unit 1, lesson 1.1
-    expect(slugs).toContain('inequalities'); // a skill with no drill generator
-    // unit metadata for the picker's collapsible sections, sorted by unit
-    expect(topics[0].unitNumber).toBe(1);
-    expect(topics[0].unitTitleEn.length).toBeGreaterThan(0);
-    expect(topics[0].unitTitleEs.length).toBeGreaterThan(0);
-    const unitSeq = topics.map((s) => s.unitNumber);
-    expect([...unitSeq].sort((a, b) => a - b)).toEqual(unitSeq);
-    expect(new Set(unitSeq).size).toBeGreaterThanOrEqual(5); // several units represented
+    // The registry only — never the Algebra 1 curriculum skills.
+    expect(topics.map((s) => s.slug)).toEqual(sprintTopicDefs.map((d) => d.slug));
+    for (const s of topics) {
+      expect(s.nameEn.length).toBeGreaterThan(0);
+      expect(s.nameEs.length).toBeGreaterThan(0);
+      expect(s.icon.length).toBeGreaterThan(0);
+    }
   });
 
-  it('filters sprint problems by a single topic (skill slug)', async () => {
-    const slug = 'exponents-perfect-squares';
-    const res = await as(student).practice.sprint({ count: 5, skillSlugs: [slug] });
-    expect(res.problems.length).toBeGreaterThan(0);
-    for (const p of res.problems) expect(p.skillSlug).toBe(slug);
-    // A drill-backed topic sprints over its drills, not its practice problems.
+  it('serves only dedicated drill problems — never curriculum practice problems', async () => {
+    const res = await as(student).practice.sprint({ count: 20 });
+    expect(res.problems.length).toBe(20);
     const rows = await prisma.problem.findMany({
       where: { id: { in: res.problems.map((p) => BigInt(p.id)) } },
     });
-    for (const row of rows) expect(row.isSprint).toBe(true);
+    const templates = new Set(sprintTopicDefs.map((d) => d.slug));
+    for (const row of rows) {
+      expect(row.isSprint).toBe(true);
+      const params = row.paramsJson as { template?: string } | null;
+      expect(templates.has(params?.template ?? '')).toBe(true);
+    }
   });
 
-  it('sprints over regular practice problems for topics without drills', async () => {
-    const res = await as(student).practice.sprint({ count: 5, skillSlugs: ['inequalities'] });
+  it('filters sprint problems by a single drill topic', async () => {
+    const res = await as(student).practice.sprint({
+      count: 5,
+      topics: ['sprint_perfect_squares'],
+    });
     expect(res.problems.length).toBeGreaterThan(0);
-    for (const p of res.problems) expect(p.skillSlug).toBe('inequalities');
+    const rows = await prisma.problem.findMany({
+      where: { id: { in: res.problems.map((p) => BigInt(p.id)) } },
+    });
+    for (const row of rows) {
+      expect(row.isSprint).toBe(true);
+      expect((row.paramsJson as { template?: string })?.template).toBe('sprint_perfect_squares');
+    }
+  });
+
+  it('grows a drill pool from nothing for topics the database has never seen', async () => {
+    // sprint_fraction_ops rows may not predate this round; the registry-driven
+    // top-up creates them on demand.
+    const res = await as(student).practice.sprint({ count: 5, topics: ['sprint_fraction_ops'] });
+    expect(res.problems.length).toBeGreaterThan(0);
+    const rows = await prisma.problem.findMany({
+      where: { id: { in: res.problems.map((p) => BigInt(p.id)) } },
+    });
+    for (const row of rows) {
+      expect((row.paramsJson as { template?: string })?.template).toBe('sprint_fraction_ops');
+    }
   });
 
   it('mixes a full round from several chosen topics', async () => {
-    const chosen = ['exponents-perfect-squares', 'properties-real-numbers'];
-    // 20 > the 12 seeded drill problems either topic starts with, so a full
-    // round draws from BOTH chosen topics — and never others.
-    const res = await as(student).practice.sprint({ count: 20, skillSlugs: chosen });
-    expect(res.problems.length).toBe(20);
-    const seen = new Set(res.problems.map((p) => p.skillSlug));
+    const chosen = ['sprint_perfect_squares', 'sprint_integer_ops'];
+    // 30 > any single topic's seeded pool, so a full round draws from BOTH
+    // chosen topics — and never others.
+    const res = await as(student).practice.sprint({ count: 30, topics: chosen });
+    expect(res.problems.length).toBe(30);
+    const rows = await prisma.problem.findMany({
+      where: { id: { in: res.problems.map((p) => BigInt(p.id)) } },
+    });
+    const seen = new Set(rows.map((r) => (r.paramsJson as { template?: string })?.template));
     expect([...seen].sort()).toEqual([...chosen].sort());
   });
 
@@ -553,7 +576,7 @@ describe('practice loop', () => {
     const poolSize = () =>
       prisma.problem.count({ where: { skillId: skill!.id, tier: 'standard', isSprint: true } });
     const before = await poolSize();
-    await as(student).practice.sprint({ count: 12, skillSlugs: ['properties-real-numbers'] });
+    await as(student).practice.sprint({ count: 12, topics: ['sprint_integer_ops'] });
     // integer-ops has a huge variant space, so the top-up lands new rows
     expect(await poolSize()).toBeGreaterThan(before);
   });
@@ -561,7 +584,7 @@ describe('practice loop', () => {
   it('serves a fresh round: problems the student attempted are not repeated', async () => {
     const first = await as(student).practice.sprint({
       count: 12,
-      skillSlugs: ['properties-real-numbers'],
+      topics: ['sprint_integer_ops'],
     });
     const attempted = first.problems.slice(0, 3);
     for (const p of attempted) {
@@ -575,7 +598,7 @@ describe('practice loop', () => {
     // than 12 unattempted variants exist — so none of the 3 can reappear.
     const second = await as(student).practice.sprint({
       count: 12,
-      skillSlugs: ['properties-real-numbers'],
+      topics: ['sprint_integer_ops'],
     });
     const secondIds = new Set(second.problems.map((p) => p.id));
     for (const p of attempted) expect(secondIds.has(p.id)).toBe(false);
@@ -591,7 +614,7 @@ describe('practice loop', () => {
     }
     const last = await as(student).practice.sprintComplete({
       difficulty: 'challenge',
-      skillSlug: 'multi-step-equations',
+      skillSlug: 'sprint_one_step_equations',
       total: 12,
       correct: 12,
     });

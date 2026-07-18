@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generators, generateProblem, makeRng } from './generators.js';
+import { generators, generateProblem, makeRng, sprintTopicDefs } from './generators.js';
 import { grade } from './engine.js';
 
 describe('problem generators', () => {
@@ -42,6 +42,11 @@ describe('problem generators', () => {
     'sprint_integer_ops',
     'sprint_perfect_squares',
     'sprint_one_step_equations',
+    'sprint_fraction_ops',
+    'sprint_decimal_ops',
+    'sprint_percent_of',
+    'sprint_order_of_ops',
+    'sprint_proportions',
   ] as const;
   const tiers = ['modified', 'standard', 'challenge'] as const;
 
@@ -70,5 +75,31 @@ describe('problem generators', () => {
   it('sprint_one_step_equations challenge produces two-step equations', () => {
     const p = generateProblem('sprint_one_step_equations', makeRng(5), 'challenge');
     expect(p.params).toHaveProperty('b'); // ax + b = c shape
+  });
+
+  it('every sprint topic in the registry has a generator template', () => {
+    for (const d of sprintTopicDefs) {
+      expect(generators, `registry topic ${d.slug} has no generator`).toHaveProperty(d.slug);
+    }
+  });
+
+  it('sprint_percent_of always produces whole-number answers', () => {
+    for (const tier of tiers) {
+      const rng = makeRng(3);
+      for (let i = 0; i < 40; i++) {
+        const p = generateProblem('sprint_percent_of', rng, tier);
+        expect(Number.isInteger(Number(p.answerLatex))).toBe(true);
+      }
+    }
+  });
+
+  it('sprint_fraction_ops modified/standard results are never negative', () => {
+    for (const tier of ['modified', 'standard'] as const) {
+      const rng = makeRng(9);
+      for (let i = 0; i < 40; i++) {
+        const p = generateProblem('sprint_fraction_ops', rng, tier);
+        expect(p.answerLatex.startsWith('(-')).toBe(false);
+      }
+    }
   });
 });

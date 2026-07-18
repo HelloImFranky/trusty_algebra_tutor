@@ -1480,7 +1480,276 @@ export const generators: Record<string, Generator> = {
       params: { a, x },
     };
   },
+
+  sprint_fraction_ops(rng, tier) {
+    // Answers use the (n)/(d) linear form (same as slope) in fully reduced
+    // form; 'equivalent' grading accepts any equal value the student types.
+    const frac = (n: number, d: number) => {
+      const g = gcd(n, d);
+      n /= g;
+      d /= g;
+      return d === 1 ? String(n) : `(${n})/(${d})`;
+    };
+    if (tier === 'modified') {
+      // Like denominators, add/subtract, nonnegative results.
+      const d = ri(rng, 3, 9);
+      let a = ri(rng, 1, d - 1);
+      let b = ri(rng, 1, d - 1);
+      const sub = rng() < 0.5;
+      if (sub && b > a) [a, b] = [b, a];
+      return {
+        promptEn: `$\\frac{${a}}{${d}} ${sub ? '-' : '+'} \\frac{${b}}{${d}} = ?$`,
+        promptEs: `$\\frac{${a}}{${d}} ${sub ? '-' : '+'} \\frac{${b}}{${d}} = ?$`,
+        answerLatex: frac(sub ? a - b : a + b, d),
+        gradingMode: 'equivalent',
+        params: { a, b, d, sub },
+      };
+    }
+    if (tier === 'challenge') {
+      // Multiply two proper fractions.
+      const d1 = ri(rng, 2, 9);
+      const d2 = ri(rng, 2, 9);
+      const a = ri(rng, 1, d1 - 1);
+      const b = ri(rng, 1, d2 - 1);
+      return {
+        promptEn: `$\\frac{${a}}{${d1}} \\times \\frac{${b}}{${d2}} = ?$`,
+        promptEs: `$\\frac{${a}}{${d1}} \\times \\frac{${b}}{${d2}} = ?$`,
+        answerLatex: frac(a * b, d1 * d2),
+        gradingMode: 'equivalent',
+        params: { a, b, d1, d2 },
+      };
+    }
+    // Unlike but friendly denominators: one is a multiple of the other.
+    const d1 = ri(rng, 2, 6);
+    const k = ri(rng, 2, 3);
+    const d2 = d1 * k;
+    let a = ri(rng, 1, d1 - 1);
+    let b = ri(rng, 1, d2 - 1);
+    const sub = rng() < 0.5;
+    // Keep results nonnegative: compare on the common denominator d2.
+    if (sub && b > a * k) {
+      return {
+        promptEn: `$\\frac{${b}}{${d2}} - \\frac{${a}}{${d1}} = ?$`,
+        promptEs: `$\\frac{${b}}{${d2}} - \\frac{${a}}{${d1}} = ?$`,
+        answerLatex: frac(b - a * k, d2),
+        gradingMode: 'equivalent',
+        params: { a, b, d1, d2, sub, flipped: true },
+      };
+    }
+    return {
+      promptEn: `$\\frac{${a}}{${d1}} ${sub ? '-' : '+'} \\frac{${b}}{${d2}} = ?$`,
+      promptEs: `$\\frac{${a}}{${d1}} ${sub ? '-' : '+'} \\frac{${b}}{${d2}} = ?$`,
+      answerLatex: frac(sub ? a * k - b : a * k + b, d2),
+      gradingMode: 'equivalent',
+      params: { a, b, d1, d2, sub },
+    };
+  },
+
+  sprint_decimal_ops(rng, tier) {
+    // All arithmetic runs in integer tenths/hundredths so answers are exact.
+    if (tier === 'modified') {
+      // Tenths, add/subtract, nonnegative results.
+      let a = ri(rng, 11, 99); // 1.1 .. 9.9
+      let b = ri(rng, 11, 99);
+      const sub = rng() < 0.5;
+      if (sub && b > a) [a, b] = [b, a];
+      const answer = (sub ? a - b : a + b) / 10;
+      return {
+        promptEn: `$${a / 10} ${sub ? '-' : '+'} ${b / 10} = ?$`,
+        promptEs: `$${a / 10} ${sub ? '-' : '+'} ${b / 10} = ?$`,
+        answerLatex: String(answer),
+        gradingMode: 'numeric_tolerance',
+        tolerance: 0.001,
+        params: { a, b, sub },
+      };
+    }
+    if (tier === 'challenge') {
+      // Multiply tenths by tenths (place-value under time pressure).
+      const a = ri(rng, 11, 49);
+      const b = ri(rng, 2, 9);
+      const answer = (a * b) / 100;
+      return {
+        promptEn: `$${a / 10} \\times ${b / 10} = ?$`,
+        promptEs: `$${a / 10} \\times ${b / 10} = ?$`,
+        answerLatex: String(answer),
+        gradingMode: 'numeric_tolerance',
+        tolerance: 0.001,
+        params: { a, b },
+      };
+    }
+    // Hundredths (money-style), add/subtract, nonnegative results.
+    let a = ri(rng, 101, 999); // 1.01 .. 9.99
+    let b = ri(rng, 101, 999);
+    const sub = rng() < 0.5;
+    if (sub && b > a) [a, b] = [b, a];
+    const answer = (sub ? a - b : a + b) / 100;
+    return {
+      promptEn: `$${a / 100} ${sub ? '-' : '+'} ${b / 100} = ?$`,
+      promptEs: `$${a / 100} ${sub ? '-' : '+'} ${b / 100} = ?$`,
+      answerLatex: String(answer),
+      gradingMode: 'numeric_tolerance',
+      tolerance: 0.001,
+      params: { a, b, sub },
+    };
+  },
+
+  sprint_percent_of(rng, tier) {
+    // Base is always a multiple of 100/gcd(pct, 100), so answers are whole.
+    const pick = (pcts: number[], lo: number, hi: number) => {
+      const pct = pcts[ri(rng, 0, pcts.length - 1)];
+      const step = 100 / gcd(pct, 100);
+      const base = step * ri(rng, lo, hi);
+      return { pct, base, answer: (pct * base) / 100 };
+    };
+    const { pct, base, answer } =
+      tier === 'modified'
+        ? pick([10, 50, 100], 1, 9)
+        : tier === 'challenge'
+          ? pick([5, 15, 30, 40, 60, 90], 2, 12)
+          : pick([10, 20, 25, 50, 75], 1, 12);
+    return {
+      promptEn: `What is ${pct}% of ${base}?`,
+      promptEs: `¿Cuánto es el ${pct}% de ${base}?`,
+      answerLatex: String(answer),
+      gradingMode: 'exact',
+      params: { pct, base },
+    };
+  },
+
+  sprint_order_of_ops(rng, tier) {
+    if (tier === 'modified') {
+      // Multiply before add, small positives.
+      const a = ri(rng, 1, 9);
+      const b = ri(rng, 2, 9);
+      const c = ri(rng, 2, 9);
+      return {
+        promptEn: `$${a} + ${b} \\times ${c} = ?$`,
+        promptEs: `$${a} + ${b} \\times ${c} = ?$`,
+        answerLatex: String(a + b * c),
+        gradingMode: 'exact',
+        params: { a, b, c },
+      };
+    }
+    if (tier === 'challenge') {
+      // Exponents join the mix.
+      const a = ri(rng, 1, 9);
+      const b = ri(rng, 2, 6);
+      const c = ri(rng, 2, 5);
+      const shape = ri(rng, 0, 1);
+      if (shape === 0) {
+        return {
+          promptEn: `$${a} + ${b} \\times ${c}^2 = ?$`,
+          promptEs: `$${a} + ${b} \\times ${c}^2 = ?$`,
+          answerLatex: String(a + b * c * c),
+          gradingMode: 'exact',
+          params: { a, b, c, shape },
+        };
+      }
+      return {
+        promptEn: `$(${b + c} - ${b})^2 + ${a} = ?$`,
+        promptEs: `$(${b + c} - ${b})^2 + ${a} = ?$`,
+        answerLatex: String(c * c + a),
+        gradingMode: 'exact',
+        params: { a, b, c, shape },
+      };
+    }
+    const a = ri(rng, 1, 9);
+    const b = ri(rng, 2, 9);
+    const c = ri(rng, 2, 9);
+    const shape = ri(rng, 0, 2);
+    if (shape === 0) {
+      return {
+        promptEn: `$${a} + ${b} \\times ${c} = ?$`,
+        promptEs: `$${a} + ${b} \\times ${c} = ?$`,
+        answerLatex: String(a + b * c),
+        gradingMode: 'exact',
+        params: { a, b, c, shape },
+      };
+    }
+    if (shape === 1) {
+      return {
+        promptEn: `$(${a} + ${b}) \\times ${c} = ?$`,
+        promptEs: `$(${a} + ${b}) \\times ${c} = ?$`,
+        answerLatex: String((a + b) * c),
+        gradingMode: 'exact',
+        params: { a, b, c, shape },
+      };
+    }
+    return {
+      promptEn: `$${b} \\times ${c} + ${a} = ?$`,
+      promptEs: `$${b} \\times ${c} + ${a} = ?$`,
+      answerLatex: String(b * c + a),
+      gradingMode: 'exact',
+      params: { a, b, c, shape },
+    };
+  },
+
+  sprint_proportions(rng, tier) {
+    if (tier === 'modified') {
+      const a = ri(rng, 1, 5);
+      const b = ri(rng, 2, 6);
+      const k = ri(rng, 2, 4);
+      return {
+        promptEn: `Solve for x: $\\frac{${a}}{${b}} = \\frac{x}{${b * k}}$`,
+        promptEs: `Resuelve para x: $\\frac{${a}}{${b}} = \\frac{x}{${b * k}}$`,
+        answerLatex: String(a * k),
+        gradingMode: 'exact',
+        params: { a, b, k },
+      };
+    }
+    if (tier === 'challenge') {
+      // The unknown moves to a denominator.
+      const a = ri(rng, 2, 9);
+      const b = ri(rng, 2, 9);
+      const k = ri(rng, 2, 6);
+      return {
+        promptEn: `Solve for x: $\\frac{${a}}{${b}} = \\frac{${a * k}}{x}$`,
+        promptEs: `Resuelve para x: $\\frac{${a}}{${b}} = \\frac{${a * k}}{x}$`,
+        answerLatex: String(b * k),
+        gradingMode: 'exact',
+        params: { a, b, k },
+      };
+    }
+    const a = ri(rng, 2, 9);
+    const b = ri(rng, 2, 9);
+    const k = ri(rng, 2, 6);
+    return {
+      promptEn: `Solve for x: $\\frac{${a}}{${b}} = \\frac{x}{${b * k}}$`,
+      promptEs: `Resuelve para x: $\\frac{${a}}{${b}} = \\frac{x}{${b * k}}$`,
+      answerLatex: String(a * k),
+      gradingMode: 'exact',
+      params: { a, b, k },
+    };
+  },
 };
+
+/**
+ * The sprint topic menu (design doc §4.4): every sprint drills 6th/7th-grade
+ * fluency skills an 8th grader already knows — sprints never draw from the
+ * Algebra 1 curriculum itself. Each topic maps to one drill template plus the
+ * curriculum skill whose row hosts its generated problems in the database
+ * (problems need a skill_id; mastery bookkeeping lands on that skill).
+ */
+export interface SprintTopicDef {
+  /** Template slug — doubles as the topic id in the sprint API. */
+  slug: string;
+  icon: string;
+  nameEn: string;
+  nameEs: string;
+  /** Curriculum skill whose row hosts this drill's problems. */
+  skillSlug: string;
+}
+
+export const sprintTopicDefs: SprintTopicDef[] = [
+  { slug: 'sprint_integer_ops', icon: '➕', nameEn: 'Integer operations', nameEs: 'Operaciones con enteros', skillSlug: 'properties-real-numbers' },
+  { slug: 'sprint_order_of_ops', icon: '🧮', nameEn: 'Order of operations', nameEs: 'Orden de las operaciones', skillSlug: 'properties-real-numbers' },
+  { slug: 'sprint_fraction_ops', icon: '🍕', nameEn: 'Fractions', nameEs: 'Fracciones', skillSlug: 'rational-irrational' },
+  { slug: 'sprint_decimal_ops', icon: '🔟', nameEn: 'Decimals', nameEs: 'Decimales', skillSlug: 'rational-irrational' },
+  { slug: 'sprint_percent_of', icon: '💯', nameEn: 'Percents', nameEs: 'Porcentajes', skillSlug: 'dimensional-analysis' },
+  { slug: 'sprint_proportions', icon: '⚖️', nameEn: 'Proportions', nameEs: 'Proporciones', skillSlug: 'dimensional-analysis' },
+  { slug: 'sprint_perfect_squares', icon: '🟦', nameEn: 'Squares & square roots', nameEs: 'Cuadrados y raíces', skillSlug: 'exponents-perfect-squares' },
+  { slug: 'sprint_one_step_equations', icon: '🎯', nameEn: 'One-step equations', nameEs: 'Ecuaciones de un paso', skillSlug: 'multi-step-equations' },
+];
 
 function gcd(a: number, b: number): number {
   a = Math.abs(a);

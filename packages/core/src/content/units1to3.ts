@@ -135,6 +135,14 @@ export const unit1: UnitSeed = {
         { template: 'rational_irrational', tier: 'modified', count: 6 },
         { template: 'rational_irrational', tier: 'standard', count: 8 },
         { template: 'rational_irrational', tier: 'challenge', count: 4 },
+        // Sprint drills appended AFTER the original specs — see the
+        // seed-order note on 1.1.
+        { template: 'sprint_fraction_ops', tier: 'standard', count: 12, sprint: true },
+        { template: 'sprint_fraction_ops', tier: 'modified', count: 12, sprint: true },
+        { template: 'sprint_fraction_ops', tier: 'challenge', count: 12, sprint: true },
+        { template: 'sprint_decimal_ops', tier: 'standard', count: 12, sprint: true },
+        { template: 'sprint_decimal_ops', tier: 'modified', count: 12, sprint: true },
+        { template: 'sprint_decimal_ops', tier: 'challenge', count: 12, sprint: true },
       ],
     },
     {
@@ -167,6 +175,14 @@ export const unit1: UnitSeed = {
         { template: 'dimensional_analysis', tier: 'modified', count: 6 },
         { template: 'dimensional_analysis', tier: 'standard', count: 8 },
         { template: 'dimensional_analysis', tier: 'challenge', count: 4 },
+        // Sprint drills appended AFTER the original specs — see the
+        // seed-order note on 1.1.
+        { template: 'sprint_percent_of', tier: 'standard', count: 12, sprint: true },
+        { template: 'sprint_percent_of', tier: 'modified', count: 12, sprint: true },
+        { template: 'sprint_percent_of', tier: 'challenge', count: 12, sprint: true },
+        { template: 'sprint_proportions', tier: 'standard', count: 12, sprint: true },
+        { template: 'sprint_proportions', tier: 'modified', count: 12, sprint: true },
+        { template: 'sprint_proportions', tier: 'challenge', count: 12, sprint: true },
       ],
     },
     {
@@ -261,6 +277,9 @@ export const unit1: UnitSeed = {
         // Appended after the original spec — see the seed-order note on 1.1.
         { template: 'sprint_integer_ops', tier: 'modified', count: 12, sprint: true },
         { template: 'sprint_integer_ops', tier: 'challenge', count: 12, sprint: true },
+        { template: 'sprint_order_of_ops', tier: 'standard', count: 12, sprint: true },
+        { template: 'sprint_order_of_ops', tier: 'modified', count: 12, sprint: true },
+        { template: 'sprint_order_of_ops', tier: 'challenge', count: 12, sprint: true },
       ],
     },
   ],
