@@ -1,5 +1,5 @@
 /** Daily Sprints: short timed fluency drills (design doc §4.4, "Sprints" folder). */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Text, XStack, YStack } from 'tamagui';
 import { client } from '../lib/trpc';
 import { attemptOrQueue } from '../lib/offline';
@@ -37,6 +37,9 @@ interface SprintTopic {
   nameEn: string;
   nameEs: string;
   problems: number;
+  unitNumber: number;
+  unitTitleEn: string;
+  unitTitleEs: string;
 }
 
 /** One item in the post-round review: a problem the student got wrong or
@@ -106,6 +109,9 @@ export function SprintScreen() {
   const [topics, setTopics] = useState<SprintTopic[]>([]);
   // Multi-select: the round draws from every chosen topic. Empty = all topics.
   const [topicSlugs, setTopicSlugs] = useState<string[]>([]);
+  // Which unit sections are expanded in the picker (all collapsed initially,
+  // so ~30 topics don't wall the start card — see the unit accordion below).
+  const [openUnits, setOpenUnits] = useState<Set<number>>(new Set());
   // Grades still in flight — the completion report waits for them so the
   // recorded score can't miss a submit that raced the timer.
   const [inFlight, setInFlight] = useState(0);
@@ -129,6 +135,38 @@ export function SprintScreen() {
     setTopicSlugs((cur) =>
       cur.includes(slug) ? cur.filter((s) => s !== slug) : [...cur, slug],
     );
+
+  const toggleUnit = (n: number) =>
+    setOpenUnits((cur) => {
+      const next = new Set(cur);
+      if (next.has(n)) next.delete(n);
+      else next.add(n);
+      return next;
+    });
+
+  /** Toggle every topic of a unit at once: all on → clear them; else add all. */
+  const toggleWholeUnit = (unitTopics: SprintTopic[]) =>
+    setTopicSlugs((cur) => {
+      const slugs = unitTopics.map((s) => s.slug);
+      const allOn = slugs.every((s) => cur.includes(s));
+      const without = cur.filter((s) => !slugs.includes(s));
+      return allOn ? without : [...without, ...slugs];
+    });
+
+  // Topics grouped into unit sections, in teaching order (the API already
+  // sorts by unit number, then lesson position).
+  const units = useMemo(() => {
+    const m = new Map<number, { title: string; topics: SprintTopic[] }>();
+    for (const s of topics) {
+      const entry = m.get(s.unitNumber) ?? {
+        title: locale === 'es' ? s.unitTitleEs : s.unitTitleEn,
+        topics: [],
+      };
+      entry.topics.push(s);
+      m.set(s.unitNumber, entry);
+    }
+    return [...m.entries()];
+  }, [topics, locale]);
 
   const start = async (slugsOverride?: string[]) => {
     const slugs = slugsOverride ?? topicSlugs;
@@ -267,15 +305,63 @@ export function SprintScreen() {
                 <PickChip selected={topicSlugs.length === 0} onPress={() => setTopicSlugs([])}>
                   {t('sprintAllTopics')}
                 </PickChip>
-                {topics.map((s) => {
-                  const on = topicSlugs.includes(s.slug);
+              </XStack>
+              {/* One collapsible section per unit, so the (many) topics don't
+                  wall the start card. Headers show how many of the unit's
+                  topics are in the mix even while collapsed. */}
+              <YStack borderRadius={12} borderWidth={1} borderColor={tokens.border} overflow="hidden">
+                {units.map(([n, u], i) => {
+                  const open = openUnits.has(n);
+                  const selectedInUnit = u.topics.filter((s) => topicSlugs.includes(s.slug)).length;
                   return (
-                    <PickChip key={s.slug} selected={on} onPress={() => toggleTopic(s.slug)}>
-                      {on ? '✓ ' : ''}{topicName(s)}
-                    </PickChip>
+                    <YStack key={n} borderTopWidth={i === 0 ? 0 : 1} borderTopColor={tokens.border}>
+                      <XStack
+                        onPress={() => toggleUnit(n)}
+                        cursor="pointer"
+                        paddingHorizontal={12}
+                        paddingVertical={10}
+                        alignItems="center"
+                        justifyContent="space-between"
+                        pressStyle={{ backgroundColor: tokens.subtle }}
+                      >
+                        <Text fontSize={13} fontWeight="700" color={tokens.ink}>
+                          {open ? '▾' : '▸'} {t('sprintUnitLabel')} {n} · {u.title}
+                        </Text>
+                        {selectedInUnit > 0 && (
+                          <XStack
+                            backgroundColor={tokens.subtle}
+                            borderRadius={RADIUS.pill}
+                            paddingHorizontal={8}
+                            paddingVertical={2}
+                          >
+                            <Text fontSize={11} fontWeight="800" color={tokens.ink}>
+                              {selectedInUnit} ✓
+                            </Text>
+                          </XStack>
+                        )}
+                      </XStack>
+                      {open && (
+                        <XStack gap={8} flexWrap="wrap" paddingHorizontal={12} paddingBottom={12}>
+                          <PickChip
+                            selected={u.topics.every((s) => topicSlugs.includes(s.slug))}
+                            onPress={() => toggleWholeUnit(u.topics)}
+                          >
+                            {t('sprintWholeUnit')}
+                          </PickChip>
+                          {u.topics.map((s) => {
+                            const on = topicSlugs.includes(s.slug);
+                            return (
+                              <PickChip key={s.slug} selected={on} onPress={() => toggleTopic(s.slug)}>
+                                {on ? '✓ ' : ''}{topicName(s)}
+                              </PickChip>
+                            );
+                          })}
+                        </XStack>
+                      )}
+                    </YStack>
                   );
                 })}
-              </XStack>
+              </YStack>
             </YStack>
           )}
           <YStack gap={8}>

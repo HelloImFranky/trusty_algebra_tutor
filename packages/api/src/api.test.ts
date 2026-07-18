@@ -504,13 +504,20 @@ describe('practice loop', () => {
     }
   });
 
-  it('lists every curriculum skill as a sprint topic, in teaching order', async () => {
+  it('lists every curriculum skill as a sprint topic, grouped by unit in teaching order', async () => {
     const { topics } = await as(student).practice.sprintTopics();
     // all seeded skills with problems — far more than the 3 drill topics
     expect(topics.length).toBeGreaterThanOrEqual(20);
     const slugs = topics.map((s) => s.slug);
     expect(slugs[0]).toBe('exponents-perfect-squares'); // unit 1, lesson 1.1
     expect(slugs).toContain('inequalities'); // a skill with no drill generator
+    // unit metadata for the picker's collapsible sections, sorted by unit
+    expect(topics[0].unitNumber).toBe(1);
+    expect(topics[0].unitTitleEn.length).toBeGreaterThan(0);
+    expect(topics[0].unitTitleEs.length).toBeGreaterThan(0);
+    const unitSeq = topics.map((s) => s.unitNumber);
+    expect([...unitSeq].sort((a, b) => a - b)).toEqual(unitSeq);
+    expect(new Set(unitSeq).size).toBeGreaterThanOrEqual(5); // several units represented
   });
 
   it('filters sprint problems by a single topic (skill slug)', async () => {

@@ -275,16 +275,28 @@ export const practiceRouter = router({
    * preference rule in the sprint query above).
    */
   sprintTopics: protectedProcedure.query(async () => {
+    // Unit number + localized unit titles ride along so the picker can group
+    // the (many) topics into collapsible per-unit sections.
     const rows = await prisma.$queryRaw<
-      { slug: string; nameEn: string; nameEs: string; problems: number }[]
+      {
+        slug: string;
+        nameEn: string;
+        nameEs: string;
+        problems: number;
+        unitNumber: number;
+        unitTitleEn: string;
+        unitTitleEs: string;
+      }[]
     >`
       SELECT s.slug, s.name_en AS "nameEn", s.name_es AS "nameEs",
-             count(*)::int AS problems
+             count(*)::int AS problems,
+             u.number AS "unitNumber",
+             u.title_en AS "unitTitleEn", u.title_es AS "unitTitleEs"
       FROM problems p
       JOIN skills s ON s.id = p.skill_id
       JOIN lessons l ON l.id = s.lesson_id
       JOIN units u ON u.id = l.unit_id
-      GROUP BY s.slug, s.name_en, s.name_es, u.number, l.position
+      GROUP BY s.slug, s.name_en, s.name_es, u.number, u.title_en, u.title_es, l.position
       ORDER BY u.number, l.position`;
     return { topics: rows };
   }),
