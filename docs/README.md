@@ -49,3 +49,8 @@ Partially built or awaiting a decision — verify against code before acting.
 *When a plan's work ships, move its row up to "Shipped", add/refresh its
 top-of-file banner, and delete any now-false "next steps". Keeping this index
 honest is what stops the next stale-plan mistake.*
+
+*Enforced by `scripts/doc-banner-check.sh` (runs in `npm test`): every doc
+here except this index must lead with a status banner — a `> [!NOTE]` /
+`> [!IMPORTANT]` alert with a bold status line — within its first lines. A new
+doc without one fails the build, so status is never optional.*
