@@ -50,8 +50,6 @@ interface MissRecord {
   skipped?: boolean;
 }
 
-type Difficulty = 'modified' | 'standard' | 'challenge';
-
 // Default pacing: 1 minute per 10 questions.
 const SECONDS_PER_QUESTION = 6;
 const ROUND_SIZES = [10, 20, 30];
@@ -59,13 +57,7 @@ const ROUND_SIZES = [10, 20, 30];
 /** "60 → 1:00" — round time in m:ss for the header and timer. */
 const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
-const DIFFICULTIES: { key: Difficulty; icon: string; label: 'sprintWarmup' | 'sprintStandard' | 'sprintChallenge' }[] = [
-  { key: 'modified', icon: '🌱', label: 'sprintWarmup' },
-  { key: 'standard', icon: '⚡', label: 'sprintStandard' },
-  { key: 'challenge', icon: '🚀', label: 'sprintChallenge' },
-];
-
-/** Small selectable pill for the difficulty / topic pickers. */
+/** Small selectable pill for the round-length / topic pickers. */
 function PickChip({
   selected,
   onPress,
@@ -110,7 +102,6 @@ export function SprintScreen() {
   const [running, setRunning] = useState(false);
   const [misses, setMisses] = useState<MissRecord[]>([]);
   const [animOpenId, setAnimOpenId] = useState<number | null>(null);
-  const [difficulty, setDifficulty] = useState<Difficulty>('standard');
   const [topics, setTopics] = useState<SprintTopic[]>([]);
   // Multi-select: the round draws from every chosen topic. Empty = all topics.
   const [topicSlugs, setTopicSlugs] = useState<string[]>([]);
@@ -143,7 +134,6 @@ export function SprintScreen() {
     const r = await client.practice.sprint.query({
       count: roundSize,
       locale,
-      difficulty,
       topics: slugs.length ? slugs : undefined,
     });
     setProblems(r.problems);
@@ -199,21 +189,20 @@ export function SprintScreen() {
   }, [seconds, running, index, problems]);
 
   // Round over (and no grade still in flight): record the completed sprint
-  // so the per-difficulty badge ladders on Progress can count it. A round
-  // over several topics is recorded as mixed (null slug), same as "all".
+  // so the badge ladder on Progress can count it. A round over several
+  // topics is recorded as mixed (null slug), same as "all".
   useEffect(() => {
     if (running || index < 0 || inFlight > 0 || attempted === 0) return;
     if (reportedRound.current) return;
     reportedRound.current = true;
     client.practice.sprintComplete
       .mutate({
-        difficulty,
         skillSlug: topicSlugs.length === 1 ? topicSlugs[0] : null,
         total: attempted,
         correct: score,
       })
       .catch(() => {});
-  }, [running, index, inFlight, attempted, score, difficulty, topicSlugs]);
+  }, [running, index, inFlight, attempted, score, topicSlugs]);
 
   const submit = async () => {
     if (!answer.trim() || !running) return;
@@ -244,15 +233,13 @@ export function SprintScreen() {
     else setRunning(false);
   };
 
-  const difficultyDef = DIFFICULTIES.find((d) => d.key === difficulty)!;
   const selected = topics.filter((s) => topicSlugs.includes(s.slug));
-  const topicLabel =
+  const roundLabel =
     selected.length === 0
-      ? t('sprintAllTopics')
+      ? `⚡ ${t('sprintAllTopics')}`
       : selected.length === 1
-        ? topicName(selected[0])
-        : `${selected.length} ${t('sprintTopicsSelected')}`;
-  const roundLabel = `${difficultyDef.icon} ${t(difficultyDef.label)} · ${topicLabel}`;
+        ? `${selected[0].icon} ${topicName(selected[0])}`
+        : `⚡ ${selected.length} ${t('sprintTopicsSelected')}`;
 
   return (
     <Screen maxWidth={560}>
@@ -269,16 +256,6 @@ export function SprintScreen() {
               {ROUND_SIZES.map((n) => (
                 <PickChip key={n} selected={roundSize === n} onPress={() => setRoundSize(n)}>
                   {n} ❓ · {fmtTime(n * SECONDS_PER_QUESTION)}
-                </PickChip>
-              ))}
-            </XStack>
-          </YStack>
-          <YStack gap={6}>
-            <Muted size={12}>{t('sprintDifficulty')}</Muted>
-            <XStack gap={8} flexWrap="wrap">
-              {DIFFICULTIES.map((d) => (
-                <PickChip key={d.key} selected={difficulty === d.key} onPress={() => setDifficulty(d.key)}>
-                  {d.icon} {t(d.label)}
                 </PickChip>
               ))}
             </XStack>

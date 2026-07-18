@@ -55,8 +55,10 @@ const polyLatex = (A: number, B: number, C: number) => {
   return parts.length ? parts.join(' + ').replace(/\+ -/g, '- ') : '0';
 };
 
-/** Difficulty knob for tier-aware templates (currently the sprint drills).
- * Mirrors the problem tiers; generators that ignore it are unaffected. */
+/** Difficulty knob for tier-aware templates. Mirrors the problem tiers;
+ * generators that ignore it are unaffected. No current template branches on
+ * it (sprints are single-difficulty), but the seed still passes each spec's
+ * tier through, so future tier-aware templates need no plumbing changes. */
 export type GeneratorTier = 'modified' | 'standard' | 'challenge';
 
 type Generator = (rng: Rng, tier?: GeneratorTier) => GeneratedProblem;
@@ -1364,50 +1366,12 @@ export const generators: Record<string, Generator> = {
 
   /* ---------------- Sprints (fluency drills) ---------------- */
 
-  // Each sprint template is tier-aware: 'modified' shrinks ranges (and drops
-  // the trickiest operation), 'challenge' widens them or adds a step. The
-  // 'standard' branch of each template must keep the exact rng-call sequence
-  // it had before tiers existed — the seed replays these streams
-  // deterministically to match problems already in the database.
-  sprint_integer_ops(rng, tier) {
-    if (tier === 'modified') {
-      // Positive first operand, + / − only — fluency without sign gymnastics.
-      const a = ri(rng, 1, 9);
-      const b = nz(rng, -9, 9);
-      const op = ['+', '-'][ri(rng, 0, 1)];
-      return {
-        promptEn: `$${a} ${op} (${b}) = ?$`,
-        promptEs: `$${a} ${op} (${b}) = ?$`,
-        answerLatex: String(op === '+' ? a + b : a - b),
-        gradingMode: 'exact',
-        params: { a, b, op },
-      };
-    }
-    if (tier === 'challenge') {
-      // Wider range, and division joins the mix (built as a*b ÷ b so the
-      // quotient is always a clean integer).
-      const a = nz(rng, -15, 15);
-      const b = nz(rng, -15, 15);
-      const op = ['+', '-', '*', '/'][ri(rng, 0, 3)];
-      if (op === '/') {
-        return {
-          promptEn: `$${a * b} \\div (${b}) = ?$`,
-          promptEs: `$${a * b} \\div (${b}) = ?$`,
-          answerLatex: String(a),
-          gradingMode: 'exact',
-          params: { a, b, op },
-        };
-      }
-      const answer = op === '+' ? a + b : op === '-' ? a - b : a * b;
-      const disp = op === '*' ? '\\times' : op;
-      return {
-        promptEn: `$${a} ${disp} (${b}) = ?$`,
-        promptEs: `$${a} ${disp} (${b}) = ?$`,
-        answerLatex: String(answer),
-        gradingMode: 'exact',
-        params: { a, b, op },
-      };
-    }
+  // Sprints have a single difficulty: every drill stays at the easy
+  // 6th/7th-grade level an 8th grader already knows. Each template must
+  // keep the exact rng-call sequence it has always had — the seed replays
+  // these streams deterministically to match problems already in the
+  // database.
+  sprint_integer_ops(rng) {
     const a = nz(rng, -12, 12);
     const b = nz(rng, -12, 12);
     const op = ['+', '-', '*'][ri(rng, 0, 2)];
@@ -1422,9 +1386,8 @@ export const generators: Record<string, Generator> = {
     };
   },
 
-  sprint_perfect_squares(rng, tier) {
-    const n =
-      tier === 'modified' ? ri(rng, 2, 10) : tier === 'challenge' ? ri(rng, 8, 20) : ri(rng, 2, 15);
+  sprint_perfect_squares(rng) {
+    const n = ri(rng, 2, 15);
     const forward = rng() < 0.5;
     return forward
       ? {
@@ -1443,33 +1406,7 @@ export const generators: Record<string, Generator> = {
         };
   },
 
-  sprint_one_step_equations(rng, tier) {
-    if (tier === 'modified') {
-      // All-positive one-step: ax = c with small friendly numbers.
-      const a = ri(rng, 2, 9);
-      const x = ri(rng, 1, 9);
-      return {
-        promptEn: `Solve: $${coeff(a, 'x')} = ${a * x}$`,
-        promptEs: `Resuelve: $${coeff(a, 'x')} = ${a * x}$`,
-        answerLatex: String(x),
-        gradingMode: 'exact',
-        params: { a, x },
-      };
-    }
-    if (tier === 'challenge') {
-      // Two-step under time pressure: ax + b = c.
-      const a = nz(rng, -9, 9);
-      const b = nz(rng, -12, 12);
-      const x = nz(rng, -9, 9);
-      const c = a * x + b;
-      return {
-        promptEn: `Solve: $${coeff(a, 'x')} ${sgn(b)} = ${c}$`,
-        promptEs: `Resuelve: $${coeff(a, 'x')} ${sgn(b)} = ${c}$`,
-        answerLatex: String(x),
-        gradingMode: 'exact',
-        params: { a, b, x },
-      };
-    }
+  sprint_one_step_equations(rng) {
     const a = nz(rng, -9, 9);
     const x = nz(rng, -9, 9);
     return {
@@ -1481,7 +1418,7 @@ export const generators: Record<string, Generator> = {
     };
   },
 
-  sprint_fraction_ops(rng, tier) {
+  sprint_fraction_ops(rng) {
     // Answers use the (n)/(d) linear form (same as slope) in fully reduced
     // form; 'equivalent' grading accepts any equal value the student types.
     const frac = (n: number, d: number) => {
@@ -1490,35 +1427,6 @@ export const generators: Record<string, Generator> = {
       d /= g;
       return d === 1 ? String(n) : `(${n})/(${d})`;
     };
-    if (tier === 'modified') {
-      // Like denominators, add/subtract, nonnegative results.
-      const d = ri(rng, 3, 9);
-      let a = ri(rng, 1, d - 1);
-      let b = ri(rng, 1, d - 1);
-      const sub = rng() < 0.5;
-      if (sub && b > a) [a, b] = [b, a];
-      return {
-        promptEn: `$\\frac{${a}}{${d}} ${sub ? '-' : '+'} \\frac{${b}}{${d}} = ?$`,
-        promptEs: `$\\frac{${a}}{${d}} ${sub ? '-' : '+'} \\frac{${b}}{${d}} = ?$`,
-        answerLatex: frac(sub ? a - b : a + b, d),
-        gradingMode: 'equivalent',
-        params: { a, b, d, sub },
-      };
-    }
-    if (tier === 'challenge') {
-      // Multiply two proper fractions.
-      const d1 = ri(rng, 2, 9);
-      const d2 = ri(rng, 2, 9);
-      const a = ri(rng, 1, d1 - 1);
-      const b = ri(rng, 1, d2 - 1);
-      return {
-        promptEn: `$\\frac{${a}}{${d1}} \\times \\frac{${b}}{${d2}} = ?$`,
-        promptEs: `$\\frac{${a}}{${d1}} \\times \\frac{${b}}{${d2}} = ?$`,
-        answerLatex: frac(a * b, d1 * d2),
-        gradingMode: 'equivalent',
-        params: { a, b, d1, d2 },
-      };
-    }
     // Unlike but friendly denominators: one is a multiple of the other.
     const d1 = ri(rng, 2, 6);
     const k = ri(rng, 2, 3);
@@ -1545,38 +1453,8 @@ export const generators: Record<string, Generator> = {
     };
   },
 
-  sprint_decimal_ops(rng, tier) {
-    // All arithmetic runs in integer tenths/hundredths so answers are exact.
-    if (tier === 'modified') {
-      // Tenths, add/subtract, nonnegative results.
-      let a = ri(rng, 11, 99); // 1.1 .. 9.9
-      let b = ri(rng, 11, 99);
-      const sub = rng() < 0.5;
-      if (sub && b > a) [a, b] = [b, a];
-      const answer = (sub ? a - b : a + b) / 10;
-      return {
-        promptEn: `$${a / 10} ${sub ? '-' : '+'} ${b / 10} = ?$`,
-        promptEs: `$${a / 10} ${sub ? '-' : '+'} ${b / 10} = ?$`,
-        answerLatex: String(answer),
-        gradingMode: 'numeric_tolerance',
-        tolerance: 0.001,
-        params: { a, b, sub },
-      };
-    }
-    if (tier === 'challenge') {
-      // Multiply tenths by tenths (place-value under time pressure).
-      const a = ri(rng, 11, 49);
-      const b = ri(rng, 2, 9);
-      const answer = (a * b) / 100;
-      return {
-        promptEn: `$${a / 10} \\times ${b / 10} = ?$`,
-        promptEs: `$${a / 10} \\times ${b / 10} = ?$`,
-        answerLatex: String(answer),
-        gradingMode: 'numeric_tolerance',
-        tolerance: 0.001,
-        params: { a, b },
-      };
-    }
+  sprint_decimal_ops(rng) {
+    // All arithmetic runs in integer hundredths so answers are exact.
     // Hundredths (money-style), add/subtract, nonnegative results.
     let a = ri(rng, 101, 999); // 1.01 .. 9.99
     let b = ri(rng, 101, 999);
@@ -1593,7 +1471,7 @@ export const generators: Record<string, Generator> = {
     };
   },
 
-  sprint_percent_of(rng, tier) {
+  sprint_percent_of(rng) {
     // Base is always a multiple of 100/gcd(pct, 100), so answers are whole.
     const pick = (pcts: number[], lo: number, hi: number) => {
       const pct = pcts[ri(rng, 0, pcts.length - 1)];
@@ -1601,12 +1479,7 @@ export const generators: Record<string, Generator> = {
       const base = step * ri(rng, lo, hi);
       return { pct, base, answer: (pct * base) / 100 };
     };
-    const { pct, base, answer } =
-      tier === 'modified'
-        ? pick([10, 50, 100], 1, 9)
-        : tier === 'challenge'
-          ? pick([5, 15, 30, 40, 60, 90], 2, 12)
-          : pick([10, 20, 25, 50, 75], 1, 12);
+    const { pct, base, answer } = pick([10, 20, 25, 50, 75], 1, 12);
     return {
       promptEn: `What is ${pct}% of ${base}?`,
       promptEs: `¿Cuánto es el ${pct}% de ${base}?`,
@@ -1616,43 +1489,7 @@ export const generators: Record<string, Generator> = {
     };
   },
 
-  sprint_order_of_ops(rng, tier) {
-    if (tier === 'modified') {
-      // Multiply before add, small positives.
-      const a = ri(rng, 1, 9);
-      const b = ri(rng, 2, 9);
-      const c = ri(rng, 2, 9);
-      return {
-        promptEn: `$${a} + ${b} \\times ${c} = ?$`,
-        promptEs: `$${a} + ${b} \\times ${c} = ?$`,
-        answerLatex: String(a + b * c),
-        gradingMode: 'exact',
-        params: { a, b, c },
-      };
-    }
-    if (tier === 'challenge') {
-      // Exponents join the mix.
-      const a = ri(rng, 1, 9);
-      const b = ri(rng, 2, 6);
-      const c = ri(rng, 2, 5);
-      const shape = ri(rng, 0, 1);
-      if (shape === 0) {
-        return {
-          promptEn: `$${a} + ${b} \\times ${c}^2 = ?$`,
-          promptEs: `$${a} + ${b} \\times ${c}^2 = ?$`,
-          answerLatex: String(a + b * c * c),
-          gradingMode: 'exact',
-          params: { a, b, c, shape },
-        };
-      }
-      return {
-        promptEn: `$(${b + c} - ${b})^2 + ${a} = ?$`,
-        promptEs: `$(${b + c} - ${b})^2 + ${a} = ?$`,
-        answerLatex: String(c * c + a),
-        gradingMode: 'exact',
-        params: { a, b, c, shape },
-      };
-    }
+  sprint_order_of_ops(rng) {
     const a = ri(rng, 1, 9);
     const b = ri(rng, 2, 9);
     const c = ri(rng, 2, 9);
@@ -1684,32 +1521,7 @@ export const generators: Record<string, Generator> = {
     };
   },
 
-  sprint_proportions(rng, tier) {
-    if (tier === 'modified') {
-      const a = ri(rng, 1, 5);
-      const b = ri(rng, 2, 6);
-      const k = ri(rng, 2, 4);
-      return {
-        promptEn: `Solve for x: $\\frac{${a}}{${b}} = \\frac{x}{${b * k}}$`,
-        promptEs: `Resuelve para x: $\\frac{${a}}{${b}} = \\frac{x}{${b * k}}$`,
-        answerLatex: String(a * k),
-        gradingMode: 'exact',
-        params: { a, b, k },
-      };
-    }
-    if (tier === 'challenge') {
-      // The unknown moves to a denominator.
-      const a = ri(rng, 2, 9);
-      const b = ri(rng, 2, 9);
-      const k = ri(rng, 2, 6);
-      return {
-        promptEn: `Solve for x: $\\frac{${a}}{${b}} = \\frac{${a * k}}{x}$`,
-        promptEs: `Resuelve para x: $\\frac{${a}}{${b}} = \\frac{${a * k}}{x}$`,
-        answerLatex: String(b * k),
-        gradingMode: 'exact',
-        params: { a, b, k },
-      };
-    }
+  sprint_proportions(rng) {
     const a = ri(rng, 2, 9);
     const b = ri(rng, 2, 9);
     const k = ri(rng, 2, 6);

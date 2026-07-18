@@ -495,14 +495,12 @@ describe('practice loop', () => {
     }
   });
 
-  it('filters sprint problems by difficulty tier', async () => {
-    for (const difficulty of ['modified', 'standard', 'challenge'] as const) {
-      const res = await as(student).practice.sprint({ count: 5, difficulty });
-      expect(res.problems.length).toBeGreaterThan(0);
-      const ids = res.problems.map((p) => BigInt(p.id));
-      const rows = await prisma.problem.findMany({ where: { id: { in: ids } } });
-      for (const row of rows) expect(row.tier).toBe(difficulty);
-    }
+  it('has no difficulty option: every served problem is easy (standard tier)', async () => {
+    const res = await as(student).practice.sprint({ count: 20 });
+    expect(res.problems.length).toBeGreaterThan(0);
+    const ids = res.problems.map((p) => BigInt(p.id));
+    const rows = await prisma.problem.findMany({ where: { id: { in: ids } } });
+    for (const row of rows) expect(row.tier).toBe('standard');
   });
 
   it('lists the 6th/7th-grade drill registry as the sprint topics', async () => {
@@ -604,34 +602,28 @@ describe('practice loop', () => {
     for (const p of attempted) expect(secondIds.has(p.id)).toBe(false);
   });
 
-  it('records completed sprints per difficulty and unlocks the badge ladder', async () => {
+  it('records completed sprints and unlocks the badge ladder', async () => {
     for (let i = 0; i < 5; i++) {
-      await as(student).practice.sprintComplete({
-        difficulty: 'modified',
-        total: 10,
-        correct: 7,
-      });
+      await as(student).practice.sprintComplete({ total: 10, correct: 7 });
     }
     const last = await as(student).practice.sprintComplete({
-      difficulty: 'challenge',
       skillSlug: 'sprint_one_step_equations',
       total: 12,
       correct: 12,
     });
-    expect(last.completions.modified).toBe(5);
-    expect(last.completions.challenge).toBe(1);
+    expect(last.completions).toBe(6);
 
     const progress = await as(student).progress.me();
-    const warmup = progress.achievements.find((a) => a.id === 'sprint-warmup-5');
-    expect(warmup?.earned).toBe(true);
-    const challenge = progress.achievements.find((a) => a.id === 'sprint-challenge-5');
-    expect(challenge?.earned).toBe(false);
-    expect(challenge?.value).toBe(1);
+    const starter = progress.achievements.find((a) => a.id === 'sprint-5');
+    expect(starter?.earned).toBe(true);
+    const veteran = progress.achievements.find((a) => a.id === 'sprint-15');
+    expect(veteran?.earned).toBe(false);
+    expect(veteran?.value).toBe(6);
   });
 
   it('rejects a sprint completion claiming more correct than attempted', async () => {
     await expect(
-      as(student).practice.sprintComplete({ difficulty: 'standard', total: 3, correct: 4 }),
+      as(student).practice.sprintComplete({ total: 3, correct: 4 }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 

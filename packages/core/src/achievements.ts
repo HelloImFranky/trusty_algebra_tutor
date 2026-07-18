@@ -24,12 +24,8 @@ export interface AchievementMetrics {
   regentsTopicsCompleted: number;
   /** Regents Review: topics answered with a perfect score. */
   regentsPerfectTopics: number;
-  /** Completed sprint rounds at Warm-up difficulty (modified tier). */
-  sprintsModified: number;
-  /** Completed sprint rounds at Standard difficulty. */
-  sprintsStandard: number;
-  /** Completed sprint rounds at Challenge difficulty. */
-  sprintsChallenge: number;
+  /** Completed sprint rounds (sprints are single-difficulty). */
+  sprintsCompleted: number;
 }
 
 export interface AchievementDef {
@@ -152,52 +148,22 @@ export const achievementDefs: AchievementDef[] = [
     nameEn: 'Eagle Eye', nameEs: 'Ojo de Águila',
     descEn: 'Get perfect scores on 5 Regents topics', descEs: 'Logra puntajes perfectos en 5 temas Regents',
   },
-  // — Sprints — one bronze/silver/gold ladder per difficulty (5 / 15 / 30
-  // completed rounds), so every student has a ladder at their level.
+  // — Sprints — one bronze/silver/gold ladder over total completed rounds
+  // (sprints are single-difficulty, so one ladder covers everyone).
   {
-    id: 'sprint-warmup-5', icon: '🏃', tier: 'bronze', metric: 'sprintsModified', target: 5,
-    nameEn: 'Warm-Up Runner', nameEs: 'Corredor de Calentamiento',
-    descEn: 'Finish 5 Warm-up sprints', descEs: 'Termina 5 sprints de calentamiento',
-  },
-  {
-    id: 'sprint-warmup-15', icon: '🏃', tier: 'silver', metric: 'sprintsModified', target: 15,
-    nameEn: 'Warm-Up Regular', nameEs: 'Habitual del Calentamiento',
-    descEn: 'Finish 15 Warm-up sprints', descEs: 'Termina 15 sprints de calentamiento',
-  },
-  {
-    id: 'sprint-warmup-30', icon: '🏃', tier: 'gold', metric: 'sprintsModified', target: 30,
-    nameEn: 'Warm-Up Champion', nameEs: 'Campeón del Calentamiento',
-    descEn: 'Finish 30 Warm-up sprints', descEs: 'Termina 30 sprints de calentamiento',
-  },
-  {
-    id: 'sprint-standard-5', icon: '⚡', tier: 'bronze', metric: 'sprintsStandard', target: 5,
+    id: 'sprint-5', icon: '⚡', tier: 'bronze', metric: 'sprintsCompleted', target: 5,
     nameEn: 'Sprint Starter', nameEs: 'Iniciador de Sprints',
-    descEn: 'Finish 5 Standard sprints', descEs: 'Termina 5 sprints estándar',
+    descEn: 'Finish 5 sprints', descEs: 'Termina 5 sprints',
   },
   {
-    id: 'sprint-standard-15', icon: '⚡', tier: 'silver', metric: 'sprintsStandard', target: 15,
+    id: 'sprint-15', icon: '⚡', tier: 'silver', metric: 'sprintsCompleted', target: 15,
     nameEn: 'Sprint Veteran', nameEs: 'Veterano de Sprints',
-    descEn: 'Finish 15 Standard sprints', descEs: 'Termina 15 sprints estándar',
+    descEn: 'Finish 15 sprints', descEs: 'Termina 15 sprints',
   },
   {
-    id: 'sprint-standard-30', icon: '⚡', tier: 'gold', metric: 'sprintsStandard', target: 30,
+    id: 'sprint-30', icon: '⚡', tier: 'gold', metric: 'sprintsCompleted', target: 30,
     nameEn: 'Sprint Master', nameEs: 'Maestro de Sprints',
-    descEn: 'Finish 30 Standard sprints', descEs: 'Termina 30 sprints estándar',
-  },
-  {
-    id: 'sprint-challenge-5', icon: '🚀', tier: 'bronze', metric: 'sprintsChallenge', target: 5,
-    nameEn: 'Challenge Taker', nameEs: 'Retador',
-    descEn: 'Finish 5 Challenge sprints', descEs: 'Termina 5 sprints de desafío',
-  },
-  {
-    id: 'sprint-challenge-15', icon: '🚀', tier: 'silver', metric: 'sprintsChallenge', target: 15,
-    nameEn: 'Challenge Crusher', nameEs: 'Triturador de Desafíos',
-    descEn: 'Finish 15 Challenge sprints', descEs: 'Termina 15 sprints de desafío',
-  },
-  {
-    id: 'sprint-challenge-30', icon: '🚀', tier: 'gold', metric: 'sprintsChallenge', target: 30,
-    nameEn: 'Challenge Legend', nameEs: 'Leyenda del Desafío',
-    descEn: 'Finish 30 Challenge sprints', descEs: 'Termina 30 sprints de desafío',
+    descEn: 'Finish 30 sprints', descEs: 'Termina 30 sprints',
   },
   // Same +60% ladder as the solver milestones: 25 → 40 → 64.
   {
