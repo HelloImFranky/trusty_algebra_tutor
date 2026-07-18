@@ -504,20 +504,37 @@ describe('practice loop', () => {
     }
   });
 
-  it('filters sprint problems by a single topic (skill slug)', async () => {
+  it('lists every curriculum skill as a sprint topic, in teaching order', async () => {
     const { topics } = await as(student).practice.sprintTopics();
-    expect(topics.length).toBeGreaterThanOrEqual(3);
-    const slug = topics[0].slug;
+    // all seeded skills with problems — far more than the 3 drill topics
+    expect(topics.length).toBeGreaterThanOrEqual(20);
+    const slugs = topics.map((s) => s.slug);
+    expect(slugs[0]).toBe('exponents-perfect-squares'); // unit 1, lesson 1.1
+    expect(slugs).toContain('inequalities'); // a skill with no drill generator
+  });
+
+  it('filters sprint problems by a single topic (skill slug)', async () => {
+    const slug = 'exponents-perfect-squares';
     const res = await as(student).practice.sprint({ count: 5, skillSlugs: [slug] });
     expect(res.problems.length).toBeGreaterThan(0);
     for (const p of res.problems) expect(p.skillSlug).toBe(slug);
+    // A drill-backed topic sprints over its drills, not its practice problems.
+    const rows = await prisma.problem.findMany({
+      where: { id: { in: res.problems.map((p) => BigInt(p.id)) } },
+    });
+    for (const row of rows) expect(row.isSprint).toBe(true);
+  });
+
+  it('sprints over regular practice problems for topics without drills', async () => {
+    const res = await as(student).practice.sprint({ count: 5, skillSlugs: ['inequalities'] });
+    expect(res.problems.length).toBeGreaterThan(0);
+    for (const p of res.problems) expect(p.skillSlug).toBe('inequalities');
   });
 
   it('mixes a full round from several chosen topics', async () => {
-    const { topics } = await as(student).practice.sprintTopics();
-    const chosen = topics.slice(0, 2).map((s) => s.slug);
-    // 20 > the 12 problems any one topic has per tier, so a full round is
-    // only possible by drawing from BOTH chosen topics — and never others.
+    const chosen = ['exponents-perfect-squares', 'properties-real-numbers'];
+    // 20 > the 12 drill problems either topic has per tier, so a full round
+    // is only possible by drawing from BOTH chosen topics — and never others.
     const res = await as(student).practice.sprint({ count: 20, skillSlugs: chosen });
     expect(res.problems.length).toBe(20);
     const seen = new Set(res.problems.map((p) => p.skillSlug));

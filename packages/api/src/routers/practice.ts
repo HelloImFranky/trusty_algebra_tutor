@@ -211,13 +211,17 @@ export const practiceRouter = router({
     }),
 
   /**
-   * Sprints (§4.4): short timed fluency drills from the Sprints folder.
-   * Optional difficulty (problem tier) and topic (skill slugs) filters power
-   * the start-screen pickers — students can mix any number of topics into
-   * one randomized round (empty/omitted = all topics). When a database
-   * predates the tiered sprint content and has nothing at the requested
-   * tier, the query falls back to ignoring the tier rather than serving an
-   * empty round.
+   * Sprints (§4.4): short timed fluency drills. Optional difficulty
+   * (problem tier) and topic (skill slugs) filters power the start-screen
+   * pickers — students can mix any number of topics into one randomized
+   * round (empty/omitted = all topics).
+   *
+   * Problem preference per skill: dedicated sprint drills when the skill
+   * has them at the requested tier, otherwise its regular practice problems
+   * — so every curriculum topic is sprintable, not just the three with
+   * drill generators. When a database predates the tiered sprint content
+   * and the tier turns up nothing at all, the query falls back to ignoring
+   * the tier rather than serving an empty round.
    */
   sprint: protectedProcedure
     .input(
@@ -243,8 +247,11 @@ export const practiceRouter = router({
                p.grading_mode AS "gradingMode",
                p.params_json AS "paramsJson", s.slug AS "skillSlug"
         FROM problems p JOIN skills s ON s.id = p.skill_id
-        WHERE p.is_sprint
-          AND (${!withTier} OR p.tier = ${input.difficulty})
+        WHERE (${!withTier} OR p.tier = ${input.difficulty})
+          AND (p.is_sprint OR NOT EXISTS (
+            SELECT 1 FROM problems d
+            WHERE d.skill_id = p.skill_id AND d.is_sprint
+              AND (${!withTier} OR d.tier = ${input.difficulty})))
           ${topicFilter}
         ORDER BY random() LIMIT ${input.count}`;
       let rows = await pick(true);
@@ -261,17 +268,24 @@ export const practiceRouter = router({
       };
     }),
 
-  /** Topics that have sprint problems — feeds the focused-sprint picker. */
+  /**
+   * Topics for the focused-sprint picker: every curriculum skill that has
+   * problems, in teaching order. Skills with dedicated sprint drills use
+   * those; the rest sprint over their regular practice problems (see the
+   * preference rule in the sprint query above).
+   */
   sprintTopics: protectedProcedure.query(async () => {
     const rows = await prisma.$queryRaw<
       { slug: string; nameEn: string; nameEs: string; problems: number }[]
     >`
       SELECT s.slug, s.name_en AS "nameEn", s.name_es AS "nameEs",
              count(*)::int AS problems
-      FROM problems p JOIN skills s ON s.id = p.skill_id
-      WHERE p.is_sprint
-      GROUP BY s.slug, s.name_en, s.name_es
-      ORDER BY min(s.id)`;
+      FROM problems p
+      JOIN skills s ON s.id = p.skill_id
+      JOIN lessons l ON l.id = s.lesson_id
+      JOIN units u ON u.id = l.unit_id
+      GROUP BY s.slug, s.name_en, s.name_es, u.number, l.position
+      ORDER BY u.number, l.position`;
     return { topics: rows };
   }),
 
