@@ -62,6 +62,27 @@ mechanism here (Tier 0).
 
 ---
 
+## Interim decision — tutor button disabled until Tier 1 is finalized
+
+Until the email-provider steps (Tier 1) are finalized — **which they are not
+yet** — the client's **tutor entry button is disabled** for any student whose
+`guardianConsent` is `false`, shown with a short "ask your teacher/guardian to
+enable the tutor" state rather than a button that taps through and errors. This
+mirrors the server gate (`assertTutorConsent`, security-review-2 H3) in the UI.
+
+Rationale: with no self-service (email) consent path live, **school/admin
+attestation (Tier 0) is the only way to lift the gate**, so an under-13 student
+the school hasn't attested for has no way to self-enable — the button should
+reflect that instead of dangling. Once Tier 1 ships, revisit this: a student
+could then trigger the guardian-email flow themselves, so the button can move
+from "disabled" to "request consent."
+
+Scope note: this is a small **client** change (the tutor button's enabled
+state), tracked with Tier 1 — it is *not* part of the Tier 0 server work below,
+which is what makes attestation possible in the first place.
+
+---
+
 ## Data model (shared by all tiers)
 
 A consent **record** is the audit source of truth (COPPA requires keeping a
