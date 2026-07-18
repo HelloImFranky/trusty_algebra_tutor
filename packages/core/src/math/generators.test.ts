@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generators, generateProblem, makeRng } from './generators.js';
+import { generators, generateProblem, makeRng, sprintTopicDefs } from './generators.js';
 import { grade } from './engine.js';
 
 describe('problem generators', () => {
@@ -42,33 +42,45 @@ describe('problem generators', () => {
     'sprint_integer_ops',
     'sprint_perfect_squares',
     'sprint_one_step_equations',
+    'sprint_fraction_ops',
+    'sprint_decimal_ops',
+    'sprint_percent_of',
+    'sprint_order_of_ops',
+    'sprint_proportions',
   ] as const;
-  const tiers = ['modified', 'standard', 'challenge'] as const;
-
-  it.each(sprintTemplates)('%s generates valid problems at every tier', (template) => {
-    for (const tier of tiers) {
-      const rng = makeRng(11);
-      for (let i = 0; i < 25; i++) {
-        const p = generateProblem(template, rng, tier);
-        expect(grade(p.answerLatex, p.answerLatex, p.gradingMode, p.tolerance).correct).toBe(true);
-      }
-    }
-  });
 
   it.each(sprintTemplates)(
-    '%s standard tier matches the pre-tier rng stream (seed replay compatibility)',
+    '%s is single-difficulty: the tier knob changes nothing (and the stream stays seed-replay compatible)',
     (template) => {
-      // Already-seeded databases are synced by replaying the generator
-      // streams — the standard tier must reproduce what an untiered call
-      // produced, or the replay would stop matching existing rows.
+      // Sprints have no difficulty option — the drill must produce the same
+      // easy problem whatever tier a caller passes. This also pins the
+      // rng-call sequence the seed replays against already-synced databases.
       const untiered = generateProblem(template, makeRng(42));
-      const standard = generateProblem(template, makeRng(42), 'standard');
-      expect(standard).toEqual(untiered);
+      for (const tier of ['modified', 'standard', 'challenge'] as const) {
+        expect(generateProblem(template, makeRng(42), tier)).toEqual(untiered);
+      }
     },
   );
 
-  it('sprint_one_step_equations challenge produces two-step equations', () => {
-    const p = generateProblem('sprint_one_step_equations', makeRng(5), 'challenge');
-    expect(p.params).toHaveProperty('b'); // ax + b = c shape
+  it('every sprint topic in the registry has a generator template', () => {
+    for (const d of sprintTopicDefs) {
+      expect(generators, `registry topic ${d.slug} has no generator`).toHaveProperty(d.slug);
+    }
+  });
+
+  it('sprint_percent_of always produces whole-number answers', () => {
+    const rng = makeRng(3);
+    for (let i = 0; i < 60; i++) {
+      const p = generateProblem('sprint_percent_of', rng);
+      expect(Number.isInteger(Number(p.answerLatex))).toBe(true);
+    }
+  });
+
+  it('sprint_fraction_ops results are never negative', () => {
+    const rng = makeRng(9);
+    for (let i = 0; i < 60; i++) {
+      const p = generateProblem('sprint_fraction_ops', rng);
+      expect(p.answerLatex.startsWith('(-')).toBe(false);
+    }
   });
 });

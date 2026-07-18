@@ -41,13 +41,13 @@ export const unit1: UnitSeed = {
         { template: 'perfect_square_root', tier: 'standard', count: 4 },
         { template: 'exponent_product_rule', tier: 'standard', count: 6 },
         { template: 'exponent_product_rule', tier: 'challenge', count: 6 },
+        // Sprints are single-difficulty (easy 6th/7th-grade fluency), so
+        // each drill seeds one standard-tier pool. New specs must be
+        // appended AFTER existing ones — the per-lesson rng seed advances
+        // per spec, so inserting earlier would shift every later spec's
+        // stream and break the deterministic replay that syncs
+        // already-seeded databases.
         { template: 'sprint_perfect_squares', tier: 'standard', count: 12, sprint: true },
-        // Sprint difficulty tiers appended AFTER the original specs — the
-        // per-lesson rng seed advances per spec, so inserting earlier would
-        // shift every later spec's stream and break the deterministic
-        // replay that syncs already-seeded databases.
-        { template: 'sprint_perfect_squares', tier: 'modified', count: 12, sprint: true },
-        { template: 'sprint_perfect_squares', tier: 'challenge', count: 12, sprint: true },
       ],
     },
     {
@@ -135,6 +135,10 @@ export const unit1: UnitSeed = {
         { template: 'rational_irrational', tier: 'modified', count: 6 },
         { template: 'rational_irrational', tier: 'standard', count: 8 },
         { template: 'rational_irrational', tier: 'challenge', count: 4 },
+        // Sprint drills appended AFTER the original specs — see the
+        // seed-order note on 1.1.
+        { template: 'sprint_fraction_ops', tier: 'standard', count: 12, sprint: true },
+        { template: 'sprint_decimal_ops', tier: 'standard', count: 12, sprint: true },
       ],
     },
     {
@@ -167,6 +171,10 @@ export const unit1: UnitSeed = {
         { template: 'dimensional_analysis', tier: 'modified', count: 6 },
         { template: 'dimensional_analysis', tier: 'standard', count: 8 },
         { template: 'dimensional_analysis', tier: 'challenge', count: 4 },
+        // Sprint drills appended AFTER the original specs — see the
+        // seed-order note on 1.1.
+        { template: 'sprint_percent_of', tier: 'standard', count: 12, sprint: true },
+        { template: 'sprint_proportions', tier: 'standard', count: 12, sprint: true },
       ],
     },
     {
@@ -259,8 +267,7 @@ export const unit1: UnitSeed = {
       generated: [
         { template: 'sprint_integer_ops', tier: 'standard', count: 12, sprint: true },
         // Appended after the original spec — see the seed-order note on 1.1.
-        { template: 'sprint_integer_ops', tier: 'modified', count: 12, sprint: true },
-        { template: 'sprint_integer_ops', tier: 'challenge', count: 12, sprint: true },
+        { template: 'sprint_order_of_ops', tier: 'standard', count: 12, sprint: true },
       ],
     },
   ],
@@ -438,9 +445,6 @@ export const unit3: UnitSeed = {
         { template: 'multi_step_equation', tier: 'standard', count: 6 },
         { template: 'multi_step_equation', tier: 'challenge', count: 6 },
         { template: 'sprint_one_step_equations', tier: 'standard', count: 12, sprint: true },
-        // Appended after the original specs — see the seed-order note on 1.1.
-        { template: 'sprint_one_step_equations', tier: 'modified', count: 12, sprint: true },
-        { template: 'sprint_one_step_equations', tier: 'challenge', count: 12, sprint: true },
       ],
     },
     {

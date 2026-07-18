@@ -1,5 +1,7 @@
-/** Daily Sprints: short timed fluency drills (design doc §4.4, "Sprints" folder). */
-import { useEffect, useMemo, useRef, useState } from 'react';
+/** Daily Sprints: short timed fluency rounds over easy 6th/7th-grade skills
+ * the student already knows (design doc §4.4, "Sprints" folder). Pacing is
+ * 1 minute per 10 questions. */
+import { useEffect, useRef, useState } from 'react';
 import { Text, XStack, YStack } from 'tamagui';
 import { client } from '../lib/trpc';
 import { attemptOrQueue } from '../lib/offline';
@@ -34,12 +36,9 @@ interface SprintProblem {
 
 interface SprintTopic {
   slug: string;
+  icon: string;
   nameEn: string;
   nameEs: string;
-  problems: number;
-  unitNumber: number;
-  unitTitleEn: string;
-  unitTitleEs: string;
 }
 
 /** One item in the post-round review: a problem the student got wrong or
@@ -51,17 +50,14 @@ interface MissRecord {
   skipped?: boolean;
 }
 
-type Difficulty = 'modified' | 'standard' | 'challenge';
+// Default pacing: 1 minute per 10 questions.
+const SECONDS_PER_QUESTION = 6;
+const ROUND_SIZES = [10, 20, 30];
 
-const SPRINT_SECONDS = 90;
+/** "60 → 1:00" — round time in m:ss for the header and timer. */
+const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
-const DIFFICULTIES: { key: Difficulty; icon: string; label: 'sprintWarmup' | 'sprintStandard' | 'sprintChallenge' }[] = [
-  { key: 'modified', icon: '🌱', label: 'sprintWarmup' },
-  { key: 'standard', icon: '⚡', label: 'sprintStandard' },
-  { key: 'challenge', icon: '🚀', label: 'sprintChallenge' },
-];
-
-/** Small selectable pill for the difficulty / topic pickers. */
+/** Small selectable pill for the round-length / topic pickers. */
 function PickChip({
   selected,
   onPress,
@@ -99,19 +95,16 @@ export function SprintScreen() {
   const [problems, setProblems] = useState<SprintProblem[]>([]);
   const [index, setIndex] = useState(-1);
   const [answer, setAnswer] = useState('');
-  const [seconds, setSeconds] = useState(SPRINT_SECONDS);
+  const [roundSize, setRoundSize] = useState(10);
+  const [seconds, setSeconds] = useState(10 * SECONDS_PER_QUESTION);
   const [score, setScore] = useState(0);
   const [attempted, setAttempted] = useState(0);
   const [running, setRunning] = useState(false);
   const [misses, setMisses] = useState<MissRecord[]>([]);
   const [animOpenId, setAnimOpenId] = useState<number | null>(null);
-  const [difficulty, setDifficulty] = useState<Difficulty>('standard');
   const [topics, setTopics] = useState<SprintTopic[]>([]);
   // Multi-select: the round draws from every chosen topic. Empty = all topics.
   const [topicSlugs, setTopicSlugs] = useState<string[]>([]);
-  // Which unit sections are expanded in the picker (all collapsed initially,
-  // so ~30 topics don't wall the start card — see the unit accordion below).
-  const [openUnits, setOpenUnits] = useState<Set<number>>(new Set());
   // Grades still in flight — the completion report waits for them so the
   // recorded score can't miss a submit that raced the timer.
   const [inFlight, setInFlight] = useState(0);
@@ -136,45 +129,12 @@ export function SprintScreen() {
       cur.includes(slug) ? cur.filter((s) => s !== slug) : [...cur, slug],
     );
 
-  const toggleUnit = (n: number) =>
-    setOpenUnits((cur) => {
-      const next = new Set(cur);
-      if (next.has(n)) next.delete(n);
-      else next.add(n);
-      return next;
-    });
-
-  /** Toggle every topic of a unit at once: all on → clear them; else add all. */
-  const toggleWholeUnit = (unitTopics: SprintTopic[]) =>
-    setTopicSlugs((cur) => {
-      const slugs = unitTopics.map((s) => s.slug);
-      const allOn = slugs.every((s) => cur.includes(s));
-      const without = cur.filter((s) => !slugs.includes(s));
-      return allOn ? without : [...without, ...slugs];
-    });
-
-  // Topics grouped into unit sections, in teaching order (the API already
-  // sorts by unit number, then lesson position).
-  const units = useMemo(() => {
-    const m = new Map<number, { title: string; topics: SprintTopic[] }>();
-    for (const s of topics) {
-      const entry = m.get(s.unitNumber) ?? {
-        title: locale === 'es' ? s.unitTitleEs : s.unitTitleEn,
-        topics: [],
-      };
-      entry.topics.push(s);
-      m.set(s.unitNumber, entry);
-    }
-    return [...m.entries()];
-  }, [topics, locale]);
-
   const start = async (slugsOverride?: string[]) => {
     const slugs = slugsOverride ?? topicSlugs;
     const r = await client.practice.sprint.query({
-      count: 20,
+      count: roundSize,
       locale,
-      difficulty,
-      skillSlugs: slugs.length ? slugs : undefined,
+      topics: slugs.length ? slugs : undefined,
     });
     setProblems(r.problems);
     setIndex(0);
@@ -182,7 +142,9 @@ export function SprintScreen() {
     setAttempted(0);
     setMisses([]);
     setAnimOpenId(null);
-    setSeconds(SPRINT_SECONDS);
+    // 1 minute per 10 questions — timed off the served round, which can be
+    // shorter than the requested size if a topic's variant pool runs dry.
+    setSeconds(Math.max(1, r.problems.length) * SECONDS_PER_QUESTION);
     setAnswer('');
     submittingIndex.current = -1;
     reportedRound.current = false;
@@ -205,7 +167,7 @@ export function SprintScreen() {
 
   // When the timer expires, everything the student never got to becomes a
   // "skipped" review row — that way the review reflects the whole round, not
-  // just problems that happened to fit in the 90 seconds.
+  // just problems that happened to fit in the time limit.
   useEffect(() => {
     if (seconds > 0 || !running) return;
     setRunning(false);
@@ -227,21 +189,20 @@ export function SprintScreen() {
   }, [seconds, running, index, problems]);
 
   // Round over (and no grade still in flight): record the completed sprint
-  // so the per-difficulty badge ladders on Progress can count it. A round
-  // over several topics is recorded as mixed (null slug), same as "all".
+  // so the badge ladder on Progress can count it. A round over several
+  // topics is recorded as mixed (null slug), same as "all".
   useEffect(() => {
     if (running || index < 0 || inFlight > 0 || attempted === 0) return;
     if (reportedRound.current) return;
     reportedRound.current = true;
     client.practice.sprintComplete
       .mutate({
-        difficulty,
         skillSlug: topicSlugs.length === 1 ? topicSlugs[0] : null,
         total: attempted,
         correct: score,
       })
       .catch(() => {});
-  }, [running, index, inFlight, attempted, score, difficulty, topicSlugs]);
+  }, [running, index, inFlight, attempted, score, topicSlugs]);
 
   const submit = async () => {
     if (!answer.trim() || !running) return;
@@ -272,28 +233,29 @@ export function SprintScreen() {
     else setRunning(false);
   };
 
-  const difficultyDef = DIFFICULTIES.find((d) => d.key === difficulty)!;
   const selected = topics.filter((s) => topicSlugs.includes(s.slug));
-  const topicLabel =
+  const roundLabel =
     selected.length === 0
-      ? t('sprintAllTopics')
+      ? `⚡ ${t('sprintAllTopics')}`
       : selected.length === 1
-        ? topicName(selected[0])
-        : `${selected.length} ${t('sprintTopicsSelected')}`;
-  const roundLabel = `${difficultyDef.icon} ${t(difficultyDef.label)} · ${topicLabel}`;
+        ? `${selected[0].icon} ${topicName(selected[0])}`
+        : `⚡ ${selected.length} ${t('sprintTopicsSelected')}`;
 
   return (
     <Screen maxWidth={560}>
       <Title>⚡ {t('sprint')}</Title>
       {!running && index === -1 && (
         <AppCard gap={14}>
-          <Text fontSize={16} color={tokens.ink} textAlign="center">90s · 20 ❓</Text>
+          <Text fontSize={16} fontWeight="800" color={tokens.ink} textAlign="center">
+            {roundSize} ❓ · ⏱ {fmtTime(roundSize * SECONDS_PER_QUESTION)}
+          </Text>
+          <Muted size={13}>{t('sprintTagline')}</Muted>
           <YStack gap={6}>
-            <Muted size={12}>{t('sprintDifficulty')}</Muted>
+            <Muted size={12}>{t('sprintLength')}</Muted>
             <XStack gap={8} flexWrap="wrap">
-              {DIFFICULTIES.map((d) => (
-                <PickChip key={d.key} selected={difficulty === d.key} onPress={() => setDifficulty(d.key)}>
-                  {d.icon} {t(d.label)}
+              {ROUND_SIZES.map((n) => (
+                <PickChip key={n} selected={roundSize === n} onPress={() => setRoundSize(n)}>
+                  {n} ❓ · {fmtTime(n * SECONDS_PER_QUESTION)}
                 </PickChip>
               ))}
             </XStack>
@@ -305,63 +267,15 @@ export function SprintScreen() {
                 <PickChip selected={topicSlugs.length === 0} onPress={() => setTopicSlugs([])}>
                   {t('sprintAllTopics')}
                 </PickChip>
-              </XStack>
-              {/* One collapsible section per unit, so the (many) topics don't
-                  wall the start card. Headers show how many of the unit's
-                  topics are in the mix even while collapsed. */}
-              <YStack borderRadius={12} borderWidth={1} borderColor={tokens.border} overflow="hidden">
-                {units.map(([n, u], i) => {
-                  const open = openUnits.has(n);
-                  const selectedInUnit = u.topics.filter((s) => topicSlugs.includes(s.slug)).length;
+                {topics.map((s) => {
+                  const on = topicSlugs.includes(s.slug);
                   return (
-                    <YStack key={n} borderTopWidth={i === 0 ? 0 : 1} borderTopColor={tokens.border}>
-                      <XStack
-                        onPress={() => toggleUnit(n)}
-                        cursor="pointer"
-                        paddingHorizontal={12}
-                        paddingVertical={10}
-                        alignItems="center"
-                        justifyContent="space-between"
-                        pressStyle={{ backgroundColor: tokens.subtle }}
-                      >
-                        <Text fontSize={13} fontWeight="700" color={tokens.ink}>
-                          {open ? '▾' : '▸'} {t('sprintUnitLabel')} {n} · {u.title}
-                        </Text>
-                        {selectedInUnit > 0 && (
-                          <XStack
-                            backgroundColor={tokens.subtle}
-                            borderRadius={RADIUS.pill}
-                            paddingHorizontal={8}
-                            paddingVertical={2}
-                          >
-                            <Text fontSize={11} fontWeight="800" color={tokens.ink}>
-                              {selectedInUnit} ✓
-                            </Text>
-                          </XStack>
-                        )}
-                      </XStack>
-                      {open && (
-                        <XStack gap={8} flexWrap="wrap" paddingHorizontal={12} paddingBottom={12}>
-                          <PickChip
-                            selected={u.topics.every((s) => topicSlugs.includes(s.slug))}
-                            onPress={() => toggleWholeUnit(u.topics)}
-                          >
-                            {t('sprintWholeUnit')}
-                          </PickChip>
-                          {u.topics.map((s) => {
-                            const on = topicSlugs.includes(s.slug);
-                            return (
-                              <PickChip key={s.slug} selected={on} onPress={() => toggleTopic(s.slug)}>
-                                {on ? '✓ ' : ''}{topicName(s)}
-                              </PickChip>
-                            );
-                          })}
-                        </XStack>
-                      )}
-                    </YStack>
+                    <PickChip key={s.slug} selected={on} onPress={() => toggleTopic(s.slug)}>
+                      {s.icon} {topicName(s)}{on ? ' ✓' : ''}
+                    </PickChip>
                   );
                 })}
-              </YStack>
+              </XStack>
             </YStack>
           )}
           <YStack gap={8}>
@@ -376,7 +290,7 @@ export function SprintScreen() {
         <AppCard gap={10}>
           <XStack justifyContent="space-between" alignItems="center">
             <Text fontWeight="900" fontSize={20} color={seconds <= 10 ? COLORS.bad : COLORS.warn}>
-              ⏱ {seconds}s
+              ⏱ {fmtTime(Math.max(0, seconds))}
             </Text>
             <Muted size={12}>{roundLabel}</Muted>
           </XStack>
