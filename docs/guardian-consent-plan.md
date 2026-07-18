@@ -145,14 +145,16 @@ is the whole answer for a pure school deployment.
   succeeds; it appends a fresh audit row (multiple attestations are legitimate
   history) but the boolean is already true. Return `{ ok: true }`.
 
-**`admin.verifyGuardianConsent`** — optional override / governance.
+**`admin.verifyGuardianConsent`** — break-glass override / governance
+(**decided: keep** — see Resolved decisions).
 - Procedure: `adminProcedure`. Same effect, `method='admin_manual'`, any
-  student (no roster scope).
+  student (no roster scope). Intended as break-glass — the teacher path is
+  primary; this covers unenrolled students, staff turnover, and corrections.
 - **Least-privilege note:** the admin router is currently documented as
-  *not* reaching student records (`packages/api/src/routers/admin.ts`). Adding
-  this widens that surface by exactly one write. Acceptable for governance, but
-  call it out in the PR. If we'd rather keep admin fully student-data-free, drop
-  this endpoint and rely on the teacher path only. **Open decision.**
+  *not* reaching student records (`packages/api/src/routers/admin.ts`). This is
+  the one deliberate exception — it widens that surface by exactly one write.
+  Call it out in the PR, and require the `note` on the admin path so every
+  break-glass use is explained in the audit row.
 
 ### Read surfacing (so teachers know who's outstanding)
 Add `guardianConsent` to the roster projection in
@@ -179,7 +181,7 @@ No new query.
 - Non-teacher (student/guardian) → `FORBIDDEN`.
 - Idempotent re-attestation succeeds and appends a second audit row.
 - Roster surfaces `consentPending` correctly before/after attestation.
-- (If kept) admin override attests for an out-of-roster student.
+- Admin override attests for an out-of-roster student (with a `note`).
 
 ### Explicitly out of scope for Tier 0
 - Activating guardian *links* / guardian dashboard access (Tier 1 / alt A).
@@ -243,13 +245,21 @@ needs research). Scoped now so it's ready when infra lands.
 
 ---
 
+## Resolved decisions
+- **Admin override endpoint** — **keep** `admin.verifyGuardianConsent` as
+  break-glass; teacher path stays primary. Require the `note` on the admin path
+  and document the one-write widening of the admin surface in the PR.
+- **Attestation detail field** — **free-text `note`** (the compliance-critical
+  facts — `method`, `granted_by_user_id`, `created_at` — are already structural
+  columns). If a district later requires a structured signed-form reference, add
+  a nullable `form_reference` column then; the audit table is append-only and
+  easy to extend.
+
 ## Open decisions
-1. **Admin override endpoint** — keep `admin.verifyGuardianConsent` (widens the
-   admin surface by one write) or teacher-only? (Leaning: keep, clearly noted.)
-2. **Guardian-link activation** — pursue the email flow (Tier 1) or
+1. **Guardian-link activation** — pursue the email flow (Tier 1) or
    guardian-account approval (alt A) for the *guardian dashboard* half? (Can
    decide when Tier 1 is scheduled.)
-3. **Mail provider** — Gmail SMTP relay vs Gmail API vs another provider
+2. **Mail provider** — Gmail SMTP relay vs Gmail API vs another provider
    (research in progress).
 
 ## Build order
