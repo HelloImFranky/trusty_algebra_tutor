@@ -46,7 +46,8 @@ async function dbSecret(): Promise<string> {
 
 /**
  * Resolve the JWT signing secret with zero required setup:
- *   1. JWT_SECRET env var, if provided (recommended for production/multi-instance)
+ *   1. JWT_SECRET env var, if provided (recommended for production/multi-instance;
+ *      also cleans up any database-persisted copy from before it was set)
  *   2. else a secret persisted in DATA_DIR (survives restarts, so logins stay valid)
  *   3. else a secret persisted in the database — the writable shared store on
  *      serverless deploys (Vercel's filesystem is read-only), where a
@@ -58,7 +59,22 @@ async function dbSecret(): Promise<string> {
  */
 async function resolveJwtSecret(): Promise<string> {
   const fromEnv = process.env.JWT_SECRET?.trim();
-  if (fromEnv) return fromEnv;
+  if (fromEnv) {
+    // The env var is the source of truth. Remove any database copy left
+    // over from before it was set, so no signing-capable secret lingers in
+    // the DB (a dump/backup of it must not be enough to forge tokens).
+    // Fire-and-forget: cleanup failing (DB down, table not migrated yet)
+    // must never block auth — the row is retried on the next cold start.
+    void prisma.appSecret
+      .deleteMany({ where: { name: 'jwt-secret' } })
+      .then((r) => {
+        if (r.count > 0) {
+          console.log('JWT_SECRET is set — removed the database-persisted secret copy (app_secrets)');
+        }
+      })
+      .catch(() => {});
+    return fromEnv;
+  }
 
   let fileErr: unknown;
   try {
@@ -68,7 +84,17 @@ async function resolveJwtSecret(): Promise<string> {
   }
 
   try {
-    return await dbSecret();
+    const secret = await dbSecret();
+    // Works, but the env var is the stronger setup (keeps the signing key
+    // out of database dumps/backups) — say so where an operator will see it.
+    console.warn(
+      'Using the database-persisted JWT secret (JWT_SECRET is not set). ' +
+        'Recommended: set JWT_SECRET in the environment' +
+        (process.env.VERCEL
+          ? ' (Vercel: Settings → Environment Variables — or run npm run deploy, which sets it for you).'
+          : '.'),
+    );
+    return secret;
   } catch (dbErr) {
     const isProd = process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL);
     if (isProd) {

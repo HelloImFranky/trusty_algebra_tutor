@@ -47,12 +47,19 @@ describe('jwtSecret resolution (data dir not writable)', () => {
     expect(await second.jwtSecret()).toBe(secret);
   });
 
-  it('prefers JWT_SECRET from the environment over everything', async () => {
+  it('prefers JWT_SECRET from the environment and cleans up the database copy', async () => {
+    // Row exists from the previous test — setting the env var must win AND
+    // remove the DB copy so no signing-capable secret lingers in dumps.
+    expect(await prisma.appSecret.findUnique({ where: { name: 'jwt-secret' } })).not.toBeNull();
     process.env.JWT_SECRET = 'env-secret-wins';
     try {
       vi.resetModules();
       const mod = await import('./config.js');
       expect(await mod.jwtSecret()).toBe('env-secret-wins');
+      // cleanup is fire-and-forget — poll briefly for it to land
+      await vi.waitFor(async () => {
+        expect(await prisma.appSecret.findUnique({ where: { name: 'jwt-secret' } })).toBeNull();
+      });
     } finally {
       delete process.env.JWT_SECRET;
     }

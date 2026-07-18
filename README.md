@@ -125,7 +125,7 @@ All settings are optional.
 | Setting | Default | Purpose |
 |---|---|---|
 | `DATABASE_URL` | local `algebra_tutor` db | PostgreSQL connection |
-| `JWT_SECRET` | auto-generated & saved | login-token key; required on Vercel (deploy script sets it) |
+| `JWT_SECRET` | auto-generated & saved | login-token signing key. **Recommended: set it explicitly in production** (the deploy script sets it on Vercel for you) — it keeps the key out of database backups. Without it, the key is saved to `DATA_DIR` locally, or to the database on read-only hosts like Vercel. Setting it later is safe: users stay logged in (sessions refresh seamlessly) and the database copy is removed automatically. |
 | `TUTOR_PROVIDER` | auto-detect | `openai`, `anthropic`, or `none` |
 | `HF_TOKEN` / `TUTOR_API_KEY` | — | token for the OpenAI-compatible tutor endpoint |
 | `TUTOR_BASE_URL` | Hugging Face router | tutor endpoint (e.g. `http://localhost:11434/v1`) |
