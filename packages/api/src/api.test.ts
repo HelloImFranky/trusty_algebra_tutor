@@ -395,11 +395,15 @@ describe('practice loop', () => {
   });
 
   it('grades a wrong answer', async () => {
+    const key = await prisma.problem.findUnique({ where: { id: BigInt(problem.id) } });
     const res = await as(student).practice.attempt({
       problemId: problem.id,
       submittedLatex: '99999999',
     });
     expect(res.correct).toBe(false);
+    // Wrong answers surface the correct value so the sprint review can
+    // show "you wrote X · correct answer Y" side-by-side.
+    expect(res.correctAnswer).toBe(key!.answerLatex);
   });
 
   it('grades the correct answer', async () => {
@@ -410,6 +414,8 @@ describe('practice loop', () => {
       hintsUsed: 1,
     });
     expect(res.correct).toBe(true);
+    // Correct submissions don't need to echo the answer back.
+    expect(res.correctAnswer).toBeNull();
   });
 
   it('records animation views on the attempt row', async () => {
@@ -486,6 +492,124 @@ describe('practice loop', () => {
       expect(p).toHaveProperty('params');
       expect(p).toHaveProperty('skillSlug');
     }
+  });
+
+  it('filters sprint problems by difficulty tier', async () => {
+    for (const difficulty of ['modified', 'standard', 'challenge'] as const) {
+      const res = await as(student).practice.sprint({ count: 5, difficulty });
+      expect(res.problems.length).toBeGreaterThan(0);
+      const ids = res.problems.map((p) => BigInt(p.id));
+      const rows = await prisma.problem.findMany({ where: { id: { in: ids } } });
+      for (const row of rows) expect(row.tier).toBe(difficulty);
+    }
+  });
+
+  it('lists every curriculum skill as a sprint topic, grouped by unit in teaching order', async () => {
+    const { topics } = await as(student).practice.sprintTopics();
+    // all seeded skills with problems — far more than the 3 drill topics
+    expect(topics.length).toBeGreaterThanOrEqual(20);
+    const slugs = topics.map((s) => s.slug);
+    expect(slugs[0]).toBe('exponents-perfect-squares'); // unit 1, lesson 1.1
+    expect(slugs).toContain('inequalities'); // a skill with no drill generator
+    // unit metadata for the picker's collapsible sections, sorted by unit
+    expect(topics[0].unitNumber).toBe(1);
+    expect(topics[0].unitTitleEn.length).toBeGreaterThan(0);
+    expect(topics[0].unitTitleEs.length).toBeGreaterThan(0);
+    const unitSeq = topics.map((s) => s.unitNumber);
+    expect([...unitSeq].sort((a, b) => a - b)).toEqual(unitSeq);
+    expect(new Set(unitSeq).size).toBeGreaterThanOrEqual(5); // several units represented
+  });
+
+  it('filters sprint problems by a single topic (skill slug)', async () => {
+    const slug = 'exponents-perfect-squares';
+    const res = await as(student).practice.sprint({ count: 5, skillSlugs: [slug] });
+    expect(res.problems.length).toBeGreaterThan(0);
+    for (const p of res.problems) expect(p.skillSlug).toBe(slug);
+    // A drill-backed topic sprints over its drills, not its practice problems.
+    const rows = await prisma.problem.findMany({
+      where: { id: { in: res.problems.map((p) => BigInt(p.id)) } },
+    });
+    for (const row of rows) expect(row.isSprint).toBe(true);
+  });
+
+  it('sprints over regular practice problems for topics without drills', async () => {
+    const res = await as(student).practice.sprint({ count: 5, skillSlugs: ['inequalities'] });
+    expect(res.problems.length).toBeGreaterThan(0);
+    for (const p of res.problems) expect(p.skillSlug).toBe('inequalities');
+  });
+
+  it('mixes a full round from several chosen topics', async () => {
+    const chosen = ['exponents-perfect-squares', 'properties-real-numbers'];
+    // 20 > the 12 seeded drill problems either topic starts with, so a full
+    // round draws from BOTH chosen topics — and never others.
+    const res = await as(student).practice.sprint({ count: 20, skillSlugs: chosen });
+    expect(res.problems.length).toBe(20);
+    const seen = new Set(res.problems.map((p) => p.skillSlug));
+    expect([...seen].sort()).toEqual([...chosen].sort());
+  });
+
+  it('generates fresh drill variants on demand — the pool grows each round', async () => {
+    const skill = await prisma.skill.findUnique({ where: { slug: 'properties-real-numbers' } });
+    const poolSize = () =>
+      prisma.problem.count({ where: { skillId: skill!.id, tier: 'standard', isSprint: true } });
+    const before = await poolSize();
+    await as(student).practice.sprint({ count: 12, skillSlugs: ['properties-real-numbers'] });
+    // integer-ops has a huge variant space, so the top-up lands new rows
+    expect(await poolSize()).toBeGreaterThan(before);
+  });
+
+  it('serves a fresh round: problems the student attempted are not repeated', async () => {
+    const first = await as(student).practice.sprint({
+      count: 12,
+      skillSlugs: ['properties-real-numbers'],
+    });
+    const attempted = first.problems.slice(0, 3);
+    for (const p of attempted) {
+      await as(student).practice.attempt({
+        problemId: p.id,
+        submittedLatex: '12345678',
+        context: 'sprint',
+      });
+    }
+    // Never-attempted problems sample first, and the top-up guarantees more
+    // than 12 unattempted variants exist — so none of the 3 can reappear.
+    const second = await as(student).practice.sprint({
+      count: 12,
+      skillSlugs: ['properties-real-numbers'],
+    });
+    const secondIds = new Set(second.problems.map((p) => p.id));
+    for (const p of attempted) expect(secondIds.has(p.id)).toBe(false);
+  });
+
+  it('records completed sprints per difficulty and unlocks the badge ladder', async () => {
+    for (let i = 0; i < 5; i++) {
+      await as(student).practice.sprintComplete({
+        difficulty: 'modified',
+        total: 10,
+        correct: 7,
+      });
+    }
+    const last = await as(student).practice.sprintComplete({
+      difficulty: 'challenge',
+      skillSlug: 'multi-step-equations',
+      total: 12,
+      correct: 12,
+    });
+    expect(last.completions.modified).toBe(5);
+    expect(last.completions.challenge).toBe(1);
+
+    const progress = await as(student).progress.me();
+    const warmup = progress.achievements.find((a) => a.id === 'sprint-warmup-5');
+    expect(warmup?.earned).toBe(true);
+    const challenge = progress.achievements.find((a) => a.id === 'sprint-challenge-5');
+    expect(challenge?.earned).toBe(false);
+    expect(challenge?.value).toBe(1);
+  });
+
+  it('rejects a sprint completion claiming more correct than attempted', async () => {
+    await expect(
+      as(student).practice.sprintComplete({ difficulty: 'standard', total: 3, correct: 4 }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 
   it('assembles a review session from practiced skills', async () => {

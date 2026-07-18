@@ -1,7 +1,14 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
-import { prisma } from '@tutor/db';
-import { decayedScore, tierForScore, grade, diagnoseMisconception } from '@tutor/core';
+import { prisma, Prisma } from '@tutor/db';
+import {
+  decayedScore,
+  tierForScore,
+  grade,
+  diagnoseMisconception,
+  generateProblem,
+  makeRng,
+} from '@tutor/core';
 import type { GradingMode, Misconception } from '@tutor/core';
 import { loc, protectedProcedure, router } from '../trpc.js';
 import { applyMastery } from './curriculum.js';
@@ -46,6 +53,69 @@ async function problemPayload(p: ProblemRow, locale: Locale) {
       hint: locale === 'es' ? s.hintEs : s.hintEn,
     })),
   };
+}
+
+/**
+ * On-demand sprint generation: before a round is sampled, grow each chosen
+ * drill topic's pool with freshly generated variants at the requested tier.
+ * Variants are validated through the math engine (generateProblem) and
+ * find-or-created by (skill, tier, prompt, answer), so the bank converges
+ * toward each template's full variant space instead of growing without
+ * bound — and every problem stays a real row, which keeps attempts,
+ * mastery, and the post-round walkthroughs working unchanged.
+ *
+ * The drill template for a skill is read off the existing drill rows'
+ * params (params_json->>'template'), so new drill generators need no
+ * registry here. A racing find-or-create between two students can insert
+ * the same variant twice — harmless (both rows are valid), so no unique
+ * constraint is required.
+ */
+async function topUpSprintDrills(
+  skillSlugs: string[],
+  difficulty: 'modified' | 'standard' | 'challenge',
+  perTopic: number,
+): Promise<void> {
+  const drills = await prisma.$queryRaw<{ skillId: bigint; template: string }[]>`
+    SELECT DISTINCT s.id AS "skillId", p.params_json->>'template' AS template
+    FROM problems p JOIN skills s ON s.id = p.skill_id
+    WHERE p.is_sprint AND p.params_json->>'template' IS NOT NULL
+      ${skillSlugs.length ? Prisma.sql`AND s.slug IN (${Prisma.join(skillSlugs)})` : Prisma.empty}`;
+  for (const d of drills) {
+    const rng = makeRng((Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0);
+    const seen = new Set<string>();
+    let made = 0;
+    for (let i = 0; made < perTopic && i < perTopic * 6; i++) {
+      const gp = generateProblem(d.template, rng, difficulty);
+      const key = gp.promptEn + gp.answerLatex;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      made++;
+      const exists = await prisma.problem.findFirst({
+        where: {
+          skillId: d.skillId,
+          tier: difficulty,
+          promptEn: gp.promptEn,
+          answerLatex: gp.answerLatex,
+          isSprint: true,
+        },
+        select: { id: true },
+      });
+      if (exists) continue;
+      await prisma.problem.create({
+        data: {
+          skillId: d.skillId,
+          tier: difficulty,
+          promptEn: gp.promptEn,
+          promptEs: gp.promptEs,
+          answerLatex: gp.answerLatex,
+          gradingMode: gp.gradingMode,
+          tolerance: gp.tolerance ?? null,
+          paramsJson: JSON.parse(JSON.stringify(gp.params)),
+          isSprint: true,
+        },
+      });
+    }
+  }
 }
 
 const attemptInput = z.object({
@@ -160,6 +230,9 @@ export const practiceRouter = router({
       correct: result.correct,
       equivalentButNotCanonical: result.equivalentButNotCanonical ?? false,
       misconceptionId: misconception?.id ?? null,
+      // Reveal the target answer only after the attempt has been graded and
+      // recorded — so the sprint review can show "your answer vs correct".
+      correctAnswer: result.correct ? null : prob.answerLatex,
       message: result.correct
         ? null
         : result.equivalentButNotCanonical
@@ -207,14 +280,47 @@ export const practiceRouter = router({
       };
     }),
 
-  /** Sprints (§4.4): short timed fluency drills from the Sprints folder. */
+  /**
+   * Sprints (§4.4): short timed fluency drills. Optional difficulty
+   * (problem tier) and topic (skill slugs) filters power the start-screen
+   * pickers — students can mix any number of topics into one randomized
+   * round (empty/omitted = all topics).
+   *
+   * Problem preference per skill: dedicated sprint drills when the skill
+   * has them at the requested tier, otherwise its regular practice problems
+   * — so every curriculum topic is sprintable, not just the three with
+   * drill generators. When a database predates the tiered sprint content
+   * and the tier turns up nothing at all, the query falls back to ignoring
+   * the tier rather than serving an empty round.
+   *
+   * Freshness: drill pools are topped up with newly generated variants at
+   * round start (topUpSprintDrills), and sampling prefers problems this
+   * student has never attempted (then least-recently attempted), so
+   * back-to-back rounds don't repeat questions until a template's whole
+   * variant space is exhausted.
+   */
   sprint: protectedProcedure
-    .input(localeInput.extend({ count: z.number().int().min(1).max(20).default(10) }))
+    .input(
+      localeInput.extend({
+        count: z.number().int().min(1).max(20).default(10),
+        difficulty: z.enum(['modified', 'standard', 'challenge']).default('standard'),
+        skillSlugs: z.array(z.string().max(100)).max(50).optional(),
+      }),
+    )
     .query(async ({ ctx, input }) => {
       const locale = loc(ctx, input.locale);
+      const slugs = input.skillSlugs ?? [];
+      const topicFilter = slugs.length
+        ? Prisma.sql`AND s.slug IN (${Prisma.join(slugs)})`
+        : Prisma.empty;
+      // Freshly generated drill variants land in the bank before sampling.
+      await topUpSprintDrills(slugs, input.difficulty, Math.min(input.count, 12));
       // params + skill slug ride along so the post-round review can offer an
       // animated walkthrough of any miss a stepanim builder understands.
-      const rows = await prisma.$queryRaw<
+      // Sampling prefers never-attempted problems for THIS student, then the
+      // least-recently attempted, then random — combined with the top-up,
+      // repeat rounds serve new questions while the variant space lasts.
+      const pick = (withTier: boolean) => prisma.$queryRaw<
         (ProblemRow & { paramsJson: unknown; skillSlug: string })[]
       >`
         SELECT p.id, p.skill_id AS "skillId", p.tier,
@@ -222,7 +328,23 @@ export const practiceRouter = router({
                p.grading_mode AS "gradingMode",
                p.params_json AS "paramsJson", s.slug AS "skillSlug"
         FROM problems p JOIN skills s ON s.id = p.skill_id
-        WHERE p.is_sprint ORDER BY random() LIMIT ${input.count}`;
+        LEFT JOIN (
+          SELECT problem_id, count(*) AS n, max(created_at) AS last_attempt
+          FROM attempts WHERE user_id = ${BigInt(ctx.user.id)} GROUP BY problem_id
+        ) a ON a.problem_id = p.id
+        WHERE (${!withTier} OR p.tier = ${input.difficulty})
+          AND (p.is_sprint OR NOT EXISTS (
+            SELECT 1 FROM problems d
+            WHERE d.skill_id = p.skill_id AND d.is_sprint
+              AND (${!withTier} OR d.tier = ${input.difficulty})))
+          ${topicFilter}
+        ORDER BY a.n NULLS FIRST, a.last_attempt NULLS FIRST, random()
+        LIMIT ${input.count}`;
+      let rows = await pick(true);
+      if (!rows.length) rows = await pick(false);
+      // The unattempted-first ordering clusters; the round itself should
+      // still feel shuffled.
+      rows.sort(() => Math.random() - 0.5);
       return {
         problems: rows.map((p) => ({
           id: Number(p.id),
@@ -233,6 +355,80 @@ export const practiceRouter = router({
           skillSlug: p.skillSlug ?? null,
         })),
       };
+    }),
+
+  /**
+   * Topics for the focused-sprint picker: every curriculum skill that has
+   * problems, in teaching order. Skills with dedicated sprint drills use
+   * those; the rest sprint over their regular practice problems (see the
+   * preference rule in the sprint query above).
+   */
+  sprintTopics: protectedProcedure.query(async () => {
+    // Unit number + localized unit titles ride along so the picker can group
+    // the (many) topics into collapsible per-unit sections.
+    const rows = await prisma.$queryRaw<
+      {
+        slug: string;
+        nameEn: string;
+        nameEs: string;
+        problems: number;
+        unitNumber: number;
+        unitTitleEn: string;
+        unitTitleEs: string;
+      }[]
+    >`
+      SELECT s.slug, s.name_en AS "nameEn", s.name_es AS "nameEs",
+             count(*)::int AS problems,
+             u.number AS "unitNumber",
+             u.title_en AS "unitTitleEn", u.title_es AS "unitTitleEs"
+      FROM problems p
+      JOIN skills s ON s.id = p.skill_id
+      JOIN lessons l ON l.id = s.lesson_id
+      JOIN units u ON u.id = l.unit_id
+      GROUP BY s.slug, s.name_en, s.name_es, u.number, u.title_en, u.title_es, l.position
+      ORDER BY u.number, l.position`;
+    return { topics: rows };
+  }),
+
+  /**
+   * Record a finished sprint round (timer expired or all problems answered).
+   * One row per completed round; the per-difficulty completion counts drive
+   * the sprint badges on the Progress tab (5 / 15 / 30 at each difficulty).
+   */
+  sprintComplete: protectedProcedure
+    .input(
+      z.object({
+        difficulty: z.enum(['modified', 'standard', 'challenge']),
+        skillSlug: z.string().max(100).nullish(),
+        total: z.number().int().min(1).max(50),
+        correct: z.number().int().min(0),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (input.correct > input.total) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'correct exceeds total' });
+      }
+      await prisma.sprintSession.create({
+        data: {
+          userId: BigInt(ctx.user.id),
+          difficulty: input.difficulty,
+          skillSlug: input.skillSlug ?? null,
+          total: input.total,
+          correct: input.correct,
+        },
+      });
+      const counts = await prisma.sprintSession.groupBy({
+        by: ['difficulty'],
+        where: { userId: BigInt(ctx.user.id) },
+        _count: true,
+      });
+      const completions = { modified: 0, standard: 0, challenge: 0 };
+      for (const c of counts) {
+        if (c.difficulty in completions) {
+          completions[c.difficulty as keyof typeof completions] = c._count;
+        }
+      }
+      return { completions };
     }),
 
   /**

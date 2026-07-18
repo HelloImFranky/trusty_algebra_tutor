@@ -1,64 +1,136 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { prisma } from '@tutor/db';
 
 /** Where auto-generated runtime state (e.g. the JWT secret) is persisted. */
 const dataDir = process.env.DATA_DIR ?? path.join(process.cwd(), '.data');
 
 /**
- * Resolve the JWT signing secret with zero required setup:
- *   1. JWT_SECRET env var, if provided (recommended for production/multi-instance)
- *   2. else a secret persisted in DATA_DIR (survives restarts, so logins stay valid)
- *   3. else generate a strong random one and persist it
- * Falls back to an in-memory secret if the data dir isn't writable (the app
- * still runs; tokens just won't survive a restart).
+ * Read the persisted secret from DATA_DIR, generating and saving one if the
+ * file doesn't exist yet. Throws when the directory isn't readable/writable
+ * (typical on serverless, where the bundle filesystem is read-only).
  */
-function resolveJwtSecret(): string {
-  const fromEnv = process.env.JWT_SECRET?.trim();
-  if (fromEnv) return fromEnv;
-
+function fileSecret(): string {
   const secretFile = path.join(dataDir, 'jwt-secret');
+  if (fs.existsSync(secretFile)) {
+    const existing = fs.readFileSync(secretFile, 'utf8').trim();
+    if (existing) return existing;
+  }
+  const generated = crypto.randomBytes(48).toString('hex');
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(secretFile, generated, { mode: 0o600 });
+  console.log(`generated a JWT secret and saved it to ${secretFile}`);
+  return generated;
+}
+
+/**
+ * Read-or-create the secret in the shared database (app_secrets). Atomic
+ * across concurrent cold-starting instances: everyone INSERTs with
+ * ON CONFLICT DO NOTHING, then reads back the single row that won — so the
+ * whole deployment converges on one secret even when several serverless
+ * instances race to create it.
+ */
+async function dbSecret(): Promise<string> {
+  const existing = await prisma.appSecret.findUnique({ where: { name: 'jwt-secret' } });
+  if (existing?.value) return existing.value;
+  const generated = crypto.randomBytes(48).toString('hex');
+  await prisma.$executeRaw`
+    INSERT INTO app_secrets (name, value) VALUES ('jwt-secret', ${generated})
+    ON CONFLICT (name) DO NOTHING`;
+  const row = await prisma.appSecret.findUnique({ where: { name: 'jwt-secret' } });
+  if (!row?.value) throw new Error('failed to persist the JWT secret in app_secrets');
+  console.log('JWT secret persisted in the database (app_secrets) — data dir not writable');
+  return row.value;
+}
+
+/**
+ * Resolve the JWT signing secret with zero required setup:
+ *   1. JWT_SECRET env var, if provided (recommended for production/multi-instance;
+ *      also cleans up any database-persisted copy from before it was set)
+ *   2. else a secret persisted in DATA_DIR (survives restarts, so logins stay valid)
+ *   3. else a secret persisted in the database — the writable shared store on
+ *      serverless deploys (Vercel's filesystem is read-only), where a
+ *      file-based secret can't work but every instance can read one DB row
+ *   4. else: production fails hard (a per-instance ephemeral secret would be a
+ *      silent, intermittent auth outage — tokens signed by one instance
+ *      rejected by the next); development falls back to an ephemeral secret
+ *      so the app still runs (tokens just don't survive a restart).
+ */
+async function resolveJwtSecret(): Promise<string> {
+  const fromEnv = process.env.JWT_SECRET?.trim();
+  if (fromEnv) {
+    // The env var is the source of truth. Remove any database copy left
+    // over from before it was set, so no signing-capable secret lingers in
+    // the DB (a dump/backup of it must not be enough to forge tokens).
+    // Fire-and-forget: cleanup failing (DB down, table not migrated yet)
+    // must never block auth — the row is retried on the next cold start.
+    void prisma.appSecret
+      .deleteMany({ where: { name: 'jwt-secret' } })
+      .then((r) => {
+        if (r.count > 0) {
+          console.log('JWT_SECRET is set — removed the database-persisted secret copy (app_secrets)');
+        }
+      })
+      .catch(() => {});
+    return fromEnv;
+  }
+
+  let fileErr: unknown;
   try {
-    if (fs.existsSync(secretFile)) {
-      const existing = fs.readFileSync(secretFile, 'utf8').trim();
-      if (existing) return existing;
-    }
-    const generated = crypto.randomBytes(48).toString('hex');
-    fs.mkdirSync(dataDir, { recursive: true });
-    fs.writeFileSync(secretFile, generated, { mode: 0o600 });
-    console.log(`generated a JWT secret and saved it to ${secretFile}`);
-    return generated;
+    return fileSecret();
   } catch (err) {
-    // In a serverless/production deploy the data dir is typically not
-    // writable AND each instance is a fresh process, so an ephemeral secret
-    // means tokens signed by one instance are rejected by the next — a
-    // silent, intermittent auth outage. Fail hard so the misconfiguration is
-    // caught at startup instead of degrading login in production.
+    fileErr = err;
+  }
+
+  try {
+    const secret = await dbSecret();
+    // Works, but the env var is the stronger setup (keeps the signing key
+    // out of database dumps/backups) — say so where an operator will see it.
+    console.warn(
+      'Using the database-persisted JWT secret (JWT_SECRET is not set). ' +
+        'Recommended: set JWT_SECRET in the environment' +
+        (process.env.VERCEL
+          ? ' (Vercel: Settings → Environment Variables — or run npm run deploy, which sets it for you).'
+          : '.'),
+    );
+    return secret;
+  } catch (dbErr) {
     const isProd = process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL);
     if (isProd) {
       throw new Error(
-        'JWT_SECRET is not set and no secret could be persisted (data dir not writable). ' +
+        'JWT_SECRET is not set and no secret could be persisted ' +
+          '(data dir not writable, and the database fallback failed). ' +
           'Set JWT_SECRET in the environment' +
           (process.env.VERCEL
             ? ' (on Vercel: Settings → Environment Variables — npm run deploy sets it for you).'
             : '.'),
+        { cause: dbErr },
       );
     }
     console.warn(
-      'could not persist a JWT secret (data dir not writable); using an ephemeral one. ' +
-        'Set JWT_SECRET to keep logins valid across restarts.',
-      err instanceof Error ? err.message : err,
+      'could not persist a JWT secret (data dir not writable, database fallback failed); ' +
+        'using an ephemeral one. Set JWT_SECRET to keep logins valid across restarts.',
+      fileErr instanceof Error ? fileErr.message : fileErr,
+      dbErr instanceof Error ? dbErr.message : dbErr,
     );
     return crypto.randomBytes(48).toString('hex');
   }
 }
 
-let cachedSecret: string | null = null;
+let cached: Promise<string> | null = null;
 
-/** Lazily resolved so importing the API package never touches the filesystem. */
-export function jwtSecret(): string {
-  cachedSecret ??= resolveJwtSecret();
-  return cachedSecret;
+/** Lazily resolved so importing the API package never touches the filesystem
+ * or database. The in-flight promise is cached (not just the value) so
+ * concurrent first callers share one resolution; a failed resolution clears
+ * the cache so a transient DB outage at cold start doesn't wedge the
+ * instance forever. */
+export function jwtSecret(): Promise<string> {
+  cached ??= resolveJwtSecret().catch((err: unknown) => {
+    cached = null;
+    throw err;
+  });
+  return cached;
 }
 
 export const authConfig = {

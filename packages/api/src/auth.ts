@@ -17,10 +17,10 @@ export interface AuthUser {
   status: AccountStatus;
 }
 
-export function signAccessToken(user: AuthUser): string {
+export async function signAccessToken(user: AuthUser): Promise<string> {
   return jwt.sign(
     { sub: String(user.id), role: user.role, username: user.username },
-    jwtSecret(),
+    await jwtSecret(),
     { expiresIn: authConfig.accessTokenTtl, algorithm: 'HS256' } as jwt.SignOptions,
   );
 }
@@ -92,7 +92,7 @@ export async function userFromAuthHeader(header: string | null | undefined): Pro
   try {
     // Pin the algorithm: never let a token's own header pick it (defends
     // against alg-confusion / "alg: none" forgeries).
-    const payload = jwt.verify(header.slice(7), jwtSecret(), {
+    const payload = jwt.verify(header.slice(7), await jwtSecret(), {
       algorithms: ['HS256'],
     }) as jwt.JwtPayload;
     return await loadUser(Number(payload.sub));

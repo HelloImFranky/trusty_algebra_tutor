@@ -89,7 +89,7 @@ export async function syncMisconceptions(): Promise<void> {
         const seen = new Set<string>();
         let made = 0;
         for (let i = 0; made < spec.count && i < spec.count * 6; i++) {
-          const gp = generateProblem(spec.template, rng);
+          const gp = generateProblem(spec.template, rng, spec.tier);
           const key = gp.promptEn + gp.answerLatex;
           if (seen.has(key)) continue;
           seen.add(key);
@@ -107,12 +107,69 @@ export async function syncMisconceptions(): Promise<void> {
   console.log(`misconceptions synced onto ${updated} problems`);
 }
 
+/**
+ * Backfill sprint problems added after the original seed (e.g. the modified /
+ * challenge difficulty tiers). Replays every generated spec's deterministic
+ * rng stream to stay aligned with the original seed order, and inserts only
+ * sprint problems that don't already exist for the skill (matched by
+ * prompt + answer + tier). Idempotent: a second run finds everything present.
+ */
+export async function syncSprintProblems(): Promise<void> {
+  let inserted = 0;
+  for (const unit of curriculum) {
+    for (const [li, lesson] of unit.lessons.entries()) {
+      const skill = await prisma.skill.findUnique({ where: { slug: lesson.skill.slug } });
+      let genSeed = unit.number * 1000 + li * 100;
+      for (const spec of lesson.generated ?? []) {
+        const rng = makeRng(genSeed++ * 7919 + 17);
+        const seen = new Set<string>();
+        let made = 0;
+        for (let i = 0; made < spec.count && i < spec.count * 6; i++) {
+          const gp = generateProblem(spec.template, rng, spec.tier);
+          const key = gp.promptEn + gp.answerLatex;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          made++;
+          if (!spec.sprint || !skill) continue;
+          const exists = await prisma.problem.findFirst({
+            where: {
+              skillId: skill.id,
+              tier: spec.tier,
+              promptEn: gp.promptEn,
+              answerLatex: gp.answerLatex,
+              isSprint: true,
+            },
+            select: { id: true },
+          });
+          if (exists) continue;
+          await prisma.problem.create({
+            data: {
+              skillId: skill.id,
+              tier: spec.tier,
+              promptEn: gp.promptEn,
+              promptEs: gp.promptEs,
+              answerLatex: gp.answerLatex,
+              gradingMode: gp.gradingMode,
+              tolerance: gp.tolerance ?? null,
+              paramsJson: JSON.parse(JSON.stringify(gp.params)),
+              isSprint: true,
+            },
+          });
+          inserted++;
+        }
+      }
+    }
+  }
+  console.log(`sprint problems synced: ${inserted} inserted`);
+}
+
 export async function seed(): Promise<void> {
   await migrate();
   const existing = await prisma.unit.count();
   if (existing > 0) {
     await seedScaffolds(); // scaffolds sync even when the curriculum exists
     await syncMisconceptions();
+    await syncSprintProblems();
     console.log('curriculum already seeded; skipping (truncate units to reseed)');
     return;
   }
@@ -212,7 +269,7 @@ export async function seed(): Promise<void> {
         const seen = new Set<string>();
         let made = 0;
         for (let i = 0; made < spec.count && i < spec.count * 6; i++) {
-          const gp = generateProblem(spec.template, rng);
+          const gp = generateProblem(spec.template, rng, spec.tier);
           const key = gp.promptEn + gp.answerLatex;
           if (seen.has(key)) continue; // skip duplicate variants
           seen.add(key);

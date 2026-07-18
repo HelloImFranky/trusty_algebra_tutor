@@ -74,7 +74,7 @@ const registerSchema = z.object({
  *   - native (default): return the refresh token in the body as before.
  */
 async function issueSession(ctx: Context, user: AuthUser) {
-  const accessToken = signAccessToken(user);
+  const accessToken = await signAccessToken(user);
   const refreshToken = await issueRefreshToken(user.id);
   if (ctx.cookieTransport) {
     (ctx.cookies ??= []).push(setRefreshCookie(refreshToken, ctx.secure ?? false));
@@ -274,7 +274,7 @@ export const authRouter = router({
         throw err;
       }
       const user = (await loadUser(ctx.user.id)) as AuthUser;
-      return { user, accessToken: signAccessToken(user) };
+      return { user, accessToken: await signAccessToken(user) };
     }),
 
   /**
