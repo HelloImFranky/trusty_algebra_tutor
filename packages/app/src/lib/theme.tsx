@@ -4,7 +4,7 @@
  * — 'auto' follows the OS/browser via useColorScheme). Both are persisted
  * client-side; nothing about appearance is server-synced. Mirrors i18n.tsx's
  * context + storage pattern. Unset accent = the design's default accent
- * (#ec3013); unset mode = 'auto'.
+ * (#1e88e5, a friendly light blue); unset mode = 'auto'.
  *
  * The pre-hydration script in apps/web/app/layout.tsx reads the same
  * storage key ('tutor.theme.mode') to stamp `data-theme` on <html> before
@@ -18,7 +18,11 @@ import { storage } from './storage';
  * `string` — every hex constant that flows into a color prop uses this. */
 export type Hex = `#${string}`;
 
-export const DEFAULT_ACCENT: Hex = '#ec3013';
+/** Light blue — friendlier default than the original brand red. Chosen as
+ * the lightest blue that keeps white on-accent text (PrimaryButton labels,
+ * selected chips) and accent text on the page background readable in both
+ * modes. Users who saved a custom accent are unaffected. */
+export const DEFAULT_ACCENT: Hex = '#1e88e5';
 
 export type ThemeMode = 'light' | 'dark' | 'auto';
 export type ResolvedThemeMode = 'light' | 'dark';
