@@ -1,9 +1,11 @@
 /** Daily Sprints: short timed fluency rounds over easy 6th/7th-grade skills
- * the student already knows (design doc §4.4, "Sprints" folder). Pacing is
- * 1 minute per 10 questions. */
+ * the student already knows (design doc §4.4, "Sprints" folder). A sprint is
+ * always and only 1 minute long and 10 questions — no length option. A live
+ * classmate leaderboard (docs/sprint-leaderboard-plan.md) sits under the
+ * round card and polls while the page is open. */
 import { useEffect, useRef, useState } from 'react';
 import { Text, XStack, YStack } from 'tamagui';
-import { client } from '../lib/trpc';
+import { client, trpc } from '../lib/trpc';
 import { attemptOrQueue } from '../lib/offline';
 import { useI18n } from '../lib/i18n';
 import { useRequireAuth } from '../components/AppChrome';
@@ -11,6 +13,7 @@ import { MathInput } from '../components/MathInput';
 import { MathText } from '../components/MathText';
 import { AnimatedEquation } from '../components/stepanim/AnimatedEquation';
 import { buildScriptForProblem } from '../components/stepanim/builders';
+import { SprintLeaderboardCard } from '../components/SprintLeaderboard';
 import {
   AppCard,
   COLORS,
@@ -50,9 +53,10 @@ interface MissRecord {
   skipped?: boolean;
 }
 
-// Default pacing: 1 minute per 10 questions.
-const SECONDS_PER_QUESTION = 6;
-const ROUND_SIZES = [10, 20, 30];
+// The one and only sprint format: 10 questions in 1 minute.
+const SPRINT_SECONDS = 60;
+// How often the live leaderboard refreshes while this page is open.
+const LEADERBOARD_POLL_MS = 5000;
 
 /** "60 → 1:00" — round time in m:ss for the header and timer. */
 const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -91,12 +95,11 @@ export function SprintScreen() {
   const tokens = useTokens();
   const badColors = useFeedbackColors('bad');
   const goodColors = useFeedbackColors('good');
-  useRequireAuth();
+  const authed = useRequireAuth();
   const [problems, setProblems] = useState<SprintProblem[]>([]);
   const [index, setIndex] = useState(-1);
   const [answer, setAnswer] = useState('');
-  const [roundSize, setRoundSize] = useState(10);
-  const [seconds, setSeconds] = useState(10 * SECONDS_PER_QUESTION);
+  const [seconds, setSeconds] = useState(SPRINT_SECONDS);
   const [score, setScore] = useState(0);
   const [attempted, setAttempted] = useState(0);
   const [running, setRunning] = useState(false);
@@ -114,6 +117,17 @@ export function SprintScreen() {
   // "skipped" (by the time-out effect) and graded (by the returning submit).
   const submittingIndex = useRef<number>(-1);
   const reportedRound = useRef(false);
+  // Server-side round id from sprintStart — closing it (sprintComplete) is
+  // what turns the live leaderboard entry into a completed round.
+  const sessionId = useRef<number | null>(null);
+
+  // Live classmate leaderboard — polls while the page is mounted so scores
+  // (including classmates mid-round) tick without a refresh.
+  const utils = trpc.useUtils();
+  const leaderboard = trpc.practice.sprintLeaderboard.useQuery(undefined, {
+    enabled: authed,
+    refetchInterval: LEADERBOARD_POLL_MS,
+  });
 
   useEffect(() => {
     client.practice.sprintTopics
@@ -131,20 +145,23 @@ export function SprintScreen() {
 
   const start = async (slugsOverride?: string[]) => {
     const slugs = slugsOverride ?? topicSlugs;
-    const r = await client.practice.sprint.query({
-      count: roundSize,
-      locale,
-      topics: slugs.length ? slugs : undefined,
-    });
+    // Open the server-side round alongside fetching the questions — the open
+    // round is what makes this student's live score visible to classmates.
+    const [r, started] = await Promise.all([
+      client.practice.sprint.query({
+        locale,
+        topics: slugs.length ? slugs : undefined,
+      }),
+      client.practice.sprintStart.mutate().catch(() => null),
+    ]);
+    sessionId.current = started?.sessionId ?? null;
     setProblems(r.problems);
     setIndex(0);
     setScore(0);
     setAttempted(0);
     setMisses([]);
     setAnimOpenId(null);
-    // 1 minute per 10 questions — timed off the served round, which can be
-    // shorter than the requested size if a topic's variant pool runs dry.
-    setSeconds(Math.max(1, r.problems.length) * SECONDS_PER_QUESTION);
+    setSeconds(SPRINT_SECONDS);
     setAnswer('');
     submittingIndex.current = -1;
     reportedRound.current = false;
@@ -197,12 +214,14 @@ export function SprintScreen() {
     reportedRound.current = true;
     client.practice.sprintComplete
       .mutate({
+        sessionId: sessionId.current,
         skillSlug: topicSlugs.length === 1 ? topicSlugs[0] : null,
         total: attempted,
         correct: score,
       })
+      .then(() => utils.practice.sprintLeaderboard.invalidate())
       .catch(() => {});
-  }, [running, index, inFlight, attempted, score, topicSlugs]);
+  }, [running, index, inFlight, attempted, score, topicSlugs, utils]);
 
   const submit = async () => {
     if (!answer.trim() || !running) return;
@@ -247,19 +266,9 @@ export function SprintScreen() {
       {!running && index === -1 && (
         <AppCard gap={14}>
           <Text fontSize={16} fontWeight="800" color={tokens.ink} textAlign="center">
-            {roundSize} ❓ · ⏱ {fmtTime(roundSize * SECONDS_PER_QUESTION)}
+            ❓ {t('sprintFormat')} · ⏱ {fmtTime(SPRINT_SECONDS)}
           </Text>
           <Muted size={13}>{t('sprintTagline')}</Muted>
-          <YStack gap={6}>
-            <Muted size={12}>{t('sprintLength')}</Muted>
-            <XStack gap={8} flexWrap="wrap">
-              {ROUND_SIZES.map((n) => (
-                <PickChip key={n} selected={roundSize === n} onPress={() => setRoundSize(n)}>
-                  {n} ❓ · {fmtTime(n * SECONDS_PER_QUESTION)}
-                </PickChip>
-              ))}
-            </XStack>
-          </YStack>
           {topics.length > 0 && (
             <YStack gap={6}>
               <Muted size={12}>{t('sprintTopicLabel')}</Muted>
@@ -392,6 +401,15 @@ export function SprintScreen() {
             )}
           </AppCard>
         </>
+      )}
+
+      {/* Live classmate leaderboard — always visible (start screen, mid-round,
+          and results) so the race is on screen while everyone sprints. */}
+      {leaderboard.data && (
+        <SprintLeaderboardCard
+          rows={leaderboard.data.rows}
+          emptyHint={t('sprintLbJoinHint')}
+        />
       )}
     </Screen>
   );

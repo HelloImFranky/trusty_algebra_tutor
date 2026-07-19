@@ -138,10 +138,11 @@ async function buildProgress(userId: number) {
   }
 
   // Total completed sprint rounds for the sprint badge ladder. Counts every
-  // stored round regardless of the (legacy) difficulty column, so rounds
+  // FINISHED round (ended_at set — an opened-then-abandoned round is not a
+  // completion) regardless of the (legacy) difficulty column, so rounds
   // finished before sprints became single-difficulty still count.
   const sprintsCompleted = await prisma.sprintSession.count({
-    where: { userId: BigInt(userId) },
+    where: { userId: BigInt(userId), endedAt: { not: null } },
   });
 
   const achievements = computeAchievements({

@@ -98,6 +98,13 @@ export function ClassRosterScreen({ classId }: { classId: number }) {
       </Link>
       <Title>{cls.name}</Title>
 
+      {/* Live sprint leaderboard + year stats for this class. */}
+      <Link href={`/classes/${classId}/sprint`}>
+        <Text color={accent} fontWeight="800" fontSize={15}>
+          ⚡ {t('sprintStatsOpen')} →
+        </Text>
+      </Link>
+
       <AppCard gap={8}>
         <XStack gap={8} alignItems="center" flexWrap="wrap">
           <Muted>{t('joinCode')}:</Muted>
