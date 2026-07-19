@@ -13,8 +13,8 @@ import { useI18n } from '../lib/i18n';
 import { useAuth } from '../lib/auth';
 import { useRequireAuth } from '../components/AppChrome';
 import {
+  CappedList,
   SprintLeaderboardCard,
-  LiveTag,
   type SprintLeaderboardEntry,
 } from '../components/SprintLeaderboard';
 import {
@@ -191,11 +191,10 @@ export function SprintStatsScreen({ classId }: { classId: number }) {
 
       <SprintLeaderboardCard rows={rows} emptyHint={t('sprintNoData')} />
 
+      {/* Weekly numbers are built from completed rounds only, so this chart
+          moves when a sprint finishes — no live tag, by design. */}
       <AppCard gap={12}>
-        <XStack justifyContent="space-between" alignItems="center">
-          <SubTitle>📈 {t('sprintWeeklyChart')}</SubTitle>
-          <LiveTag />
-        </XStack>
+        <SubTitle>📈 {t('sprintWeeklyChart')}</SubTitle>
         {weekly.length === 0 ? (
           <Muted size={12}>{t('sprintNoData')}</Muted>
         ) : (
@@ -225,32 +224,34 @@ export function SprintStatsScreen({ classId }: { classId: number }) {
                 <Muted size={11}>{t('sprintColAccuracy')}</Muted>
               </YStack>
             </XStack>
-            {season.map((s, i) => (
-              <XStack
-                key={s.id}
-                gap={8}
-                alignItems="center"
-                paddingVertical={7}
-                borderTopWidth={i === 0 ? 0 : 1}
-                borderTopColor={tokens.border}
-              >
-                <YStack flex={1}>
-                  <Link href={`/progress/${s.id}`}>
-                    <Text fontSize={14} fontWeight="700" color={accent}>
-                      {s.displayName}
-                    </Text>
-                  </Link>
-                </YStack>
-                <Cell>{s.yearRounds}</Cell>
-                <Cell muted>{s.yearAttempted}</Cell>
-                <Cell>{s.yearCorrect}</Cell>
-                <Cell muted>
-                  {s.yearAttempted > 0
-                    ? `${Math.round((s.yearCorrect / s.yearAttempted) * 100)}%`
-                    : '—'}
-                </Cell>
-              </XStack>
-            ))}
+            <CappedList count={season.length}>
+              {season.map((s, i) => (
+                <XStack
+                  key={s.id}
+                  gap={8}
+                  alignItems="center"
+                  paddingVertical={7}
+                  borderTopWidth={i === 0 ? 0 : 1}
+                  borderTopColor={tokens.border}
+                >
+                  <YStack flex={1}>
+                    <Link href={`/progress/${s.id}`}>
+                      <Text fontSize={14} fontWeight="700" color={accent}>
+                        {s.displayName}
+                      </Text>
+                    </Link>
+                  </YStack>
+                  <Cell>{s.yearRounds}</Cell>
+                  <Cell muted>{s.yearAttempted}</Cell>
+                  <Cell>{s.yearCorrect}</Cell>
+                  <Cell muted>
+                    {s.yearAttempted > 0
+                      ? `${Math.round((s.yearCorrect / s.yearAttempted) * 100)}%`
+                      : '—'}
+                  </Cell>
+                </XStack>
+              ))}
+            </CappedList>
           </YStack>
         )}
       </AppCard>

@@ -22,7 +22,9 @@ export interface SprintLeaderboardRow {
   liveCorrect: number;
   /** Display column: live round if one is open, else best completed round today. */
   sprintCorrect: number;
-  /** Correct across completed rounds since Monday (+ the open round's live count). */
+  /** Correct across COMPLETED rounds since Monday. Deliberately excludes the
+   * open round's live count — the week column only moves when a sprint
+   * finishes, so it reads as a settled total next to the live sprint column. */
   weekCorrect: number;
 }
 
@@ -74,7 +76,7 @@ export async function sprintLeaderboard(
       inSprint: live !== undefined,
       liveCorrect,
       sprintCorrect: live !== undefined ? liveCorrect : (done?.bestToday ?? 0),
-      weekCorrect: Number(done?.weekCorrect ?? 0) + liveCorrect,
+      weekCorrect: Number(done?.weekCorrect ?? 0),
     });
   }
   return out;

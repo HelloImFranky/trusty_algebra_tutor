@@ -1072,10 +1072,11 @@ describe('sprint leaderboard (live rounds)', () => {
       });
     }
 
-    // A classmate's poll sees A mid-round with a live score of 2.
+    // A classmate's poll sees A mid-round with a live score of 2. The week
+    // column stays settled (completed rounds only) until the round closes.
     const { rows: board } = await as(racerB).practice.sprintLeaderboard();
     const a = board.find((r) => r.id === racerA.id);
-    expect(a).toMatchObject({ inSprint: true, sprintCorrect: 2, weekCorrect: 2 });
+    expect(a).toMatchObject({ inSprint: true, sprintCorrect: 2, weekCorrect: 0 });
     // The caller is always present and flagged; non-classmates never appear.
     expect(board.find((r) => r.you)?.id).toBe(racerB.id);
     expect(board.find((r) => r.id === loner.id)).toBeUndefined();

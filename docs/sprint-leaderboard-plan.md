@@ -31,8 +31,12 @@
   round opened — so the column ticks up mid-round. Otherwise the column
   shows their **best completed round today**.
 - **"This week" column** — sum of `correct` over completed rounds since the
-  start of the ISO week (Monday, server time), plus any in-flight round's
-  live correct count.
+  start of the ISO week (Monday, server time). Weekly numbers (this column,
+  the teacher tiles, and the weekly chart) deliberately exclude in-flight
+  rounds — they update when a sprint completes, reading as settled totals
+  next to the live sprint column.
+- **Long classes** — ranked lists (leaderboard, school-year table) cap at 15
+  visible rows and scroll inside their card past that, headers pinned.
 - **Live** = short-interval polling (5 s) via TanStack Query
   `refetchInterval`, active only while a leaderboard screen is mounted. The
   app is a PWA on classroom Wi-Fi; polling a cheap aggregate is simpler and

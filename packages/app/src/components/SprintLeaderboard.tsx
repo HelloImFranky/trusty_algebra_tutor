@@ -5,6 +5,7 @@
  * while a round runs, else today's best) and questions correct this week.
  * The data arrives pre-ranked from the server; callers poll and re-render.
  */
+import { ScrollView } from 'react-native';
 import { Text, XStack, YStack } from 'tamagui';
 import { useI18n } from '../lib/i18n';
 import { AppCard, Muted, SubTitle, useAccent, useTokens } from './ui';
@@ -36,6 +37,27 @@ export function LiveTag() {
 
 /** Fixed column widths keep the two stat columns aligned across rows. */
 const STAT_WIDTH = 74;
+
+/**
+ * Past this many rows a ranked list scrolls inside the card instead of
+ * stretching the page (whole-class boards stay tidy on a projector). The
+ * cap height shows the limit plus a sliver of the next row as the scroll cue.
+ */
+export const MAX_LIST_ROWS = 15;
+/** Measured: 14px paddings + one line of 13-16px text ≈ 30-32px per row. */
+const ROW_HEIGHT = 31;
+export const LIST_MAX_HEIGHT = MAX_LIST_ROWS * ROW_HEIGHT + ROW_HEIGHT / 2;
+
+/** Rows capped at MAX_LIST_ROWS then scrolling — header stays outside so the
+ * column labels never scroll away. */
+export function CappedList({ count, children }: { count: number; children: React.ReactNode }) {
+  if (count <= MAX_LIST_ROWS) return <YStack>{children}</YStack>;
+  return (
+    <ScrollView style={{ maxHeight: LIST_MAX_HEIGHT }} nestedScrollEnabled>
+      <YStack>{children}</YStack>
+    </ScrollView>
+  );
+}
 
 export function SprintLeaderboardCard({
   rows,
@@ -74,56 +96,58 @@ export function SprintLeaderboardCard({
               <Muted size={11}>{t('sprintLbWeek')}</Muted>
             </YStack>
           </XStack>
-          {rows.map((r, i) => (
-            <XStack
-              key={r.id}
-              gap={8}
-              alignItems="center"
-              paddingVertical={7}
-              paddingHorizontal={r.you ? 8 : 0}
-              marginHorizontal={r.you ? -8 : 0}
-              borderRadius={r.you ? 12 : 0}
-              backgroundColor={r.you ? tokens.subtle : 'transparent'}
-              borderTopWidth={i === 0 ? 0 : 1}
-              borderTopColor={tokens.border}
-            >
-              <YStack width={26} alignItems="center">
-                <Text fontSize={13} fontWeight="800" color={tokens.muted}>
-                  {MEDALS[i] ?? i + 1}
-                </Text>
-              </YStack>
-              <XStack flex={1} gap={6} alignItems="center" flexWrap="wrap">
-                <Text
-                  fontSize={14}
-                  fontWeight={r.you ? '800' : '600'}
-                  color={tokens.ink}
-                  flexShrink={1}
-                >
-                  {r.displayName}
-                </Text>
-                {r.you && (
-                  <Text fontSize={11} fontWeight="800" color={accent}>
-                    ({t('sprintLbYou')})
+          <CappedList count={rows.length}>
+            {rows.map((r, i) => (
+              <XStack
+                key={r.id}
+                gap={8}
+                alignItems="center"
+                paddingVertical={7}
+                paddingHorizontal={r.you ? 8 : 0}
+                marginHorizontal={r.you ? -8 : 0}
+                borderRadius={r.you ? 12 : 0}
+                backgroundColor={r.you ? tokens.subtle : 'transparent'}
+                borderTopWidth={i === 0 ? 0 : 1}
+                borderTopColor={tokens.border}
+              >
+                <YStack width={26} alignItems="center">
+                  <Text fontSize={13} fontWeight="800" color={tokens.muted}>
+                    {MEDALS[i] ?? i + 1}
                   </Text>
-                )}
-                {r.inSprint && (
-                  <Text fontSize={11} fontWeight="700" color={accent} aria-label={t('sprintLbRacing')}>
-                    ⚡ {t('sprintLbRacing')}
+                </YStack>
+                <XStack flex={1} gap={6} alignItems="center" flexWrap="wrap">
+                  <Text
+                    fontSize={14}
+                    fontWeight={r.you ? '800' : '600'}
+                    color={tokens.ink}
+                    flexShrink={1}
+                  >
+                    {r.displayName}
                   </Text>
-                )}
+                  {r.you && (
+                    <Text fontSize={11} fontWeight="800" color={accent}>
+                      ({t('sprintLbYou')})
+                    </Text>
+                  )}
+                  {r.inSprint && (
+                    <Text fontSize={11} fontWeight="700" color={accent} aria-label={t('sprintLbRacing')}>
+                      ⚡ {t('sprintLbRacing')}
+                    </Text>
+                  )}
+                </XStack>
+                <YStack width={STAT_WIDTH} alignItems="flex-end">
+                  <Text fontSize={16} fontWeight="800" color={r.inSprint ? accent : tokens.ink}>
+                    {r.sprintCorrect}
+                  </Text>
+                </YStack>
+                <YStack width={STAT_WIDTH} alignItems="flex-end">
+                  <Text fontSize={16} fontWeight="700" color={tokens.ink}>
+                    {r.weekCorrect}
+                  </Text>
+                </YStack>
               </XStack>
-              <YStack width={STAT_WIDTH} alignItems="flex-end">
-                <Text fontSize={16} fontWeight="800" color={r.inSprint ? accent : tokens.ink}>
-                  {r.sprintCorrect}
-                </Text>
-              </YStack>
-              <YStack width={STAT_WIDTH} alignItems="flex-end">
-                <Text fontSize={16} fontWeight="700" color={tokens.ink}>
-                  {r.weekCorrect}
-                </Text>
-              </YStack>
-            </XStack>
-          ))}
+            ))}
+          </CappedList>
         </YStack>
       )}
     </AppCard>
