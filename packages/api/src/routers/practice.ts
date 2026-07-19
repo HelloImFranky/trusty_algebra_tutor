@@ -13,6 +13,7 @@ import {
 import type { GradingMode, Misconception } from '@tutor/core';
 import { loc, protectedProcedure, router } from '../trpc.js';
 import { applyMastery } from './curriculum.js';
+import { sprintLeaderboard } from '../sprintStats.js';
 
 const localeInput = z.object({ locale: z.enum(['en', 'es']).optional() });
 
@@ -74,6 +75,10 @@ async function problemPayload(p: ProblemRow, locale: Locale) {
  * unique constraint is required.
  */
 const SPRINT_TIER = 'standard';
+
+/** A sprint is always and only 1 minute long and 10 questions — there is no
+ * round-length option anywhere (client or API). */
+const SPRINT_COUNT = 10;
 
 async function topUpSprintDrills(topics: string[], perTopic: number): Promise<void> {
   const defs = topics.length
@@ -286,10 +291,11 @@ export const practiceRouter = router({
    * 8th grader already knows (the sprintTopicDefs drill registry) — never
    * the Algebra 1 curriculum itself. There is no difficulty option: every
    * sprint problem is easy by design (the drill generators only produce
-   * grade 6/7 fluency questions). The client times rounds at 1 minute per
-   * 10 questions. The optional topic filter (drill template slugs) powers
-   * the start-screen picker — students can mix any number of topics into
-   * one randomized round (empty/omitted = all topics).
+   * grade 6/7 fluency questions). A round is always 10 questions in 1
+   * minute (SPRINT_COUNT — no length option exists). The optional topic
+   * filter (drill template slugs) powers the start-screen picker — students
+   * can mix any number of topics into one randomized round (empty/omitted =
+   * all topics).
    *
    * Freshness: drill pools are topped up with newly generated variants at
    * round start (topUpSprintDrills), and sampling prefers problems this
@@ -300,7 +306,6 @@ export const practiceRouter = router({
   sprint: protectedProcedure
     .input(
       localeInput.extend({
-        count: z.number().int().min(1).max(30).default(10),
         topics: z.array(z.string().max(100)).max(20).optional(),
       }),
     )
@@ -315,7 +320,7 @@ export const practiceRouter = router({
       // Freshly generated drill variants land in the bank before sampling.
       // Per-topic amount covers the round even when a single topic must fill
       // it, but shrinks when an "all topics" round spreads across the registry.
-      const perTopic = Math.max(4, Math.ceil(input.count / templates.length));
+      const perTopic = Math.max(4, Math.ceil(SPRINT_COUNT / templates.length));
       await topUpSprintDrills(topics, perTopic);
       // params + skill slug ride along so the post-round review can offer an
       // animated walkthrough of any miss a stepanim builder understands.
@@ -340,7 +345,7 @@ export const practiceRouter = router({
           AND p.tier = ${SPRINT_TIER}
           AND p.params_json->>'template' IN (${Prisma.join(templates)})
         ORDER BY a.n NULLS FIRST, a.last_attempt NULLS FIRST, random()
-        LIMIT ${input.count}`;
+        LIMIT ${SPRINT_COUNT}`;
       // The unattempted-first ordering clusters; the round itself should
       // still feel shuffled.
       rows.sort(() => Math.random() - 0.5);
@@ -373,15 +378,37 @@ export const practiceRouter = router({
   }),
 
   /**
+   * Open a sprint round (docs/sprint-leaderboard-plan.md): creates the
+   * session row with ended_at NULL so the live leaderboards can count this
+   * student's correct sprint attempts as the round runs. The round is closed
+   * by sprintComplete; an abandoned round simply ages out of the 2-minute
+   * live window and never counts as a completion.
+   */
+  sprintStart: protectedProcedure.mutation(async ({ ctx }) => {
+    const session = await prisma.sprintSession.create({
+      data: {
+        userId: BigInt(ctx.user.id),
+        difficulty: SPRINT_TIER,
+        total: 0,
+        correct: 0,
+      },
+    });
+    return { sessionId: Number(session.id) };
+  }),
+
+  /**
    * Record a finished sprint round (timer expired or all problems answered).
-   * One row per completed round; the total completion count drives the
-   * sprint badge ladder on the Progress tab (5 / 15 / 30 rounds). The
-   * difficulty column predates single-difficulty sprints and is pinned to
-   * the sprint tier for new rows.
+   * Closes the round sprintStart opened (sessionId), stamping ended_at plus
+   * the final score; completed rounds drive the sprint badge ladder on the
+   * Progress tab (5 / 15 / 30 rounds) and the leaderboard week column.
+   * Without a sessionId (old clients, offline replays) it falls back to
+   * inserting an already-finished row. The difficulty column predates
+   * single-difficulty sprints and is pinned to the sprint tier for new rows.
    */
   sprintComplete: protectedProcedure
     .input(
       z.object({
+        sessionId: z.number().int().nullish(),
         skillSlug: z.string().max(100).nullish(),
         total: z.number().int().min(1).max(50),
         correct: z.number().int().min(0),
@@ -391,20 +418,86 @@ export const practiceRouter = router({
       if (input.correct > input.total) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'correct exceeds total' });
       }
-      await prisma.sprintSession.create({
-        data: {
-          userId: BigInt(ctx.user.id),
-          difficulty: SPRINT_TIER,
-          skillSlug: input.skillSlug ?? null,
-          total: input.total,
-          correct: input.correct,
-        },
-      });
+      const data = {
+        difficulty: SPRINT_TIER,
+        skillSlug: input.skillSlug ?? null,
+        total: input.total,
+        correct: input.correct,
+        endedAt: new Date(),
+      };
+      // Ownership-scoped update: closing someone else's round (or one already
+      // closed) matches zero rows and falls through to the legacy insert.
+      const closed = input.sessionId
+        ? await prisma.sprintSession.updateMany({
+            where: {
+              id: BigInt(input.sessionId),
+              userId: BigInt(ctx.user.id),
+              endedAt: null,
+            },
+            data,
+          })
+        : { count: 0 };
+      if (closed.count === 0) {
+        await prisma.sprintSession.create({
+          data: { userId: BigInt(ctx.user.id), ...data },
+        });
+      }
       const completions = await prisma.sprintSession.count({
-        where: { userId: BigInt(ctx.user.id) },
+        where: { userId: BigInt(ctx.user.id), endedAt: { not: null } },
       });
       return { completions };
     }),
+
+  /**
+   * Live class leaderboard for the student Sprint page
+   * (docs/sprint-leaderboard-plan.md). Scope: classmates — every student
+   * sharing an active enrollment in any of the caller's active classes,
+   * plus the caller (always, even with no class). Exactly two stat columns:
+   * correct during the sprint (live while a round runs, else today's best)
+   * and correct this week. The client polls this on a short interval.
+   */
+  sprintLeaderboard: protectedProcedure.query(async ({ ctx }) => {
+    const me = BigInt(ctx.user.id);
+    const myClasses = await prisma.classEnrollment.findMany({
+      where: { studentUserId: me, status: 'active', class: { archived: false } },
+      select: { classId: true },
+    });
+    const classmates = myClasses.length
+      ? await prisma.classEnrollment.findMany({
+          where: { classId: { in: myClasses.map((c) => c.classId) }, status: 'active' },
+          select: {
+            studentUserId: true,
+            student: { select: { displayName: true } },
+          },
+        })
+      : [];
+    const nameById = new Map<string, string>(
+      classmates.map((c) => [String(c.studentUserId), c.student.displayName]),
+    );
+    nameById.set(String(me), ctx.user.displayName);
+    const ids = [...nameById.keys()].map((id) => BigInt(id));
+
+    const stats = await sprintLeaderboard(ids);
+    const rows = ids
+      .map((id) => {
+        const s = stats.get(String(id))!;
+        return {
+          id: Number(id),
+          displayName: nameById.get(String(id))!,
+          you: id === me,
+          inSprint: s.inSprint,
+          sprintCorrect: s.sprintCorrect,
+          weekCorrect: s.weekCorrect,
+        };
+      })
+      .sort(
+        (a, b) =>
+          b.sprintCorrect - a.sprintCorrect ||
+          b.weekCorrect - a.weekCorrect ||
+          a.displayName.localeCompare(b.displayName),
+      );
+    return { rows };
+  }),
 
   /**
    * Review mode (§4.5): mixed-unit session assembled from previously seen

@@ -71,7 +71,8 @@ Reach for the raw hook when you need to color a bespoke surface
 `import { useAccent } from '@tutor/app/components/ui'`
 
 Returns the current accent as a `Hex`. Follows the user's color-picker
-choice; defaults to `#ec3013` (brand red). Use for:
+choice; defaults to `#1e88e5` (light blue — the friendlier default that
+replaced the original brand red). Use for:
 - `PrimaryButton` — already consumes it
 - `ProgressBar` fill — already consumes it
 - Active nav tab tint
@@ -110,7 +111,7 @@ includes them so a NEW literal (even in an "allowed" file) still
 triggers the check. Existing pinned callsites:
 
 - **`ui.tsx`** — the palette source itself.
-- **`lib/theme.tsx`** — `DEFAULT_ACCENT = #ec3013` (brand red).
+- **`lib/theme.tsx`** — `DEFAULT_ACCENT = #1e88e5` (light blue).
 - **`screens/appearance.tsx`** — color picker gradient endpoints
   (`#000000`, `#ffffff`) and the initial hue placeholder.
 - **`components/Mascot.tsx`** — SVG illustration lines.

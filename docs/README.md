@@ -32,6 +32,7 @@ history; do not action them.
 | [`tutor-usage-dashboard-plan.md`](tutor-usage-dashboard-plan.md) | ✅ Option 2 shipped (`UsageDashboard.tsx`, `core/admin/usage.ts`, Admin-API numbers in `/admin`). |
 | [`ui-ux-refresh-plan.md`](ui-ux-refresh-plan.md) | ✅ The light/dark refresh landed. |
 | [`stepanim-plan.md`](stepanim-plan.md) | ✅ Phases 1–5 shipped. Only Phase 6 (native-device pass) remains — needs a local simulator/device, cannot run in a cloud container. |
+| [`sprint-leaderboard-plan.md`](sprint-leaderboard-plan.md) | ✅ Shipped with its PR: fixed 1-min/10-question sprints, live class leaderboards (student + teacher), teacher sprint-stats page, light-blue default accent. |
 | [`stepanim-next-steps.md`](stepanim-next-steps.md) | ✅ Companion status doc; the tracked items shipped. See `stepanim-plan.md`. |
 
 ## Live / outstanding work

@@ -486,9 +486,10 @@ describe('practice loop', () => {
     expect(res.tier).toBe('modified');
   });
 
-  it('serves sprint problems with params + slug for post-round walkthroughs', async () => {
-    const res = await as(student).practice.sprint({ count: 5 });
-    expect(res.problems.length).toBe(5);
+  it('always serves a 10-question round, with params + slug for walkthroughs', async () => {
+    // There is no round-length option: a sprint is always 10 questions.
+    const res = await as(student).practice.sprint({});
+    expect(res.problems.length).toBe(10);
     for (const p of res.problems) {
       expect(p).toHaveProperty('params');
       expect(p).toHaveProperty('skillSlug');
@@ -496,7 +497,7 @@ describe('practice loop', () => {
   });
 
   it('has no difficulty option: every served problem is easy (standard tier)', async () => {
-    const res = await as(student).practice.sprint({ count: 20 });
+    const res = await as(student).practice.sprint({});
     expect(res.problems.length).toBeGreaterThan(0);
     const ids = res.problems.map((p) => BigInt(p.id));
     const rows = await prisma.problem.findMany({ where: { id: { in: ids } } });
@@ -515,8 +516,8 @@ describe('practice loop', () => {
   });
 
   it('serves only dedicated drill problems — never curriculum practice problems', async () => {
-    const res = await as(student).practice.sprint({ count: 20 });
-    expect(res.problems.length).toBe(20);
+    const res = await as(student).practice.sprint({});
+    expect(res.problems.length).toBe(10);
     const rows = await prisma.problem.findMany({
       where: { id: { in: res.problems.map((p) => BigInt(p.id)) } },
     });
@@ -530,7 +531,6 @@ describe('practice loop', () => {
 
   it('filters sprint problems by a single drill topic', async () => {
     const res = await as(student).practice.sprint({
-      count: 5,
       topics: ['sprint_perfect_squares'],
     });
     expect(res.problems.length).toBeGreaterThan(0);
@@ -546,7 +546,7 @@ describe('practice loop', () => {
   it('grows a drill pool from nothing for topics the database has never seen', async () => {
     // sprint_fraction_ops rows may not predate this round; the registry-driven
     // top-up creates them on demand.
-    const res = await as(student).practice.sprint({ count: 5, topics: ['sprint_fraction_ops'] });
+    const res = await as(student).practice.sprint({ topics: ['sprint_fraction_ops'] });
     expect(res.problems.length).toBeGreaterThan(0);
     const rows = await prisma.problem.findMany({
       where: { id: { in: res.problems.map((p) => BigInt(p.id)) } },
@@ -556,17 +556,16 @@ describe('practice loop', () => {
     }
   });
 
-  it('mixes a full round from several chosen topics', async () => {
+  it('mixes a round from several chosen topics — and never others', async () => {
     const chosen = ['sprint_perfect_squares', 'sprint_integer_ops'];
-    // 30 > any single topic's seeded pool, so a full round draws from BOTH
-    // chosen topics — and never others.
-    const res = await as(student).practice.sprint({ count: 30, topics: chosen });
-    expect(res.problems.length).toBe(30);
+    const res = await as(student).practice.sprint({ topics: chosen });
+    expect(res.problems.length).toBe(10);
     const rows = await prisma.problem.findMany({
       where: { id: { in: res.problems.map((p) => BigInt(p.id)) } },
     });
-    const seen = new Set(rows.map((r) => (r.paramsJson as { template?: string })?.template));
-    expect([...seen].sort()).toEqual([...chosen].sort());
+    for (const r of rows) {
+      expect(chosen).toContain((r.paramsJson as { template?: string })?.template);
+    }
   });
 
   it('generates fresh drill variants on demand — the pool grows each round', async () => {
@@ -574,14 +573,13 @@ describe('practice loop', () => {
     const poolSize = () =>
       prisma.problem.count({ where: { skillId: skill!.id, tier: 'standard', isSprint: true } });
     const before = await poolSize();
-    await as(student).practice.sprint({ count: 12, topics: ['sprint_integer_ops'] });
+    await as(student).practice.sprint({ topics: ['sprint_integer_ops'] });
     // integer-ops has a huge variant space, so the top-up lands new rows
     expect(await poolSize()).toBeGreaterThan(before);
   });
 
   it('serves a fresh round: problems the student attempted are not repeated', async () => {
     const first = await as(student).practice.sprint({
-      count: 12,
       topics: ['sprint_integer_ops'],
     });
     const attempted = first.problems.slice(0, 3);
@@ -593,9 +591,8 @@ describe('practice loop', () => {
       });
     }
     // Never-attempted problems sample first, and the top-up guarantees more
-    // than 12 unattempted variants exist — so none of the 3 can reappear.
+    // than 10 unattempted variants exist — so none of the 3 can reappear.
     const second = await as(student).practice.sprint({
-      count: 12,
       topics: ['sprint_integer_ops'],
     });
     const secondIds = new Set(second.problems.map((p) => p.id));
@@ -608,8 +605,8 @@ describe('practice loop', () => {
     }
     const last = await as(student).practice.sprintComplete({
       skillSlug: 'sprint_one_step_equations',
-      total: 12,
-      correct: 12,
+      total: 10,
+      correct: 10,
     });
     expect(last.completions).toBe(6);
 
@@ -1019,6 +1016,132 @@ describe('teacher classes (roster + scoping)', () => {
     await expect(as(teacherA).progress.student({ studentId: student.id })).rejects.toMatchObject({
       code: 'FORBIDDEN',
     });
+  });
+});
+
+describe('sprint leaderboard (live rounds)', () => {
+  const mkUser = async (role: string, username: string, displayName: string): Promise<AuthUser> => {
+    const row = await prisma.user.create({
+      data: { role, username, passwordHash: 'x', displayName },
+      select: { id: true },
+    });
+    return {
+      id: Number(row.id),
+      role: role as AuthUser['role'],
+      username,
+      displayName,
+      locale: 'en',
+      status: 'active',
+    };
+  };
+  let coach: AuthUser;
+  let rivalCoach: AuthUser;
+  let racerA: AuthUser;
+  let racerB: AuthUser;
+  let loner: AuthUser;
+  let classId = 0;
+  let sessionId = 0;
+
+  it('sets up a class with two racers (and one classless student)', async () => {
+    coach = await mkUser('teacher', 'sprint_coach', 'Sprint Coach');
+    rivalCoach = await mkUser('teacher', 'rival_coach', 'Rival Coach');
+    racerA = await mkUser('student', 'racer_a', 'Racer A');
+    racerB = await mkUser('student', 'racer_b', 'Racer B');
+    loner = await mkUser('student', 'racer_loner', 'Racer Loner');
+    const cls = await as(coach).teacher.classes.create({ name: 'Sprint Squad' });
+    classId = cls.id;
+    await as(racerA).teacher.classes.join({ code: cls.joinCode });
+    await as(racerB).teacher.classes.join({ code: cls.joinCode });
+  });
+
+  it('counts an open round live on the classmate leaderboard', async () => {
+    const round = await as(racerA).practice.sprint({});
+    sessionId = (await as(racerA).practice.sprintStart()).sessionId;
+
+    // Two right, one wrong — answers straight from the problem rows.
+    const picks = round.problems.slice(0, 3);
+    const rows = await prisma.problem.findMany({
+      where: { id: { in: picks.map((p) => BigInt(p.id)) } },
+    });
+    const answerById = new Map(rows.map((r) => [Number(r.id), r.answerLatex]));
+    for (const [i, p] of picks.entries()) {
+      await as(racerA).practice.attempt({
+        problemId: p.id,
+        submittedLatex: i < 2 ? answerById.get(p.id)! : '999999999',
+        context: 'sprint',
+      });
+    }
+
+    // A classmate's poll sees A mid-round with a live score of 2. The week
+    // column stays settled (completed rounds only) until the round closes.
+    const { rows: board } = await as(racerB).practice.sprintLeaderboard();
+    const a = board.find((r) => r.id === racerA.id);
+    expect(a).toMatchObject({ inSprint: true, sprintCorrect: 2, weekCorrect: 0 });
+    // The caller is always present and flagged; non-classmates never appear.
+    expect(board.find((r) => r.you)?.id).toBe(racerB.id);
+    expect(board.find((r) => r.id === loner.id)).toBeUndefined();
+    // Live leader sorts first.
+    expect(board[0]?.id).toBe(racerA.id);
+  });
+
+  it('closing the round keeps the score as today’s best and counts a completion', async () => {
+    const done = await as(racerA).practice.sprintComplete({ sessionId, total: 3, correct: 2 });
+    expect(done.completions).toBe(1);
+    const { rows: board } = await as(racerA).practice.sprintLeaderboard();
+    const a = board.find((r) => r.you);
+    expect(a).toMatchObject({ inSprint: false, sprintCorrect: 2, weekCorrect: 2 });
+  });
+
+  it('shows a classless student only their own row', async () => {
+    const { rows } = await as(loner).practice.sprintLeaderboard();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: loner.id, you: true });
+  });
+
+  it('gives the teacher the same leaderboard plus season depth, ownership-gated', async () => {
+    const stats = await as(coach).teacher.classes.sprintStats({ classId });
+    expect(stats.class.id).toBe(classId);
+    expect(stats.students).toHaveLength(2);
+    const a = stats.students.find((s) => s.id === racerA.id);
+    // Same two columns the students see…
+    expect(a).toMatchObject({ sprintCorrect: 2, weekCorrect: 2 });
+    // …plus the teacher-only season totals and the weekly time series.
+    expect(a).toMatchObject({ yearRounds: 1, yearAttempted: 3, yearCorrect: 2 });
+    expect(stats.weekly.length).toBeGreaterThanOrEqual(1);
+    expect(stats.weekly.reduce((sum, w) => sum + w.correct, 0)).toBe(2);
+    expect(stats.yearStart.endsWith('-09-01')).toBe(true);
+
+    // Another teacher can't read this class's stats.
+    await expect(
+      as(rivalCoach).teacher.classes.sprintStats({ classId }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    // Students can't call the teacher endpoint at all.
+    await expect(
+      as(racerA).teacher.classes.sprintStats({ classId }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('never lets a student close someone else’s round', async () => {
+    const open = await as(racerA).practice.sprintStart();
+    // B "closing" A's round falls back to a fresh completed row of B's own.
+    const res = await as(racerB).practice.sprintComplete({
+      sessionId: open.sessionId,
+      total: 10,
+      correct: 4,
+    });
+    expect(res.completions).toBe(1);
+    const row = await prisma.sprintSession.findUnique({
+      where: { id: BigInt(open.sessionId) },
+    });
+    expect(row?.endedAt).toBeNull();
+    expect(row?.correct).toBe(0);
+  });
+
+  it('treats an abandoned round as no completion (badge ladder unaffected)', async () => {
+    // A's stray open round from the previous test never finished.
+    const progress = await as(racerA).progress.me();
+    const starter = progress.achievements.find((b) => b.id === 'sprint-5');
+    expect(starter?.value).toBe(1);
   });
 });
 

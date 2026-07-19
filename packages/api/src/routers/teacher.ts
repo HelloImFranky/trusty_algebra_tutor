@@ -5,6 +5,7 @@ import { Prisma, prisma } from '@tutor/db';
 import { decayedScore, masteryLabel } from '@tutor/core';
 import { fixedWindowLimiter, router, studentProcedure, teacherProcedure } from '../trpc.js';
 import { recordGuardianConsent, teacherCanSeeStudent } from '../authz.js';
+import { schoolYearStart, seasonTotals, sprintLeaderboard, weeklySeries } from '../sprintStats.js';
 
 /**
  * Teacher dashboard (docs/teacher-dashboard-plan.md, Stage 1). A teacher owns
@@ -245,6 +246,60 @@ export const teacherRouter = router({
           data: { status: 'removed' },
         });
         return { ok: true };
+      }),
+
+    /**
+     * Live sprint stats for one owned class (docs/sprint-leaderboard-plan.md):
+     * the same leaderboard students see (correct during the sprint + correct
+     * this week), plus teacher-only depth — per-student season totals since
+     * Sep 1 and a weekly class time series for the year chart. The stats
+     * page polls this on a short interval.
+     */
+    sprintStats: teacherProcedure
+      .input(z.object({ classId: z.number().int() }))
+      .query(async ({ ctx, input }) => {
+        const cls = await ownedClass(BigInt(ctx.user.id), input.classId);
+        const enrollments = await prisma.classEnrollment.findMany({
+          where: { classId: cls.id, status: 'active' },
+          select: {
+            studentUserId: true,
+            student: { select: { displayName: true } },
+          },
+        });
+        const ids = enrollments.map((e) => e.studentUserId);
+        const [board, season, series] = await Promise.all([
+          sprintLeaderboard(ids),
+          seasonTotals(ids),
+          weeklySeries(ids),
+        ]);
+        const students = enrollments
+          .map((e) => {
+            const key = String(e.studentUserId);
+            const b = board.get(key)!;
+            const y = season.get(key) ?? { rounds: 0, attempted: 0, correct: 0 };
+            return {
+              id: Number(e.studentUserId),
+              displayName: e.student.displayName,
+              inSprint: b.inSprint,
+              sprintCorrect: b.sprintCorrect,
+              weekCorrect: b.weekCorrect,
+              yearRounds: y.rounds,
+              yearAttempted: y.attempted,
+              yearCorrect: y.correct,
+            };
+          })
+          .sort(
+            (a, b) =>
+              b.sprintCorrect - a.sprintCorrect ||
+              b.weekCorrect - a.weekCorrect ||
+              a.displayName.localeCompare(b.displayName),
+          );
+        return {
+          class: { id: Number(cls.id), name: cls.name },
+          students,
+          weekly: series,
+          yearStart: schoolYearStart().toISOString().slice(0, 10),
+        };
       }),
 
     /** Student action: enroll in a class by its join code. */
