@@ -48,7 +48,13 @@ function FitBlockKatex({ html, color }: { html: string; color: string }) {
   }, [html]);
 
   return (
-    <div ref={outerRef} style={{ width: '100%', overflow: 'hidden', height: box.height || undefined }}>
+    // textAlign centers the inline-block child, and scaling from the top
+    // center keeps it centered whether it renders at full size or is shrunk
+    // to fit — matching KaTeX's default display-mode centering.
+    <div
+      ref={outerRef}
+      style={{ width: '100%', overflow: 'hidden', height: box.height || undefined, textAlign: 'center' }}
+    >
       <div
         ref={innerRef}
         style={{
@@ -56,7 +62,7 @@ function FitBlockKatex({ html, color }: { html: string; color: string }) {
           display: 'inline-block',
           whiteSpace: 'nowrap',
           transform: `scale(${box.scale})`,
-          transformOrigin: 'left top',
+          transformOrigin: 'top center',
         }}
         dangerouslySetInnerHTML={{ __html: html }}
       />
