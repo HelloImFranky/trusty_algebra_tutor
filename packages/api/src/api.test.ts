@@ -1730,3 +1730,135 @@ describe('phase 2 statistics (readiness, item analysis, tiers, tutor usage)', ()
     expect(JSON.stringify(res.readiness)).not.toContain('Worker');
   });
 });
+
+describe('phase 3 statistics (snapshots, growth, slices)', () => {
+  const monday = (weeksAgo: number) => {
+    const d = new Date();
+    d.setUTCHours(0, 0, 0, 0);
+    d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7) - weeksAgo * 7);
+    return d;
+  };
+
+  it('writes a weekly mastery snapshot whenever mastery is written', async () => {
+    // student1 practiced through the API in earlier suites, so applyMastery
+    // ran and this week's snapshot rows must exist and mirror live mastery.
+    const live = await prisma.mastery.findFirstOrThrow({
+      where: { userId: BigInt(student.id), attemptsCount: { gt: 0 } },
+    });
+    const snap = await prisma.masterySnapshot.findUnique({
+      where: {
+        userId_skillId_weekStart: {
+          userId: live.userId,
+          skillId: live.skillId,
+          weekStart: monday(0),
+        },
+      },
+    });
+    expect(snap).not.toBeNull();
+    expect(snap!.score).toBeCloseTo(live.score, 10);
+    expect(snap!.attemptsCount).toBe(live.attemptsCount);
+  });
+
+  it('averages snapshots into weekly growth series for student and teacher', async () => {
+    const worker = await prisma.user.findUniqueOrThrow({ where: { username: 'insights_worker' } });
+    const skills = await prisma.skill.findMany({ take: 2, orderBy: { id: 'asc' } });
+    await prisma.masterySnapshot.createMany({
+      data: [
+        { userId: worker.id, skillId: skills[0]!.id, weekStart: monday(2), score: 0.2, attemptsCount: 3 },
+        { userId: worker.id, skillId: skills[1]!.id, weekStart: monday(2), score: 0.4, attemptsCount: 3 },
+        { userId: worker.id, skillId: skills[0]!.id, weekStart: monday(1), score: 0.6, attemptsCount: 5 },
+      ],
+      skipDuplicates: true,
+    });
+    const workerAuth: AuthUser = {
+      id: Number(worker.id),
+      role: 'student',
+      username: worker.username,
+      displayName: worker.displayName,
+      locale: 'en',
+      status: 'active',
+    };
+    const mine = await as(workerAuth).progress.me();
+    const w2 = mine.growth.find((g) => g.weekStart === monday(2).toISOString().slice(0, 10));
+    const w1 = mine.growth.find((g) => g.weekStart === monday(1).toISOString().slice(0, 10));
+    expect(w2?.avgScore).toBeCloseTo(0.3, 3);
+    expect(w1?.avgScore).toBeCloseTo(0.6, 3);
+
+    // The teacher's class series covers the same student, batched.
+    const teacher = await prisma.user.findUniqueOrThrow({ where: { username: 'insights_teacher' } });
+    const cls = await prisma.class.findFirstOrThrow({ where: { name: 'Period 4 Insights' } });
+    const teacherAuth: AuthUser = {
+      id: Number(teacher.id),
+      role: 'teacher',
+      username: teacher.username,
+      displayName: teacher.displayName,
+      locale: 'en',
+      status: 'active',
+    };
+    const insights = await as(teacherAuth).teacher.classes.insights({ classId: Number(cls.id) });
+    const t2 = insights.growth.find((g) => g.weekStart === monday(2).toISOString().slice(0, 10));
+    expect(t2?.avgScore).toBeCloseTo(0.3, 3);
+    expect(t2?.students).toBe(1);
+  });
+
+  it('slices the school by grade with a suppression floor', async () => {
+    // Five 12th-graders (unsuppressed cohort) and one 11th-grader (suppressed).
+    const problem = await prisma.problem.findFirstOrThrow();
+    for (let i = 0; i < 5; i++) {
+      const row = await prisma.user.create({
+        data: {
+          role: 'student',
+          username: `slice_g12_${i}`,
+          passwordHash: 'x',
+          displayName: `Slice ${i}`,
+          grade: 12,
+        },
+      });
+      await prisma.attempt.create({
+        data: { userId: row.id, problemId: problem.id, submittedLatex: 'x', correct: true, durationMs: 120_000 },
+      });
+      await prisma.mastery.create({
+        data: { userId: row.id, skillId: problem.skillId, score: 0.8, attemptsCount: 4, lastPracticedAt: new Date() },
+      });
+    }
+    await prisma.user.create({
+      data: { role: 'student', username: 'slice_g11', passwordHash: 'x', displayName: 'Lone Junior', grade: 11 },
+    });
+
+    const admin = await prisma.user.findUniqueOrThrow({ where: { username: 'insights_admin' } });
+    const adminAuth: AuthUser = {
+      id: Number(admin.id),
+      role: 'admin',
+      username: admin.username,
+      displayName: admin.displayName,
+      locale: 'en',
+      status: 'active',
+    };
+    const res = await as(adminAuth).admin.stats.overview();
+
+    const g12 = res.slices.byGrade.find((s) => s.key === '12')!;
+    expect(g12.students).toBe(5);
+    expect(g12.suppressed).toBe(false);
+    expect(g12.active30d).toBe(5);
+    expect(g12.minutes30d).toBe(10); // 5 × 2 minutes
+    expect(g12.avgMastery).toBeGreaterThan(0.5);
+
+    // A cohort under the floor exposes its size but no stats at all.
+    const g11 = res.slices.byGrade.find((s) => s.key === '11')!;
+    expect(g11).toMatchObject({
+      suppressed: true,
+      active30d: null,
+      minutes30d: null,
+      avgMastery: null,
+    });
+
+    // Locale slice exists and the big 'en' cohort reports stats.
+    const en = res.slices.byLocale.find((s) => s.key === 'en')!;
+    expect(en.suppressed).toBe(false);
+    expect(en.students).toBeGreaterThanOrEqual(5);
+
+    // School growth series present (snapshots exist from the API attempts).
+    expect(res.growth.length).toBeGreaterThanOrEqual(1);
+    expect(res.growth[0]!.avgScore).toBeGreaterThan(0);
+  });
+});

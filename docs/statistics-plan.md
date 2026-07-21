@@ -1,10 +1,12 @@
 # Statistics Expansion — Design & Implementation Plan
 
 > [!NOTE]
-> **Phases 1–2 implemented** on branch `claude/algebra-app-statistics-hf4c76`
+> **✅ Phases 1–3 implemented** on branch `claude/algebra-app-statistics-hf4c76`
 > (teacher class insights, admin school overview, item analysis, tier mix,
-> Regents readiness, tutor-usage counts, CSV export). Phase 3 is designed
-> below but not started. Status index: [`README.md`](README.md).
+> Regents readiness, tutor-usage counts, mastery-growth history, equity
+> slices, cost-per-student, and full-page report downloads in PDF / Word /
+> CSV). The sections below are the design record. Status index:
+> [`README.md`](README.md).
 
 ## Why this exists
 
@@ -125,17 +127,41 @@ School-wide, de-identified. New `stats` sub-router in `admin.ts`; a new
 
 ## Phase 3 — growth over time + slices (schema change)
 
-- New `mastery_snapshots` table (user, skill, score, label, week) written by
-  a weekly roll-up (on-login upsert or cron); powers:
+- New `mastery_snapshots` table (migration `017`): one row per
+  (user, skill, ISO week), upserted by `applyMastery` on every practice
+  write so each row converges to that week's closing score — no cron
+  needed. History accrues from deploy forward (old scores were overwritten
+  by design; nothing to backfill). Powers:
   - **Student**: "your mastery this month vs last month" trend;
-  - **Teacher**: class growth since September;
-  - **Admin**: school growth by unit — the i-Ready-style growth headline.
+  - **Teacher**: class weekly-average growth since September;
+  - **Admin**: school-wide growth series.
 - **Admin slices** — usage/outcome aggregates split by grade and by locale
   (EN/ES usage is the MLL/ELL story a NY school reports on), with a
-  minimum-cell-size floor (suppress slices under ~5 students) so aggregates
-  can't be re-identified.
-- **Cost per active student** — divide the existing Anthropic spend summary
-  by 30d active students on the admin screen.
+  minimum-cell-size floor (`MIN_COHORT = 5`; smaller slices report their
+  size but no stats) so aggregates can't be re-identified.
+- **Cost per active student** — the Anthropic spend summary divided by the
+  matching window's active students, on the admin usage card.
+
+## Report downloads (added scope, shipped with Phase 3)
+
+Every stats surface (class insights, school overview, student progress)
+exports its full contents via a "Download report" bar with three formats:
+
+- **PDF** (pdfmake, lazily imported on click so neither the native bundle
+  nor the initial page load pays for it): tables plus charts drawn as
+  vector rects — stacked distributions, readiness grids, weekly bars.
+- **Word** (`.doc` = Word-compatible HTML): same blocks; charts survive as
+  proportional colored table cells.
+- **CSV**: data only, charts flattened to their numbers.
+
+The format-agnostic block model (`heading / note / stats / table / bars /
+stacked / grid`) and the pure CSV + Word renderers live in
+`@tutor/core/report.ts` (unit-tested); browser downloads and the pdfmake
+renderer live in `packages/app/src/lib/report{,Pdf}.ts`; the shared button
+bar is `components/ReportButtons.tsx`. Reports use a fixed light palette —
+a document must look the same on every export regardless of the viewer's
+theme. The class heatmap is reshaped for print (skills as rows with
+per-label stacked counts) because 29 skill columns can't fit a page.
 
 ## Verification
 

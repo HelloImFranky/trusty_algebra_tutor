@@ -648,3 +648,143 @@ export async function schoolReadinessDistribution(): Promise<TopicReadinessDistr
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 3 (docs/statistics-plan.md): mastery growth over time + admin cohort
+// slices. Growth reads mastery_snapshots (written weekly by applyMastery),
+// so it accrues from the migration forward — there is no history to backfill.
+// ---------------------------------------------------------------------------
+
+export interface GrowthWeekPoint {
+  /** ISO date (YYYY-MM-DD) of the week's Monday. */
+  weekStart: string;
+  /** Mean snapshot score across (student, skill) pairs that week, 0..1. */
+  avgScore: number;
+  /** Distinct students with any snapshot that week. */
+  students: number;
+}
+
+/** Weekly average-mastery series. null studentIds = every student (admin). */
+export async function masteryGrowthSeries(
+  studentIds: bigint[] | null,
+  since: Date,
+): Promise<GrowthWeekPoint[]> {
+  if (studentIds !== null && studentIds.length === 0) return [];
+  const scope =
+    studentIds === null
+      ? Prisma.empty
+      : Prisma.sql`AND user_id IN (${Prisma.join(studentIds)})`;
+  const rows = await prisma.$queryRaw<
+    { week: Date; avgScore: number; students: bigint }[]
+  >`
+    SELECT week_start AS week, avg(score)::float AS "avgScore",
+           count(DISTINCT user_id) AS students
+    FROM mastery_snapshots
+    WHERE week_start >= ${since} ${scope}
+    GROUP BY 1 ORDER BY 1`;
+  return rows.map((r) => ({
+    weekStart: r.week.toISOString().slice(0, 10),
+    avgScore: Math.round(r.avgScore * 1000) / 1000,
+    students: Number(r.students),
+  }));
+}
+
+export interface CohortSlice {
+  /** Cohort key: a grade number as string, a locale code, or 'unspecified'. */
+  key: string;
+  students: number;
+  /** True when the cohort is smaller than MIN_COHORT — stats are withheld so
+   * small groups can't be re-identified from "aggregates". */
+  suppressed: boolean;
+  active30d: number | null;
+  minutes30d: number | null;
+  /** Mean decayed mastery over the cohort's mastery rows, 0..1. */
+  avgMastery: number | null;
+}
+
+/** Below this many students a slice reports no stats (re-identification floor). */
+export const MIN_COHORT = 5;
+
+/**
+ * School slices by grade or locale (docs/statistics-plan.md, Phase 3) — the
+ * usage/outcome splits a NY school reports on (locale = the MLL/ELL story).
+ * Aggregates only, and small cohorts are suppressed outright.
+ */
+export async function cohortSlices(dimension: 'grade' | 'locale'): Promise<CohortSlice[]> {
+  const students = await prisma.user.findMany({
+    where: { role: 'student', status: 'active' },
+    select: { id: true, grade: true, locale: true },
+  });
+  const keyOf = (s: { grade: number | null; locale: string }) =>
+    dimension === 'grade' ? (s.grade === null ? 'unspecified' : String(s.grade)) : s.locale;
+  const cohorts = new Map<string, bigint[]>();
+  for (const s of students) {
+    const key = keyOf(s);
+    (cohorts.get(key) ?? cohorts.set(key, []).get(key)!).push(s.id);
+  }
+  if (cohorts.size === 0) return [];
+
+  const allIds = students.map((s) => s.id);
+  const ids = Prisma.join(allIds);
+  const activityRows = await prisma.$queryRaw<
+    { userId: bigint; ms30d: bigint | null; active: boolean }[]
+  >`
+    SELECT user_id AS "userId", sum(duration_ms) AS "ms30d", TRUE AS active
+    FROM attempts
+    WHERE user_id IN (${ids}) AND created_at > now() - interval '30 days'
+    GROUP BY 1`;
+  const activityByUser = new Map(activityRows.map((r) => [String(r.userId), r]));
+  const masteryRows = await prisma.mastery.findMany({
+    where: { userId: { in: allIds }, attemptsCount: { gt: 0 } },
+    select: { userId: true, score: true, attemptsCount: true, lastPracticedAt: true },
+  });
+  const masteryByUser = new Map<string, number[]>();
+  for (const m of masteryRows) {
+    const key = String(m.userId);
+    const score = decayedScore({
+      score: m.score,
+      attemptsCount: m.attemptsCount,
+      lastPracticedAt: m.lastPracticedAt,
+    });
+    (masteryByUser.get(key) ?? masteryByUser.set(key, []).get(key)!).push(score);
+  }
+
+  const out: CohortSlice[] = [];
+  for (const [key, cohortIds] of cohorts) {
+    const suppressed = cohortIds.length < MIN_COHORT;
+    if (suppressed) {
+      out.push({
+        key,
+        students: cohortIds.length,
+        suppressed,
+        active30d: null,
+        minutes30d: null,
+        avgMastery: null,
+      });
+      continue;
+    }
+    let active = 0;
+    let ms = 0;
+    const scores: number[] = [];
+    for (const id of cohortIds) {
+      const a = activityByUser.get(String(id));
+      if (a) {
+        active++;
+        ms += Number(a.ms30d ?? 0);
+      }
+      scores.push(...(masteryByUser.get(String(id)) ?? []));
+    }
+    out.push({
+      key,
+      students: cohortIds.length,
+      suppressed,
+      active30d: active,
+      minutes30d: Math.round(ms / 60000),
+      avgMastery:
+        scores.length > 0
+          ? Math.round((scores.reduce((sum, s) => sum + s, 0) / scores.length) * 1000) / 1000
+          : null,
+    });
+  }
+  return out.sort((a, b) => a.key.localeCompare(b.key, undefined, { numeric: true }));
+}

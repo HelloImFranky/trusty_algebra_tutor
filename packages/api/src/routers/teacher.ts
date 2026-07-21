@@ -8,6 +8,7 @@ import { recordGuardianConsent, teacherCanSeeStudent } from '../authz.js';
 import { schoolYearStart, seasonTotals, sprintLeaderboard, weeklySeries } from '../sprintStats.js';
 import {
   heatmapCells,
+  masteryGrowthSeries,
   misconceptionReport,
   problemItemAnalysis,
   readinessByStudent,
@@ -332,7 +333,7 @@ export const teacherRouter = router({
           orderBy: { joinedAt: 'asc' },
         });
         const ids = enrollments.map((e) => e.studentUserId);
-        const [cells, skills, misconceptions, work, weekly, items, regentsItems, tiers, tutor, readiness] =
+        const [cells, skills, misconceptions, work, weekly, items, regentsItems, tiers, tutor, readiness, growth] =
           await Promise.all([
             heatmapCells(ids),
             skillColumns(),
@@ -344,6 +345,7 @@ export const teacherRouter = router({
             tierMix(ids),
             tutorUsage(ids),
             readinessByStudent(ids),
+            masteryGrowthSeries(ids, schoolYearStart()),
           ]);
 
         const students = enrollments.map((e) => ({
@@ -405,6 +407,8 @@ export const teacherRouter = router({
           timeOnTask,
           weekly,
           yearStart: schoolYearStart().toISOString().slice(0, 10),
+          // Phase 3 (docs/statistics-plan.md): weekly class-average mastery.
+          growth,
           // Phase 2 sections (docs/statistics-plan.md).
           itemAnalysis: items,
           regentsItems,

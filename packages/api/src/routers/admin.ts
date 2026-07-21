@@ -5,6 +5,8 @@ import { adminUsageAvailable, fetchUsageSummary, type UsageSummary } from '@tuto
 import { adminProcedure, router } from '../trpc.js';
 import { recordGuardianConsent } from '../authz.js';
 import {
+  cohortSlices,
+  masteryGrowthSeries,
   schoolAdoption,
   schoolEngagement,
   schoolReadinessDistribution,
@@ -142,19 +144,27 @@ export const adminRouter = router({
      * above: the admin still cannot reach any individual student's records.
      */
     overview: adminProcedure.query(async () => {
-      const [engagement, weekly, masteryByUnit, adoption, readiness] = await Promise.all([
-        schoolEngagement(),
-        weeklyMinutes(null, schoolYearStart()),
-        unitMasteryDistribution(),
-        schoolAdoption(),
-        schoolReadinessDistribution(),
-      ]);
+      const [engagement, weekly, masteryByUnit, adoption, readiness, growth, byGrade, byLocale] =
+        await Promise.all([
+          schoolEngagement(),
+          weeklyMinutes(null, schoolYearStart()),
+          unitMasteryDistribution(),
+          schoolAdoption(),
+          schoolReadinessDistribution(),
+          masteryGrowthSeries(null, schoolYearStart()),
+          cohortSlices('grade'),
+          cohortSlices('locale'),
+        ]);
       return {
         engagement,
         weekly,
         masteryByUnit,
         adoption,
         readiness,
+        // Phase 3 (docs/statistics-plan.md): school growth + equity slices
+        // (small cohorts suppressed server-side, see MIN_COHORT).
+        growth,
+        slices: { byGrade, byLocale },
         yearStart: schoolYearStart().toISOString().slice(0, 10),
       };
     }),

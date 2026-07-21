@@ -33,6 +33,7 @@ history; do not action them.
 | [`ui-ux-refresh-plan.md`](ui-ux-refresh-plan.md) | ✅ The light/dark refresh landed. |
 | [`stepanim-plan.md`](stepanim-plan.md) | ✅ Phases 1–5 shipped. Only Phase 6 (native-device pass) remains — needs a local simulator/device, cannot run in a cloud container. |
 | [`sprint-leaderboard-plan.md`](sprint-leaderboard-plan.md) | ✅ Shipped with its PR: fixed 1-min/10-question sprints, live class leaderboards (student + teacher), teacher sprint-stats page, light-blue default accent. |
+| [`statistics-plan.md`](statistics-plan.md) | ✅ Phases 1–3 shipped: teacher class insights (heatmap, misconceptions, watch list, item analysis, tiers, tutor usage), admin school overview (engagement, mastery/readiness distributions, equity slices, cost-per-student), Regents readiness bands, mastery-growth history (`mastery_snapshots`), and PDF/Word/CSV report downloads on every stats page. |
 | [`stepanim-next-steps.md`](stepanim-next-steps.md) | ✅ Companion status doc; the tracked items shipped. See `stepanim-plan.md`. |
 
 ## Live / outstanding work
@@ -41,7 +42,6 @@ Partially built or awaiting a decision — verify against code before acting.
 
 | Doc | Status |
 |---|---|
-| [`statistics-plan.md`](statistics-plan.md) | 🚧 Phases 1–2 shipped (class insights, school overview, item analysis, tiers, Regents readiness, tutor usage, CSV). Phase 3 (growth history + slices) designed, not built. |
 | [`guardian-consent-plan.md`](guardian-consent-plan.md) | 🚧 Tier 0 shipped (school/admin attestation — migration `013`, `authz.ts`, teacher/admin routers). Tiers 1–2 (email-plus, guardian accounts) scoped but **not built**. |
 | [`tutor-anthropic-haiku-plan.md`](tutor-anthropic-haiku-plan.md) | 🚧 **Planning only — not built.** Gated on sign-off. (The separate link-out and usage-dashboard pieces shipped.) |
 | [`security-review-2.md`](security-review-2.md) | 🚧 Mixed. Items marked ✅ in the doc are fixed; 📝 items may remain open. Treat as a record, verify before acting. |

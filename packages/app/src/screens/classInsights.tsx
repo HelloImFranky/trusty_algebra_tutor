@@ -5,16 +5,24 @@
  * time on task. All read-only aggregations of the class the teacher owns;
  * per-student depth stays behind the existing /progress/:id drill-down.
  */
-import { Platform, ScrollView } from 'react-native';
+import { ScrollView } from 'react-native';
 import { Link } from 'solito/link';
 import { Text, XStack, YStack } from 'tamagui';
-import { misconceptionLabel, regentsTopics } from '@tutor/core';
+import {
+  misconceptionLabel,
+  plainMath,
+  regentsTopics,
+  REPORT_COLORS,
+  type Report,
+} from '@tutor/core';
 import { trpc } from '../lib/trpc';
 import { useI18n, type I18nKey } from '../lib/i18n';
 import { useAuth } from '../lib/auth';
 import { useRequireAuth } from '../components/AppChrome';
 import { MathText } from '../components/MathText';
-import { ReadinessDot, ReadinessPill, type Band } from '../components/Readiness';
+import { ReadinessDot, ReadinessPill, BAND_KEY, type Band } from '../components/Readiness';
+import { ReportButtons } from '../components/ReportButtons';
+import { WeeklyBars } from '../components/WeeklyBars';
 import {
   AppCard,
   Badge,
@@ -22,7 +30,6 @@ import {
   Loading,
   Muted,
   Screen,
-  SecondaryButton,
   StatChip,
   SubTitle,
   Title,
@@ -63,22 +70,6 @@ function useCellStyle() {
         return { color: tokens.subtle, opacity: 1 };
     }
   };
-}
-
-/** Browser-only CSV download — teachers live in grade books. */
-function downloadCsv(filename: string, rows: string[][]) {
-  const csv = rows
-    .map((r) =>
-      r.map((cell) => (/[",\n]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell)).join(','),
-    )
-    .join('\n');
-  const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 
 function LegendSwatch({ label, text }: { label: MasteryLabelName; text: string }) {
@@ -132,6 +123,9 @@ export function ClassInsightsScreen({ classId }: { classId: number }) {
     tiers,
     tutorUsage,
     readiness,
+    growth,
+    weekly,
+    yearStart,
   } = insights.data;
   const skillName = (id: number) => {
     const s = skills.find((sk) => sk.skillId === id);
@@ -155,27 +149,202 @@ export function ClassInsightsScreen({ classId }: { classId: number }) {
     return tp ? (locale === 'es' ? tp.titleEs : tp.titleEn) : slug;
   };
 
-  const exportHeatmap = () =>
-    downloadCsv(`${cls.name.replace(/\s+/g, '_')}-mastery.csv`, [
-      ['Student', ...skills.map((s) => (locale === 'es' ? s.nameEs : s.nameEn))],
-      ...students.map((s) => {
-        const bySkill = new Map(s.cells.map((c) => [c.skillId, c.label]));
-        return [s.displayName, ...skills.map((sk) => bySkill.get(sk.skillId) ?? 'not_started')];
-      }),
-    ]);
-  const exportWatchlist = () =>
-    downloadCsv(`${cls.name.replace(/\s+/g, '_')}-watchlist.csv`, [
-      ['Student', 'Flags', 'Last active', 'Attempts 14d', 'Hints/problem', 'Accuracy %', 'Struggling skills'],
-      ...watchlist.map((w) => [
-        w.displayName,
-        w.flags.join('; '),
-        w.lastActiveAt ?? '',
-        String(w.attempts14d),
-        String(w.hintRate),
-        w.accuracyPct === null ? '' : String(w.accuracyPct),
-        w.strugglingSkillIds.map(skillName).join('; '),
-      ]),
-    ]);
+  /** Full-page report (docs/statistics-plan.md, Phase 3): every section of
+   * this screen as blocks, charts included, for PDF/Word/CSV export. */
+  const buildReport = (): Report => {
+    const bandColor: Record<Band, string> = {
+      ready: REPORT_COLORS.ready,
+      developing: REPORT_COLORS.developing,
+      needsWork: REPORT_COLORS.needsWork,
+      noData: REPORT_COLORS.noData,
+    };
+    // Per-skill class distribution: the heatmap's information, reshaped so
+    // it fits a printed page (29 skills as rows beats 29 columns).
+    const skillDist = skills.map((sk) => {
+      let struggling = 0;
+      let practicing = 0;
+      let proficient = 0;
+      let mastered = 0;
+      for (const s of students) {
+        switch (cellByStudent.get(s.id)?.get(sk.skillId)) {
+          case 'struggling': struggling++; break;
+          case 'practicing': practicing++; break;
+          case 'proficient': proficient++; break;
+          case 'mastered': mastered++; break;
+        }
+      }
+      return {
+        label: `${sk.lessonCode} ${locale === 'es' ? sk.nameEs : sk.nameEn}`,
+        segments: [
+          struggling,
+          practicing,
+          proficient,
+          mastered,
+          students.length - struggling - practicing - proficient - mastered,
+        ],
+      };
+    });
+    return {
+      meta: {
+        title: `${t('classInsights')} — ${cls.name}`,
+        stamp: `${t('reportGenerated')} ${new Date().toISOString().slice(0, 10)} · ${t('appName')}`,
+      },
+      blocks: [
+        {
+          kind: 'stats',
+          items: [
+            { label: t('studentsLabel'), value: String(students.length) },
+            { label: t('classMinutes7d'), value: String(totalMinutes7d) },
+            { label: t('classMinutes30d'), value: String(totalMinutes30d) },
+          ],
+        },
+        { kind: 'heading', text: t('watchlistTitle') },
+        watchlist.length === 0
+          ? { kind: 'note', text: t('watchlistEmpty') }
+          : {
+              kind: 'table',
+              columns: [
+                t('sprintColStudent'),
+                t('watchlistTitle'),
+                t('lastActive'),
+                t('insightsHintRate'),
+                t('insightsAccuracy'),
+                t('flagStruggling'),
+              ],
+              rows: watchlist.map((w) => [
+                w.displayName,
+                w.flags.map((f) => t(FLAG_KEY[f] ?? 'flagStruggling')).join(', '),
+                fmtActive(w.lastActiveAt),
+                String(w.hintRate),
+                w.accuracyPct === null ? '—' : `${w.accuracyPct}%`,
+                w.strugglingSkillIds.map(skillName).join(', '),
+              ]),
+            },
+        {
+          kind: 'grid',
+          title: t('readinessTitle'),
+          columns: readiness.topics.map((tp) => (locale === 'es' ? tp.titleEs : tp.titleEn)),
+          legend: (['ready', 'developing', 'needsWork', 'noData'] as Band[]).map((b) => ({
+            label: t(BAND_KEY[b]),
+            color: bandColor[b],
+          })),
+          rows: readiness.students.map((s) => ({
+            label: s.displayName,
+            cells: readiness.topics.map((tp) => {
+              const band = (s.bands[tp.slug] ?? 'noData') as Band;
+              return { color: bandColor[band], value: t(BAND_KEY[band]) };
+            }),
+          })),
+        },
+        {
+          kind: 'stacked',
+          title: t('masteryDistTitle'),
+          legend: [
+            { label: t('struggling'), color: REPORT_COLORS.struggling },
+            { label: t('practicing'), color: REPORT_COLORS.practicing },
+            { label: t('proficient'), color: REPORT_COLORS.proficient },
+            { label: t('mastered'), color: REPORT_COLORS.mastered },
+            { label: t('not_started'), color: REPORT_COLORS.notStarted },
+          ],
+          rows: skillDist,
+        },
+        {
+          kind: 'table',
+          title: t('misconceptionsTitle'),
+          columns: [t('misconceptionsTitle'), t('skillCol'), t('misconStudents'), t('misconHits')],
+          rows: misconceptions.map((m) => [
+            misconceptionLabel(m.misconceptionId, locale === 'es' ? 'es' : 'en'),
+            locale === 'es' ? m.skillNameEs : m.skillNameEn,
+            String(m.students),
+            String(m.hits),
+          ]),
+        },
+        {
+          kind: 'table',
+          title: t('itemAnalysisTitle'),
+          columns: ['#', t('practice'), t('itemCorrectCol'), t('itemTriesCol'), t('misconStudents')],
+          rows: itemAnalysis.map((p, i) => [
+            String(i + 1),
+            plainMath(locale === 'es' ? p.promptEs : p.promptEn),
+            `${Math.round((p.correct / p.attempts) * 100)}%`,
+            String(p.attempts),
+            String(p.students),
+          ]),
+        },
+        {
+          kind: 'table',
+          title: t('regentsItemsTitle'),
+          columns: ['#', t('review'), t('itemCorrectCol'), t('itemTriesCol')],
+          rows: regentsItems.map((q, i) => [
+            String(i + 1),
+            plainMath(regentsQuestion(q.topicSlug, q.questionId)),
+            `${Math.round((q.correct / q.answered) * 100)}%`,
+            String(q.answered),
+          ]),
+        },
+        {
+          kind: 'table',
+          title: t('tiersTitle'),
+          columns: [
+            t('sprintColStudent'),
+            t('tierModified'),
+            t('tierStandard'),
+            t('tierChallenge'),
+            '',
+          ],
+          rows: tiers
+            .filter((s) => s.modified + s.standard + s.challenge > 0)
+            .map((s) => {
+              const total = s.modified + s.standard + s.challenge;
+              return [
+                s.displayName,
+                `${Math.round((s.modified / total) * 100)}%`,
+                `${Math.round((s.standard / total) * 100)}%`,
+                `${Math.round((s.challenge / total) * 100)}%`,
+                s.stuckModified ? t('stuckModifiedFlag') : '',
+              ];
+            }),
+        },
+        {
+          kind: 'table',
+          title: t('tutorUsageTitle'),
+          columns: [t('sprintColStudent'), t('tutorSessionsLabel')],
+          rows: tutorUsage.perStudent.map((s) => [s.displayName, String(s.sessions)]),
+        },
+        {
+          kind: 'table',
+          title: t('tutorTopSkills'),
+          columns: [t('tutorTopSkills'), t('tutorSessionsLabel')],
+          rows: tutorUsage.topSkills.map((sk) => [
+            locale === 'es' ? sk.nameEs : sk.nameEn,
+            String(sk.sessions),
+          ]),
+        },
+        {
+          kind: 'bars',
+          title: t('timeOnTaskTitle'),
+          items: [...timeOnTask]
+            .sort((a, b) => b.minutes30d - a.minutes30d)
+            .map((s) => ({
+              label: s.displayName,
+              value: s.minutes30d,
+              display: `${s.minutes30d} ${t('minutes')}`,
+            })),
+        },
+        {
+          kind: 'bars',
+          title: t('growthTitle'),
+          max: 100,
+          items: growth.map((g) => ({
+            label: g.weekStart,
+            value: Math.round(g.avgScore * 100),
+            display: `${Math.round(g.avgScore * 100)}%`,
+          })),
+        },
+        { kind: 'note', text: t('growthNote') },
+      ],
+    };
+  };
 
   return (
     <Screen maxWidth={980}>
@@ -186,16 +355,16 @@ export function ClassInsightsScreen({ classId }: { classId: number }) {
       </Link>
       <Title>📊 {t('classInsights')}</Title>
 
+      {/* Full-page report export: PDF/Word keep the tables + charts, CSV is
+          the raw data (docs/statistics-plan.md, Phase 3). */}
+      <ReportButtons
+        filenameBase={`class-insights-${cls.name.replace(/\s+/g, '_')}`}
+        buildReport={buildReport}
+      />
+
       {/* Students to watch — the short list first: it's what the page is for. */}
       <AppCard gap={10}>
-        <XStack justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={8}>
-          <SubTitle>🚩 {t('watchlistTitle')}</SubTitle>
-          {Platform.OS === 'web' && watchlist.length > 0 && (
-            <SecondaryButton size="$2" onPress={exportWatchlist}>
-              ⬇️ {t('exportWatchlistCsv')}
-            </SecondaryButton>
-          )}
-        </XStack>
+        <SubTitle>🚩 {t('watchlistTitle')}</SubTitle>
         {watchlist.length === 0 && <Muted size={12}>{t('watchlistEmpty')}</Muted>}
         {watchlist.map((w) => (
           <YStack key={w.id} gap={6} paddingVertical={4} borderTopWidth={1} borderTopColor={tokens.border}>
@@ -288,14 +457,7 @@ export function ClassInsightsScreen({ classId }: { classId: number }) {
 
       {/* Skill heatmap: students × curriculum skills, decayed mastery colors. */}
       <AppCard gap={10}>
-        <XStack justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={8}>
-          <SubTitle>🗺️ {t('heatmapTitle')}</SubTitle>
-          {Platform.OS === 'web' && students.length > 0 && (
-            <SecondaryButton size="$2" onPress={exportHeatmap}>
-              ⬇️ {t('exportHeatmapCsv')}
-            </SecondaryButton>
-          )}
-        </XStack>
+        <SubTitle>🗺️ {t('heatmapTitle')}</SubTitle>
         {students.length === 0 ? (
           <Muted size={12}>{t('emptyRoster')}</Muted>
         ) : (
@@ -495,6 +657,24 @@ export function ClassInsightsScreen({ classId }: { classId: number }) {
           </>
         )}
         <Muted size={11}>{t('tutorUsageNote')}</Muted>
+      </AppCard>
+
+      {/* Mastery growth: weekly class-average from the snapshot history. */}
+      <AppCard gap={12}>
+        <SubTitle>📈 {t('growthTitle')}</SubTitle>
+        {growth.length === 0 ? (
+          <Muted size={12}>{t('noDataYet')}</Muted>
+        ) : (
+          <WeeklyBars
+            yearStart={yearStart}
+            points={growth.map((g) => ({
+              weekStart: g.weekStart,
+              value: Math.round(g.avgScore * 100),
+              display: `${Math.round(g.avgScore * 100)}%`,
+            }))}
+          />
+        )}
+        <Muted size={11}>{t('growthNote')}</Muted>
       </AppCard>
 
       {/* Time on task. */}

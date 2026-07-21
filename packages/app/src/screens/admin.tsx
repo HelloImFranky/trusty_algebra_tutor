@@ -8,7 +8,9 @@
 import { useState } from 'react';
 import { Linking } from 'react-native';
 import { Text, XStack, YStack } from 'tamagui';
-import { regentsTopics } from '@tutor/core';
+import { regentsTopics, REPORT_COLORS, type Report } from '@tutor/core';
+import { ReportButtons } from '../components/ReportButtons';
+import { WeeklyBars } from '../components/WeeklyBars';
 import { trpc } from '../lib/trpc';
 import { useI18n, type I18nKey } from '../lib/i18n';
 import { useAuth } from '../lib/auth';
@@ -78,6 +80,127 @@ export function AdminScreen() {
     );
   }
 
+  /** Full school-overview report for PDF/Word/CSV export (Phase 3). */
+  const buildAdminReport = (): Report => {
+    const d = overview.data!;
+    const topicTitle = (slug: string) => {
+      const tp = regentsTopics.find((x) => x.slug === slug);
+      return tp ? (locale === 'es' ? tp.titleEs : tp.titleEn) : slug;
+    };
+    const sliceRows = (slices: typeof d.slices.byGrade, dim: 'grade' | 'locale') =>
+      slices.map((s) => [
+        s.key === 'unspecified'
+          ? t('sliceUnspecified')
+          : dim === 'grade'
+            ? `${t('grade')} ${s.key}`
+            : s.key === 'es'
+              ? 'Español'
+              : 'English',
+        String(s.students),
+        s.suppressed ? t('sliceSuppressed') : String(s.active30d),
+        s.suppressed ? '' : String(s.minutes30d),
+        s.suppressed || s.avgMastery === null ? '' : `${Math.round(s.avgMastery * 100)}%`,
+      ]);
+    const sliceColumns = [
+      '',
+      t('studentsLabel'),
+      t('activeStudents30d'),
+      t('schoolMinutes30d'),
+      t('avgMasteryLabel'),
+    ];
+    return {
+      meta: {
+        title: `${t('schoolOverview')} — ${t('appName')}`,
+        stamp: `${t('reportGenerated')} ${new Date().toISOString().slice(0, 10)} · ${t('appName')}`,
+      },
+      blocks: [
+        {
+          kind: 'stats',
+          items: [
+            { label: t('activeStudents7d'), value: String(d.engagement.active7d) },
+            { label: t('activeStudents30d'), value: String(d.engagement.active30d) },
+            { label: t('schoolAttempts30d'), value: String(d.engagement.attempts30d) },
+            { label: t('schoolMinutes30d'), value: String(d.engagement.minutes30d) },
+          ],
+        },
+        {
+          kind: 'stacked',
+          title: t('masteryByUnitTitle'),
+          legend: [
+            { label: t('struggling'), color: REPORT_COLORS.struggling },
+            { label: t('practicing'), color: REPORT_COLORS.practicing },
+            { label: t('proficient'), color: REPORT_COLORS.proficient },
+            { label: t('mastered'), color: REPORT_COLORS.mastered },
+          ],
+          rows: d.masteryByUnit
+            .filter((u) => u.struggling + u.practicing + u.proficient + u.mastered > 0)
+            .map((u) => ({
+              label: `${u.unitNumber}. ${locale === 'es' ? u.titleEs : u.titleEn}`,
+              segments: [u.struggling, u.practicing, u.proficient, u.mastered],
+            })),
+        },
+        { kind: 'note', text: t('masteryByUnitNote') },
+        {
+          kind: 'bars',
+          title: t('growthTitle'),
+          max: 100,
+          items: d.growth.map((g) => ({
+            label: g.weekStart,
+            value: Math.round(g.avgScore * 100),
+            display: `${Math.round(g.avgScore * 100)}%`,
+          })),
+        },
+        { kind: 'note', text: t('growthNote') },
+        {
+          kind: 'stacked',
+          title: t('readinessTitle'),
+          legend: [
+            { label: t('readinessNeedsWork'), color: REPORT_COLORS.needsWork },
+            { label: t('readinessDeveloping'), color: REPORT_COLORS.developing },
+            { label: t('readinessReady'), color: REPORT_COLORS.ready },
+            { label: t('readinessNoData'), color: REPORT_COLORS.noData },
+          ],
+          rows: d.readiness.map((r) => ({
+            label: topicTitle(r.topicSlug),
+            segments: [r.needsWork, r.developing, r.ready, r.noData],
+          })),
+        },
+        { kind: 'note', text: t('readinessNote') },
+        {
+          kind: 'stats',
+          items: [
+            { label: t('adoptionTeachers'), value: String(d.adoption.teachersActive) },
+            { label: t('adoptionClasses'), value: String(d.adoption.classes) },
+            { label: t('adoptionEnrolled'), value: String(d.adoption.studentsEnrolled) },
+            { label: t('adoptionAccounts'), value: String(d.adoption.studentsTotal) },
+            { label: t('consentPendingStat'), value: String(d.adoption.consentPending) },
+          ],
+        },
+        {
+          kind: 'table',
+          title: t('slicesGradeTitle'),
+          columns: sliceColumns,
+          rows: sliceRows(d.slices.byGrade, 'grade'),
+        },
+        {
+          kind: 'table',
+          title: t('slicesLocaleTitle'),
+          columns: sliceColumns,
+          rows: sliceRows(d.slices.byLocale, 'locale'),
+        },
+        {
+          kind: 'bars',
+          title: t('weeklyMinutesChart'),
+          items: d.weekly.map((w) => ({
+            label: w.weekStart,
+            value: w.minutes,
+            display: `${w.minutes} ${t('minutes')}`,
+          })),
+        },
+      ],
+    };
+  };
+
   return (
     <Screen maxWidth={820}>
       <Title>🛡️ {t('admin')}</Title>
@@ -86,7 +209,12 @@ export function AdminScreen() {
           aggregates only — engagement, mastery by unit, adoption, consent
           coverage. The admin role still can't reach any individual student. */}
       <AppCard gap={12}>
-        <SubTitle>🏫 {t('schoolOverview')}</SubTitle>
+        <XStack justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={8}>
+          <SubTitle>🏫 {t('schoolOverview')}</SubTitle>
+          {overview.data && (
+            <ReportButtons filenameBase="school-overview" buildReport={buildAdminReport} />
+          )}
+        </XStack>
         {overview.isLoading && <Loading />}
         {overview.error && <Feedback kind="bad">{overview.error.message}</Feedback>}
         {overview.data && (
@@ -148,6 +276,21 @@ export function AdminScreen() {
             ) && <Muted size={12}>{t('noDataYet')}</Muted>}
             <Muted size={11}>{t('masteryByUnitNote')}</Muted>
 
+            <SubTitle>📈 {t('growthTitle')}</SubTitle>
+            {overview.data.growth.length === 0 ? (
+              <Muted size={12}>{t('noDataYet')}</Muted>
+            ) : (
+              <WeeklyBars
+                yearStart={overview.data.yearStart}
+                points={overview.data.growth.map((g) => ({
+                  weekStart: g.weekStart,
+                  value: Math.round(g.avgScore * 100),
+                  display: `${Math.round(g.avgScore * 100)}%`,
+                }))}
+              />
+            )}
+            <Muted size={11}>{t('growthNote')}</Muted>
+
             <SubTitle>🎯 {t('readinessTitle')}</SubTitle>
             {overview.data.readiness.map((r) => {
               const topic = regentsTopics.find((tp) => tp.slug === r.topicSlug);
@@ -206,6 +349,60 @@ export function AdminScreen() {
                 label={t('consentPendingStat')}
               />
             </XStack>
+
+            {/* Equity slices (Phase 3): usage/outcomes by grade and by
+                language. Cohorts under MIN_COHORT arrive suppressed from the
+                server — the row says so instead of showing numbers. */}
+            {(
+              [
+                ['slicesGradeTitle', overview.data.slices.byGrade],
+                ['slicesLocaleTitle', overview.data.slices.byLocale],
+              ] as const
+            ).map(([titleKey, slices]) => (
+              <YStack key={titleKey} gap={6}>
+                <SubTitle>🧭 {t(titleKey)}</SubTitle>
+                {slices.map((s) => (
+                  <XStack
+                    key={s.key}
+                    gap={12}
+                    alignItems="center"
+                    flexWrap="wrap"
+                    paddingVertical={3}
+                    borderTopWidth={1}
+                    borderTopColor={tokens.border}
+                  >
+                    <Text fontSize={13} fontWeight="800" color={tokens.ink} width={90}>
+                      {s.key === 'unspecified'
+                        ? t('sliceUnspecified')
+                        : titleKey === 'slicesGradeTitle'
+                          ? `${t('grade')} ${s.key}`
+                          : s.key === 'es'
+                            ? 'Español'
+                            : 'English'}
+                    </Text>
+                    {s.suppressed ? (
+                      <Muted size={12}>{t('sliceSuppressed')}</Muted>
+                    ) : (
+                      <>
+                        <Muted size={12}>
+                          {s.students} {t('studentsLabel')}
+                        </Muted>
+                        <Muted size={12}>
+                          {s.active30d} {t('activeStudents30d')}
+                        </Muted>
+                        <Muted size={12}>
+                          {s.minutes30d} {t('schoolMinutes30d')}
+                        </Muted>
+                        <Muted size={12}>
+                          {s.avgMastery === null ? '—' : `${Math.round(s.avgMastery * 100)}%`}{' '}
+                          {t('avgMasteryLabel')}
+                        </Muted>
+                      </>
+                    )}
+                  </XStack>
+                ))}
+              </YStack>
+            ))}
           </>
         )}
       </AppCard>
@@ -269,6 +466,23 @@ export function AdminScreen() {
         {usage.data?.available && usage.data.summary ? (
           <>
             <UsageDashboard summary={usage.data.summary} />
+            {/* Cost per active student (Phase 3): spend over the picked
+                window divided by matching active-student count — the number
+                a principal defends in a budget meeting. */}
+            {overview.data &&
+              (() => {
+                const active =
+                  usageWindow === '7d'
+                    ? overview.data.engagement.active7d
+                    : overview.data.engagement.active30d;
+                if (active === 0) return null;
+                const per = usage.data!.summary!.totals.costUsd / active;
+                return (
+                  <Muted size={12}>
+                    💲 ${per.toFixed(2)} {t('costPerStudent')} ({usageWindow})
+                  </Muted>
+                );
+              })()}
             <Muted size={10.5}>{t('usageFreshnessNote')}</Muted>
           </>
         ) : (

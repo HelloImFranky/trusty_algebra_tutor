@@ -12,6 +12,8 @@ import {
 } from '@tutor/core';
 import { protectedProcedure, router } from '../trpc.js';
 import { teacherCanSeeStudent } from '../authz.js';
+import { masteryGrowthSeries } from '../classInsights.js';
+import { schoolYearStart } from '../sprintStats.js';
 
 async function buildProgress(userId: number) {
   const mastery = await prisma.mastery.findMany({
@@ -195,6 +197,10 @@ async function buildProgress(userId: number) {
     sprintsCompleted,
   });
 
+  // Phase 3 (docs/statistics-plan.md): weekly average-mastery trend from
+  // the snapshot history — the "your mastery this month vs last month" line.
+  const growth = await masteryGrowthSeries([BigInt(userId)], schoolYearStart());
+
   return {
     streakDays: streak,
     skills,
@@ -202,6 +208,7 @@ async function buildProgress(userId: number) {
     activity,
     regents,
     regentsReadiness,
+    growth,
     achievements,
   };
 }

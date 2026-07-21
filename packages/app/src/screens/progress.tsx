@@ -14,7 +14,10 @@ import { useI18n, type I18nKey } from '../lib/i18n';
 import { useAuth } from '../lib/auth';
 import { useRequireAuth } from '../components/AppChrome';
 import { JoinClassCard } from '../components/JoinClassCard';
-import { ReadinessPill } from '../components/Readiness';
+import { BAND_KEY, ReadinessPill, type Band } from '../components/Readiness';
+import { ReportButtons } from '../components/ReportButtons';
+import { WeeklyBars } from '../components/WeeklyBars';
+import { REPORT_COLORS, type Report } from '@tutor/core';
 import {
   AppCard, Badge, Feedback, Loading, Muted, NEUTRAL, ProgressBar, Screen, StatChip,
   SubTitle, Title, useAccent, useTokens, COLORS,
@@ -223,6 +226,93 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
   const earned = achievements.filter((a) => a.earned);
   const families = toFamilies(achievements);
 
+  /** Full progress report for PDF/Word/CSV — the parent-conference handout
+   * (docs/statistics-plan.md, Phase 3). */
+  const buildProgressReport = (): Report => {
+    const bandColor: Record<Band, string> = {
+      ready: REPORT_COLORS.ready,
+      developing: REPORT_COLORS.developing,
+      needsWork: REPORT_COLORS.needsWork,
+      noData: REPORT_COLORS.noData,
+    };
+    return {
+      meta: {
+        title: `${t('progress')} — ${data.student?.displayName ?? ''}`.replace(/ — $/, ''),
+        stamp: `${t('reportGenerated')} ${new Date().toISOString().slice(0, 10)} · ${t('appName')}`,
+      },
+      blocks: [
+        {
+          kind: 'stats',
+          items: [
+            { label: t('streak'), value: String(data.streakDays) },
+            { label: `${t('minutes')} / 30d`, value: String(Math.round(totalMinutes)) },
+            {
+              label: t('mastered'),
+              value: String(
+                data.skills.filter((s) => s.label === 'mastered' || s.label === 'proficient')
+                  .length,
+              ),
+            },
+            { label: t('badgesEarned'), value: `${earned.length}/${achievements.length}` },
+            { label: t('regentsCorrectLabel'), value: String(data.regents.questionsCorrect) },
+          ],
+        },
+        {
+          kind: 'grid',
+          title: t('readinessTitle'),
+          columns: data.regentsReadiness.map((r) => (locale === 'es' ? r.titleEs : r.titleEn)),
+          legend: (['ready', 'developing', 'needsWork', 'noData'] as Band[]).map((b) => ({
+            label: t(BAND_KEY[b]),
+            color: bandColor[b],
+          })),
+          rows: [
+            {
+              label: data.student?.displayName ?? t('progress'),
+              cells: data.regentsReadiness.map((r) => ({
+                color: bandColor[r.band as Band],
+                value: t(BAND_KEY[r.band as Band]),
+              })),
+            },
+          ],
+        },
+        { kind: 'note', text: t('readinessNote') },
+        {
+          kind: 'bars',
+          title: t('growthTitle'),
+          max: 100,
+          items: data.growth.map((g) => ({
+            label: g.weekStart,
+            value: Math.round(g.avgScore * 100),
+            display: `${Math.round(g.avgScore * 100)}%`,
+          })),
+        },
+        { kind: 'note', text: t('growthNote') },
+        {
+          kind: 'table',
+          title: t('review'),
+          columns: [t('review'), t('questionsAnsweredLabel'), t('rightLabel'), t('wrongLabel')],
+          rows: data.regents.topics.map((topic) => [
+            locale === 'es' ? topic.titleEs : topic.titleEn,
+            String(topic.correctAll + topic.wrongAll),
+            String(topic.correctAll),
+            String(topic.wrongAll),
+          ]),
+        },
+        {
+          kind: 'table',
+          title: t('masteryMap'),
+          columns: [t('lesson'), t('skillCol'), t('score'), ''],
+          rows: data.skills.map((s) => [
+            s.lessonCode,
+            s.name,
+            `${Math.round(s.score * 100)}%`,
+            t(s.label as I18nKey),
+          ]),
+        },
+      ],
+    };
+  };
+
   return (
     <Screen maxWidth={980}>
       <XStack alignItems="center" gap={8}>
@@ -234,6 +324,13 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
       </XStack>
 
       {!studentId && role === 'student' && <JoinClassCard />}
+
+      {/* Full-page report export (PDF/Word keep charts; CSV = data only). */}
+      <ReportButtons
+        filenameBase={`progress-${(data.student?.displayName ?? 'me').replace(/\s+/g, '_')}`}
+        buildReport={buildProgressReport}
+      />
+
 
       <XStack gap={8} flexWrap="wrap">
         {/* Streak flame is a fixed brand red — see curriculum.tsx for the
@@ -363,6 +460,24 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
           </XStack>
         ))}
         <Muted size={11}>{t('readinessNote')}</Muted>
+      </AppCard>
+
+      {/* Mastery trend from the weekly snapshot history (Phase 3). */}
+      <AppCard gap={12}>
+        <SubTitle>📈 {t('growthTitle')}</SubTitle>
+        {data.growth.length === 0 ? (
+          <Muted size={12}>{t('noDataYet')}</Muted>
+        ) : (
+          <WeeklyBars
+            yearStart={`${new Date().getUTCFullYear()}-01-01`}
+            points={data.growth.map((g) => ({
+              weekStart: g.weekStart,
+              value: Math.round(g.avgScore * 100),
+              display: `${Math.round(g.avgScore * 100)}%`,
+            }))}
+          />
+        )}
+        <Muted size={11}>{t('growthNote')}</Muted>
       </AppCard>
 
       {data.struggleFlags.length > 0 && (
