@@ -15,7 +15,6 @@ import {
   Footprints,
   Lightbulb,
   Lock,
-  MessageCircle,
   X,
 } from '@tamagui/lucide-icons';
 import { Button, Text, XStack, YStack } from 'tamagui';
@@ -28,7 +27,6 @@ import { MathInput } from '../components/MathInput';
 import { MathText } from '../components/MathText';
 import { AnimatedEquation } from '../components/stepanim/AnimatedEquation';
 import { buildScriptForProblem } from '../components/stepanim/builders';
-import { TutorChat } from '../components/TutorChat';
 import {
   AppCard, Badge, COLORS, Feedback, GhostButton, HINT, Loading, Muted, PrimaryButton, Screen,
   SecondaryButton, useAccent, useTokens,
@@ -76,7 +74,6 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
   const [stepIndex, setStepIndex] = useState(0);
   const [stepAnswer, setStepAnswer] = useState('');
   const [stepFeedback, setStepFeedback] = useState('');
-  const [showTutor, setShowTutor] = useState(false);
   const [showAnim, setShowAnim] = useState(false);
   const [animStart, setAnimStart] = useState(0);
   const [animViews, setAnimViews] = useState(0);
@@ -106,7 +103,6 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
     setStepIndex(0);
     setStepAnswer('');
     setStepFeedback('');
-    setShowTutor(false);
     setShowAnim(false);
     setAnimStart(0);
     setAnimViews(0);
@@ -332,9 +328,6 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
                     {t('showStep')}
                   </GhostButton>
                 )}
-                <GhostButton icon={<MessageCircle size={15} />} onPress={() => setShowTutor((s) => !s)}>
-                  {t('askTutor')}
-                </GhostButton>
               </>
             )}
             {phase === 'done' && (
@@ -417,9 +410,6 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
                     {t('animatedExample')}
                   </GhostButton>
                 )}
-                <GhostButton icon={<MessageCircle size={15} />} onPress={() => setShowTutor((s) => !s)}>
-                  {t('askTutor')}
-                </GhostButton>
               </XStack>
             </AppCard>
           )}
@@ -462,18 +452,6 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
           key={`${problem.id}-${animStart}`}
           script={animScript}
           startAtStep={animStart}
-        />
-      )}
-
-      {showTutor && (
-        <TutorChat
-          problemId={problem.id}
-          stepReached={phase === 'steps' ? stepIndex : undefined}
-          onOpenAnim={
-            animScript
-              ? (step) => openAnim(Math.min(Math.max(0, step), animScript.steps.length - 1))
-              : undefined
-          }
         />
       )}
     </Screen>

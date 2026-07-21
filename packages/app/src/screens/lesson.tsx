@@ -14,7 +14,6 @@ import {
   Download,
   FileText,
   Lightbulb,
-  MessageCircle,
   PenLine,
 } from '@tamagui/lucide-icons';
 import { Text, XStack, YStack } from 'tamagui';
@@ -25,9 +24,8 @@ import { Mascot } from '../components/Mascot';
 import { MathText } from '../components/MathText';
 import { Katex } from '../components/Katex';
 import { LessonAnimations } from '../components/stepanim/LessonAnimations';
-import { TutorChat } from '../components/TutorChat';
 import {
-  AppCard, GhostButton, HINT, Loading, Muted, PrimaryButton, Screen,
+  AppCard, HINT, Loading, Muted, PrimaryButton, Screen,
   useAccent, useFeedbackColors, useTokens,
 } from '../components/ui';
 
@@ -99,7 +97,6 @@ export function LessonScreen({ id }: { id: number }) {
   const lesson = trpc.curriculum.lesson.useQuery({ id, locale }, { enabled: authed && !!id });
   const [revealed, setRevealed] = useState(1);
   const [openScaffold, setOpenScaffold] = useState<string | null>(null);
-  const [showTutor, setShowTutor] = useState(false);
 
   if (!lesson.data) return <Loading />;
   const l = lesson.data;
@@ -225,12 +222,7 @@ export function LessonScreen({ id }: { id: number }) {
             <PrimaryButton icon={<PenLine size={15} color="#fff" />}>{t('practice')}</PrimaryButton>
           </Link>
         )}
-        <GhostButton icon={<MessageCircle size={15} />} onPress={() => setShowTutor((s) => !s)}>
-          {t('askTutor')}
-        </GhostButton>
       </XStack>
-
-      {showTutor && <TutorChat lessonId={l.id} />}
     </Screen>
   );
 }
