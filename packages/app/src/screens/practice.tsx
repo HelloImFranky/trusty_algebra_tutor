@@ -15,10 +15,9 @@ import {
   Footprints,
   Lightbulb,
   Lock,
-  MessageCircle,
   X,
 } from '@tamagui/lucide-icons';
-import { Text, XStack, YStack } from 'tamagui';
+import { Button, Text, XStack, YStack } from 'tamagui';
 import { client } from '../lib/trpc';
 import { attemptOrQueue } from '../lib/offline';
 import { useI18n } from '../lib/i18n';
@@ -28,7 +27,6 @@ import { MathInput } from '../components/MathInput';
 import { MathText } from '../components/MathText';
 import { AnimatedEquation } from '../components/stepanim/AnimatedEquation';
 import { buildScriptForProblem } from '../components/stepanim/builders';
-import { TutorChat } from '../components/TutorChat';
 import {
   AppCard, Badge, COLORS, Feedback, GhostButton, HINT, Loading, Muted, PrimaryButton, Screen,
   SecondaryButton, useAccent, useTokens,
@@ -48,6 +46,12 @@ interface Problem {
   gradingMode: string;
   params?: unknown;
   skillSlug?: string | null;
+  /** Fixed answer choices for word-answer questions (rational/irrational,
+   * yes/no, up/down, …); null/absent for free-response questions. */
+  choices?: string[] | null;
+  /** Which dedicated keypad this problem's answer needs ('numeric' for bare
+   * numbers, 'algebra' for expressions); null when it's a choice question. */
+  keypad?: 'numeric' | 'algebra' | null;
   steps: ProblemStep[];
 }
 
@@ -70,7 +74,6 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
   const [stepIndex, setStepIndex] = useState(0);
   const [stepAnswer, setStepAnswer] = useState('');
   const [stepFeedback, setStepFeedback] = useState('');
-  const [showTutor, setShowTutor] = useState(false);
   const [showAnim, setShowAnim] = useState(false);
   const [animStart, setAnimStart] = useState(0);
   const [animViews, setAnimViews] = useState(0);
@@ -100,7 +103,6 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
     setStepIndex(0);
     setStepAnswer('');
     setStepFeedback('');
-    setShowTutor(false);
     setShowAnim(false);
     setAnimStart(0);
     setAnimViews(0);
@@ -157,21 +159,22 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
     }
   };
 
-  /** Escalating hint ladder (§4.2): nudge → step hint → guided steps → tutor. */
+  /** The Hint button is a simple on/off toggle: first tap shows the nudge,
+   * a second tap clears it. The deeper escalations have their own buttons
+   * ("Walk me through it" for the guided/animated walkthrough, "Ask the
+   * tutor" for the LLM chat), so the hint button never advances the phase
+   * or opens the tutor on its own. */
   const nudge = () => {
-    setHintsUsed((h) => h + 1);
-    if (hintsUsed === 0) {
-      setHintText(
-        problem.steps[0]?.hint ??
-          problem.steps[0]?.prompt ??
-          (locale === 'es' ? 'Repasa los pasos de la lección.' : 'Look back at the lesson steps.'),
-      );
-    } else if (problem.steps.length > 0) {
-      setPhase('steps');
+    if (hintText) {
       setHintText('');
-    } else {
-      setShowTutor(true);
+      return;
     }
+    setHintsUsed((h) => h + 1);
+    setHintText(
+      problem.steps[0]?.hint ??
+        problem.steps[0]?.prompt ??
+        (locale === 'es' ? 'Repasa los pasos de la lección.' : 'Look back at the lesson steps.'),
+    );
   };
 
   const checkStep = async () => {
@@ -244,7 +247,47 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
             {t('yourAnswer')}
           </Text>
           <MathText text={problem.prompt} size={18} />
-          <MathInput value={answer} onChange={setAnswer} onSubmit={submit} disabled={phase === 'done'} />
+          {problem.choices && problem.choices.length > 0 ? (
+            <XStack gap={10} flexWrap="wrap">
+              {problem.choices.map((choice) => {
+                const selected = answer === choice;
+                return (
+                  <Button
+                    key={choice}
+                    flex={1}
+                    flexBasis={130}
+                    minWidth={110}
+                    height={52}
+                    borderRadius={14}
+                    borderWidth={2}
+                    borderColor={selected ? accent : tokens.border}
+                    backgroundColor={selected ? tokens.subtle : tokens.surface}
+                    disabled={phase === 'done'}
+                    pressStyle={{ opacity: 0.85 }}
+                    onPress={() => setAnswer(choice)}
+                    aria-label={choice}
+                  >
+                    <Text
+                      fontSize={17}
+                      fontWeight="800"
+                      color={selected ? accent : tokens.ink}
+                      textTransform="capitalize"
+                    >
+                      {choice}
+                    </Text>
+                  </Button>
+                );
+              })}
+            </XStack>
+          ) : (
+            <MathInput
+              value={answer}
+              onChange={setAnswer}
+              onSubmit={submit}
+              disabled={phase === 'done'}
+              keypad={problem.keypad ?? 'algebra'}
+            />
+          )}
           {feedback === 'good' && <Feedback kind="good">{t('correct')}</Feedback>}
           {feedback === 'bad' && (
             <Feedback kind="bad" icon={<X size={15} color={COLORS.bad} />}>
@@ -265,25 +308,26 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
                 <SecondaryButton icon={<Lightbulb size={15} />} onPress={nudge}>
                   {t('hint')}
                 </SecondaryButton>
-                {feedback === 'bad' && animScript && !showAnim && (
-                  <GhostButton icon={<Film size={15} />} onPress={() => openAnim(0)}>
-                    {t('animatedExample')}
-                  </GhostButton>
-                )}
-                {problem.steps.length > 0 && (
+                {(animScript || problem.steps.length > 0) && (
                   <GhostButton
                     icon={<Footprints size={15} />}
                     onPress={() => {
-                      setPhase('steps');
-                      setHintsUsed((h) => h + 1);
+                      // "Walk me through it" IS the animated worked example.
+                      // Toggle the animation when a builder understands this
+                      // problem; only fall back to the per-step guided mode
+                      // when there's no animation to play.
+                      if (animScript) {
+                        if (showAnim) setShowAnim(false);
+                        else openAnim(0);
+                      } else {
+                        setPhase('steps');
+                        setHintsUsed((h) => h + 1);
+                      }
                     }}
                   >
                     {t('showStep')}
                   </GhostButton>
                 )}
-                <GhostButton icon={<MessageCircle size={15} />} onPress={() => setShowTutor((s) => !s)}>
-                  {t('askTutor')}
-                </GhostButton>
               </>
             )}
             {phase === 'done' && (
@@ -340,7 +384,15 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
                 {t('step')} {stepIndex + 1} {t('of')} {problem.steps.length}
               </Text>
               <MathText text={step.prompt} />
-              <MathInput value={stepAnswer} onChange={setStepAnswer} onSubmit={checkStep} />
+              <MathInput
+                value={stepAnswer}
+                onChange={setStepAnswer}
+                onSubmit={checkStep}
+                // Steps are intermediate and often algebraic even when the
+                // final answer is a bare number, so use the full algebra pad
+                // (choice questions type their word answer instead).
+                keypad={problem.choices && problem.choices.length > 0 ? false : 'algebra'}
+              />
               {stepFeedback === 'good' && <Feedback kind="good">{t('correct')}</Feedback>}
               {stepFeedback === 'bad' && <Feedback kind="bad">{t('incorrect')}</Feedback>}
               {stepFeedback && stepFeedback !== 'good' && stepFeedback !== 'bad' && (
@@ -358,9 +410,6 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
                     {t('animatedExample')}
                   </GhostButton>
                 )}
-                <GhostButton icon={<MessageCircle size={15} />} onPress={() => setShowTutor((s) => !s)}>
-                  {t('askTutor')}
-                </GhostButton>
               </XStack>
             </AppCard>
           )}
@@ -403,18 +452,6 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
           key={`${problem.id}-${animStart}`}
           script={animScript}
           startAtStep={animStart}
-        />
-      )}
-
-      {showTutor && (
-        <TutorChat
-          problemId={problem.id}
-          stepReached={phase === 'steps' ? stepIndex : undefined}
-          onOpenAnim={
-            animScript
-              ? (step) => openAnim(Math.min(Math.max(0, step), animScript.steps.length - 1))
-              : undefined
-          }
         />
       )}
     </Screen>

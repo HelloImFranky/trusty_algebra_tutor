@@ -44,8 +44,11 @@ Playwright chromium is at `/opt/pw-browsers/chromium` (use
    Click "Continue →" until "✏️ Practice" appears.
 4. Practice — answers can be looked up in Postgres
    (`SELECT answer_latex FROM problems WHERE id=...`). Wrong answer → "Not
-   quite"; Hint escalates; "Walk me through it" enters per-step mode.
-5. Tutor chat streams a graceful fallback when no LLM key is configured.
+   quite"; Hint toggles a nudge on/off; "Walk me through it" plays the
+   animated worked example (per-step guided mode only when no animation exists).
+5. Tutor chat is disabled for now — the "Ask the tutor" entry points are
+   removed from the lesson and practice screens (the TutorChat component and
+   its API stay in the tree for a later re-enable).
 6. `/progress`, `/sprint`, `/review`, `/calculator` (Calculate/Graph/Table tabs;
    engine-rendered svg, drag-pan + wheel-zoom; autosaves to
    `calculator_sessions`),

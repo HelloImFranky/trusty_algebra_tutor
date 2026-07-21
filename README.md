@@ -148,6 +148,45 @@ python3 scripts/ingest_scaffold_images.py "scripts/Algebra Scaffolds__891.docx"
 
 Redeploy or restart, and lessons pick up the new notes automatically.
 
+## Versioning & releases
+
+The project version (root `package.json`) follows [Semantic Versioning](https://semver.org)
+and is bumped **at release time** from the [Conventional Commits](https://www.conventionalcommits.org)
+we already write (`fix:`, `feat:`, `feat!:`/`BREAKING CHANGE:`). No commit
+bumps the version on its own — the version describes a shipped release, not
+each work-in-progress commit.
+
+Cut a release with [`commit-and-tag-version`](https://github.com/absolute-version/commit-and-tag-version):
+
+```bash
+npm run release:dry     # preview the next version + changelog, write nothing
+npm run release         # bump package.json, update CHANGELOG.md, commit + tag
+git push --follow-tags origin <branch>
+```
+
+`npm run release` reads every commit since the last `v*` tag, picks the bump,
+writes `CHANGELOG.md`, makes a `chore(release): x.y.z` commit, and tags `vx.y.z`.
+
+**Which commits move the number** (only `feat`/`fix`/`perf` and breaking
+changes count; `docs`/`chore`/`refactor`/`style`/`test`/`build`/`ci` never cut
+a release):
+
+| commit type | while `0.x` (now) | after `1.0.0` |
+| --- | --- | --- |
+| `fix:` | patch (`0.2.0 → 0.2.1`) | patch |
+| `feat:` | patch (`0.2.0 → 0.2.1`) | minor (`1.2.0 → 1.3.0`) |
+| `feat!:` / `BREAKING CHANGE:` | minor (`0.2.0 → 0.3.0`) | major (`1.2.0 → 2.0.0`) |
+
+The `0.x` column is intentional: per SemVer §4, a pre-1.0 project may change
+anything at any time, so `commit-and-tag-version` softens each bump by one
+level until you cut `1.0.0` (run `npm run release -- --release-as major` when
+you're ready for that first stable release). Changelog sections and the
+git-link base live in [`.versionrc.json`](.versionrc.json).
+
+> First release only: there's no `v*` tag yet, so the first `npm run release`
+> would fold the whole history into one changelog. To start the log from today
+> instead, tag the current commit once first: `git tag v0.2.0`.
+
 ## Design notes
 
 - **Content is data, not code** — the curriculum lives in versioned Postgres rows seeded from `packages/core/src/content/`; the attempts log is append-only.

@@ -1,1 +1,1 @@
-hex=108 symbols=26
+hex=114 symbols=30

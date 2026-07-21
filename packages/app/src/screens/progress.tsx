@@ -23,6 +23,11 @@ import {
   SubTitle, Title, useAccent, useTokens, COLORS,
 } from '../components/ui';
 
+/** Cap for the per-topic "correct / tried" denominator on the Regents
+ * Review card — a student can renew a topic's round indefinitely, so the
+ * lifetime tried-count is bounded here just for display. */
+const REGENTS_MAX_TRIED = 9000;
+
 /** The stacking tier ladder. A family with `n` achievements uses the first
  * `n` names from this list — three-tier families (streaks, mastery, …) end
  * at gold; the six-tier solver family goes all the way to Math Wizard.
@@ -325,11 +330,15 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
 
       {!studentId && role === 'student' && <JoinClassCard />}
 
-      {/* Full-page report export (PDF/Word keep charts; CSV = data only). */}
-      <ReportButtons
-        filenameBase={`progress-${(data.student?.displayName ?? 'me').replace(/\s+/g, '_')}`}
-        buildReport={buildProgressReport}
-      />
+      {/* Full-page report export (PDF/Word keep charts; CSV = data only).
+          Students don't get the stats download — only guardians/teachers
+          reviewing a student, and admins, can export the report. */}
+      {role !== 'student' && (
+        <ReportButtons
+          filenameBase={`progress-${(data.student?.displayName ?? 'me').replace(/\s+/g, '_')}`}
+          buildReport={buildProgressReport}
+        />
+      )}
 
 
       <XStack gap={8} flexWrap="wrap">
@@ -365,20 +374,19 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
       </AppCard>
 
       <AppCard gap={10}>
-        <XStack justifyContent="space-between" alignItems="center">
-          <SubTitle>📚 {t('review')}</SubTitle>
-          <Muted>
-            {data.regents.topicsCompleted} / {data.regents.topics.length} {t('completeLabel').toLowerCase()}
-          </Muted>
-        </XStack>
+        <SubTitle>📚 {t('review')}</SubTitle>
         <Muted>
           {data.regents.questionsAnswered} {t('questionsAnsweredLabel')} · ✅{' '}
           {data.regents.questionsCorrect} {t('rightLabel')} · ❌{' '}
           {data.regents.questionsAnswered - data.regents.questionsCorrect} {t('wrongLabel')}
         </Muted>
         {data.regents.topics.map((topic) => {
-          const done = topic.answered >= topic.total;
-          const perfect = done && topic.correct === topic.total;
+          // Show lifetime accuracy per topic: x = questions answered
+          // correctly, y = total questions tried (capped at REGENTS_MAX_TRIED).
+          // The bar tracks that same x/y ratio.
+          const tried = Math.min(topic.correctAll + topic.wrongAll, REGENTS_MAX_TRIED);
+          const perfect = tried > 0 && topic.correctAll === tried;
+          const started = tried > 0;
           const open = openTopic === topic.slug;
           return (
             <YStack key={topic.slug}>
@@ -396,16 +404,16 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
                 <Text fontSize={13.5} fontWeight="700" width={170} numberOfLines={1} color={tokens.ink}>
                   {locale === 'es' ? topic.titleEs : topic.titleEn}
                 </Text>
-                <ProgressBar ratio={topic.answered / topic.total} />
+                <ProgressBar ratio={tried > 0 ? topic.correctAll / tried : 0} />
                 <Text
                   fontSize={12.5}
                   fontWeight="800"
-                  width={54}
+                  width={70}
                   textAlign="right"
-                  color={perfect ? COLORS.good : done ? accent : COLORS.muted}
+                  color={perfect ? COLORS.good : started ? accent : COLORS.muted}
                 >
-                  {perfect ? '🌟 ' : done ? '✓ ' : ''}
-                  {topic.correct}/{topic.total}
+                  {perfect ? '🌟 ' : ''}
+                  {topic.correctAll}/{tried}
                 </Text>
                 <Text fontSize={11} width={14} color={tokens.muted}>
                   {open ? '▾' : '▸'}
