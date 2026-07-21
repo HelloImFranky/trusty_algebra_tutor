@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma, Prisma } from '@tutor/db';
 import {
   answerChoicesFor,
+  keypadKindForAnswer,
   decayedScore,
   tierForScore,
   grade,
@@ -39,9 +40,14 @@ async function problemPayload(p: ProblemRow, locale: Locale) {
     // walkthrough of this exact problem (stepanim builders)
     prisma.problem.findUnique({
       where: { id: p.id },
-      select: { paramsJson: true, skill: { select: { slug: true } } },
+      select: { paramsJson: true, answerLatex: true, skill: { select: { slug: true } } },
     }),
   ]);
+  // Word-answer questions (rational/irrational, yes/no, …) come with a fixed
+  // choice set so the client offers buttons instead of a keypad; everything
+  // else gets a dedicated pad ('numeric' for bare numbers, 'algebra' for
+  // expressions) chosen from the answer's shape.
+  const choices = answerChoicesFor(extra?.paramsJson ?? null);
   return {
     id: Number(p.id),
     skillId: Number(p.skillId),
@@ -50,9 +56,8 @@ async function problemPayload(p: ProblemRow, locale: Locale) {
     gradingMode: p.gradingMode,
     params: extra?.paramsJson ?? null,
     skillSlug: extra?.skill.slug ?? null,
-    // Word-answer questions (rational/irrational, yes/no, …) come with a
-    // fixed choice set so the client offers buttons instead of a keypad.
-    choices: answerChoicesFor(extra?.paramsJson ?? null),
+    choices,
+    keypad: choices ? null : keypadKindForAnswer(extra?.answerLatex ?? ''),
     steps: steps.map((s) => ({
       position: s.position,
       prompt: locale === 'es' ? s.promptEs : s.promptEn,

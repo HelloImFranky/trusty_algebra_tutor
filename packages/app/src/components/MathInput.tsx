@@ -4,20 +4,22 @@
  * - Default (`keypad` off): a middle-school-tuned symbol toolbar over a text
  *   field that accepts the typed shortcuts the doc calls out (x^2, sqrt(),
  *   <=), with a live math preview.
- * - Keypad (`keypad` on, used by Practice): a calculator-style number/
- *   operations pad. The OS soft keyboard is suppressed so students press
- *   digits, operators and math symbols instead of typing free text on the
- *   alphabetical keyboard.
+ * - Keypad (`keypad` set): a dedicated, per-problem on-screen pad (see
+ *   MathKeypad) — 'numeric' for bare-number answers, 'algebra' for
+ *   expressions/equations. The OS soft keyboard is suppressed so students
+ *   press keys instead of typing free text on the alphabetical keyboard.
  *
  * Grading always normalizes through the CAS server-side — never string
- * equality — so `*` for ×, `/` for ÷, `^` for powers etc. all grade fine.
+ * equality — so `/` for ÷, `^` for powers, juxtaposition for × etc. all
+ * grade fine.
  */
 import { useRef } from 'react';
 import { TextInput } from 'react-native';
 import { Button, Input, Text, XStack, YStack } from 'tamagui';
 import { Katex } from './Katex';
+import { MathKeypad, type KeypadKind } from './MathKeypad';
 import { useI18n } from '../lib/i18n';
-import { useAccent, useTokens, type Hex } from './ui';
+import { useAccent, useTokens } from './ui';
 
 const BUTTONS: { label: string; insert: string; caret?: number }[] = [
   { label: 'x²', insert: '^2' },
@@ -45,60 +47,6 @@ export function toPreviewTex(input: string): string {
   return s;
 }
 
-/* ── Keypad layout ──────────────────────────────────────────────────────
- * A "functions" row of the middle-school math symbols, then a 4-column
- * calculator grid with the operator column on the right (mirrors the app's
- * Calculator pad). Every key just inserts text (or backspaces / clears);
- * grading normalizes server-side. */
-type Variant = 'digit' | 'var' | 'op' | 'fn' | 'util';
-type PadKey =
-  | { label: string; insert: string; caret?: number; variant: Variant; aria?: string }
-  | { label: string; action: 'backspace' | 'clear'; variant: Variant; aria: string };
-
-const PAD_FUNCTIONS: PadKey[] = [
-  { label: 'x²', insert: '^2', variant: 'fn', aria: 'squared' },
-  { label: 'xⁿ', insert: '^', caret: 1, variant: 'fn', aria: 'to the power' },
-  { label: '√', insert: 'sqrt()', caret: 5, variant: 'fn', aria: 'square root' },
-  { label: 'a/b', insert: '()/()', caret: 1, variant: 'fn', aria: 'fraction' },
-  { label: 'π', insert: 'pi', variant: 'fn' },
-  { label: '≤', insert: '<=', variant: 'fn', aria: 'less than or equal' },
-  { label: '≥', insert: '>=', variant: 'fn', aria: 'greater than or equal' },
-  { label: '=', insert: '=', variant: 'fn', aria: 'equals' },
-];
-
-const PAD_GRID: PadKey[][] = [
-  [
-    { label: '(', insert: '(', variant: 'fn' },
-    { label: ')', insert: ')', variant: 'fn' },
-    { label: '⌫', action: 'backspace', variant: 'util', aria: 'backspace' },
-    { label: 'AC', action: 'clear', variant: 'util', aria: 'clear' },
-  ],
-  [
-    { label: '7', insert: '7', variant: 'digit' },
-    { label: '8', insert: '8', variant: 'digit' },
-    { label: '9', insert: '9', variant: 'digit' },
-    { label: '÷', insert: '/', variant: 'op', aria: 'divide' },
-  ],
-  [
-    { label: '4', insert: '4', variant: 'digit' },
-    { label: '5', insert: '5', variant: 'digit' },
-    { label: '6', insert: '6', variant: 'digit' },
-    { label: '×', insert: '*', variant: 'op', aria: 'multiply' },
-  ],
-  [
-    { label: '1', insert: '1', variant: 'digit' },
-    { label: '2', insert: '2', variant: 'digit' },
-    { label: '3', insert: '3', variant: 'digit' },
-    { label: '−', insert: '-', variant: 'op', aria: 'subtract' },
-  ],
-  [
-    { label: 'x', insert: 'x', variant: 'var' },
-    { label: '0', insert: '0', variant: 'digit' },
-    { label: '.', insert: '.', variant: 'digit' },
-    { label: '+', insert: '+', variant: 'op', aria: 'add' },
-  ],
-];
-
 export function MathInput({
   value,
   onChange,
@@ -112,14 +60,17 @@ export function MathInput({
   onSubmit?: () => void;
   disabled?: boolean;
   placeholder?: string;
-  /** Show the calculator-style keypad and suppress the OS keyboard. */
-  keypad?: boolean;
+  /** Show a dedicated on-screen pad and suppress the OS keyboard. `true`
+   * picks the general algebra pad; pass a KeypadKind for a specific one. */
+  keypad?: boolean | KeypadKind;
 }) {
   const { t } = useI18n();
   const accent = useAccent();
   const tokens = useTokens();
   const ref = useRef<TextInput>(null);
   const selection = useRef({ start: value.length, end: value.length });
+
+  const keypadKind: KeypadKind | null = keypad === true ? 'algebra' : keypad || null;
 
   const insert = (text: string, caretOffset?: number) => {
     const { start, end } = selection.current;
@@ -147,47 +98,15 @@ export function MathInput({
     ref.current?.focus();
   };
 
-  const pressKey = (key: PadKey) => {
-    if ('action' in key) {
-      if (key.action === 'backspace') backspace();
-      else clearAll();
-      return;
-    }
-    insert(key.insert, key.caret);
-  };
-
-  const KEY_STYLE: Record<Variant, { bg: Hex; color: Hex; fontSize: number }> = {
-    digit: { bg: tokens.subtle, color: tokens.ink, fontSize: 19 },
-    var: { bg: tokens.subtle, color: accent, fontSize: 19 },
-    op: { bg: accent, color: tokens.onAccent, fontSize: 21 },
-    fn: { bg: tokens.subtle, color: accent, fontSize: 15 },
-    util: { bg: tokens.border, color: tokens.ink, fontSize: 16 },
-  };
-
-  const renderKey = (key: PadKey, flexBasis?: number) => {
-    const s = KEY_STYLE[key.variant];
-    return (
-      <Button
-        key={key.label}
-        flex={1}
-        flexBasis={flexBasis ?? 0}
-        minWidth={0}
-        height={46}
-        paddingHorizontal={0}
-        borderRadius={12}
-        disabled={disabled}
-        backgroundColor={s.bg}
-        color={s.color}
-        pressStyle={{ opacity: 0.7 }}
-        hoverStyle={{ opacity: 0.85 }}
-        onPress={() => pressKey(key)}
-        aria-label={('aria' in key && key.aria) || key.label}
-      >
-        <Text color={s.color} fontSize={s.fontSize} fontWeight="700" numberOfLines={1}>
-          {key.label}
-        </Text>
-      </Button>
-    );
+  // Toggle a leading minus on the whole entry — a negative sign, not the
+  // subtract operator (the numeric pad has no −).
+  const negate = () => {
+    const next = value.startsWith('-') ? value.slice(1) : `-${value}`;
+    const d = next.length - value.length;
+    onChange(next);
+    const { start, end } = selection.current;
+    selection.current = { start: Math.max(0, start + d), end: Math.max(0, end + d) };
+    ref.current?.focus();
   };
 
   const field = (
@@ -195,7 +114,7 @@ export function MathInput({
       ref={ref as never}
       value={value}
       editable={!disabled}
-      placeholder={placeholder ?? (keypad ? t('padAnswer') : t('typeMath'))}
+      placeholder={placeholder ?? (keypadKind ? t('padAnswer') : t('typeMath'))}
       onChangeText={onChange}
       onSelectionChange={(e) => {
         selection.current = e.nativeEvent.selection;
@@ -209,7 +128,7 @@ export function MathInput({
       // Keypad mode is the keyboard: keep the OS soft keyboard (alphabetical)
       // away so students only use the pad. inputMode covers web/Android;
       // showSoftInputOnFocus covers Android/iOS native.
-      {...(keypad ? { inputMode: 'none' as const, showSoftInputOnFocus: false } : null)}
+      {...(keypadKind ? { inputMode: 'none' as const, showSoftInputOnFocus: false } : null)}
       fontSize={17}
       color={tokens.ink}
       borderColor={tokens.border}
@@ -223,21 +142,19 @@ export function MathInput({
     </YStack>
   );
 
-  if (keypad) {
+  if (keypadKind) {
     return (
       <YStack gap={8}>
         {field}
         {preview}
-        <XStack gap={6} flexWrap="wrap" role="toolbar" aria-label="math functions">
-          {PAD_FUNCTIONS.map((k) => renderKey(k, 40))}
-        </XStack>
-        <YStack gap={6}>
-          {PAD_GRID.map((row, ri) => (
-            <XStack key={ri} gap={6}>
-              {row.map((k) => renderKey(k))}
-            </XStack>
-          ))}
-        </YStack>
+        <MathKeypad
+          kind={keypadKind}
+          onInsert={insert}
+          onBackspace={backspace}
+          onClear={clearAll}
+          onNegate={negate}
+          disabled={disabled}
+        />
       </YStack>
     );
   }

@@ -4,6 +4,7 @@ export * from './math/misconceptions.js';
 export * from './math/misconceptionCatalog.js';
 export * from './math/generators.js';
 export * from './math/choices.js';
+export * from './math/keypad.js';
 export * from './mastery.js';
 export * from './readiness.js';
 export * from './report.js';

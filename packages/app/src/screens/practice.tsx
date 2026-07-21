@@ -51,6 +51,9 @@ interface Problem {
   /** Fixed answer choices for word-answer questions (rational/irrational,
    * yes/no, up/down, …); null/absent for free-response questions. */
   choices?: string[] | null;
+  /** Which dedicated keypad this problem's answer needs ('numeric' for bare
+   * numbers, 'algebra' for expressions); null when it's a choice question. */
+  keypad?: 'numeric' | 'algebra' | null;
   steps: ProblemStep[];
 }
 
@@ -281,7 +284,13 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
               })}
             </XStack>
           ) : (
-            <MathInput value={answer} onChange={setAnswer} onSubmit={submit} disabled={phase === 'done'} keypad />
+            <MathInput
+              value={answer}
+              onChange={setAnswer}
+              onSubmit={submit}
+              disabled={phase === 'done'}
+              keypad={problem.keypad ?? 'algebra'}
+            />
           )}
           {feedback === 'good' && <Feedback kind="good">{t('correct')}</Feedback>}
           {feedback === 'bad' && (
@@ -386,7 +395,10 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
                 value={stepAnswer}
                 onChange={setStepAnswer}
                 onSubmit={checkStep}
-                keypad={!(problem.choices && problem.choices.length > 0)}
+                // Steps are intermediate and often algebraic even when the
+                // final answer is a bare number, so use the full algebra pad
+                // (choice questions type their word answer instead).
+                keypad={problem.choices && problem.choices.length > 0 ? false : 'algebra'}
               />
               {stepFeedback === 'good' && <Feedback kind="good">{t('correct')}</Feedback>}
               {stepFeedback === 'bad' && <Feedback kind="bad">{t('incorrect')}</Feedback>}
