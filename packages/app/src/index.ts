@@ -15,6 +15,7 @@ export { ProgressScreen } from './screens/progress';
 export { ClassesScreen } from './screens/classes';
 export { ClassRosterScreen } from './screens/classRoster';
 export { SprintStatsScreen } from './screens/sprintStats';
+export { ClassInsightsScreen } from './screens/classInsights';
 export { AdminScreen } from './screens/admin';
 export { CalculatorScreen } from './screens/calculator';
 export { ExamplesScreen } from './screens/examples';

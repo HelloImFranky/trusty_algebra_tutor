@@ -6,10 +6,14 @@ import {
   computeAchievements,
   decayedScore,
   masteryLabel,
+  readinessBand,
   regentsTopics,
+  regentsTopicSkillSlugs,
 } from '@tutor/core';
 import { protectedProcedure, router } from '../trpc.js';
 import { teacherCanSeeStudent } from '../authz.js';
+import { masteryGrowthSeries } from '../classInsights.js';
+import { schoolYearStart } from '../sprintStats.js';
 
 async function buildProgress(userId: number) {
   const mastery = await prisma.mastery.findMany({
@@ -97,6 +101,43 @@ async function buildProgress(userId: number) {
     perfectTopics: regentsTopicStats.filter((t) => t.correct === t.total).length,
   };
 
+  // Regents readiness per topic (docs/statistics-plan.md, Phase 2): the
+  // shared core blend of decayed mastery over the topic's linked skills and
+  // lifetime Regents accuracy — same bands the teacher and admin views show.
+  const scoreBySlug = new Map(
+    mastery
+      .filter((m) => m.attemptsCount > 0)
+      .map((m) => [
+        m.skill.slug,
+        decayedScore({
+          score: m.score,
+          attemptsCount: m.attemptsCount,
+          lastPracticedAt: m.lastPracticedAt,
+        }),
+      ]),
+  );
+  const regentsReadiness = regentsTopics.map((t) => {
+    const linked = regentsTopicSkillSlugs[t.slug] ?? [];
+    const scores = linked
+      .map((slug) => scoreBySlug.get(slug))
+      .filter((s): s is number => s !== undefined);
+    const masteryAvg =
+      scores.length > 0 ? scores.reduce((sum, s) => sum + s, 0) / scores.length : null;
+    const p = regentsByTopic.get(t.slug);
+    const answered = p ? p.correctAll + p.wrongAll : 0;
+    return {
+      slug: t.slug,
+      icon: t.icon,
+      titleEn: t.titleEn,
+      titleEs: t.titleEs,
+      band: readinessBand({
+        masteryAvg,
+        regentsAnswered: answered,
+        regentsCorrect: p?.correctAll ?? 0,
+      }),
+    };
+  });
+
   const skills = sorted.map((m) => {
     const score = decayedScore({
       score: m.score,
@@ -156,12 +197,18 @@ async function buildProgress(userId: number) {
     sprintsCompleted,
   });
 
+  // Phase 3 (docs/statistics-plan.md): weekly average-mastery trend from
+  // the snapshot history — the "your mastery this month vs last month" line.
+  const growth = await masteryGrowthSeries([BigInt(userId)], schoolYearStart());
+
   return {
     streakDays: streak,
     skills,
     struggleFlags: skills.filter((s) => s.label === 'struggling'),
     activity,
     regents,
+    regentsReadiness,
+    growth,
     achievements,
   };
 }

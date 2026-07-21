@@ -258,6 +258,19 @@ model Mastery {
   @@map("mastery")
 }
 
+model MasterySnapshot {
+  userId        BigInt   @map("user_id")
+  skillId       BigInt   @map("skill_id")
+  weekStart     DateTime @map("week_start") @db.Date
+  score         Float
+  attemptsCount Int      @map("attempts_count")
+  updatedAt     DateTime @default(now()) @map("updated_at") @db.Timestamptz()
+
+  @@id([userId, skillId, weekStart])
+  @@index([weekStart], map: "idx_mastery_snapshots_week")
+  @@map("mastery_snapshots")
+}
+
 model TutorSession {
   id             BigInt   @id @default(autoincrement())
   userId         BigInt   @map("user_id")

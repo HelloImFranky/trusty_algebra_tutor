@@ -2,10 +2,23 @@ import crypto from 'node:crypto';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { Prisma, prisma } from '@tutor/db';
-import { decayedScore, masteryLabel } from '@tutor/core';
+import { decayedScore, masteryLabel, regentsTopics } from '@tutor/core';
 import { fixedWindowLimiter, router, studentProcedure, teacherProcedure } from '../trpc.js';
 import { recordGuardianConsent, teacherCanSeeStudent } from '../authz.js';
 import { schoolYearStart, seasonTotals, sprintLeaderboard, weeklySeries } from '../sprintStats.js';
+import {
+  heatmapCells,
+  masteryGrowthSeries,
+  misconceptionReport,
+  problemItemAnalysis,
+  readinessByStudent,
+  recentWork,
+  regentsItemAnalysis,
+  skillColumns,
+  tierMix,
+  tutorUsage,
+  weeklyMinutes,
+} from '../classInsights.js';
 
 /**
  * Teacher dashboard (docs/teacher-dashboard-plan.md, Stage 1). A teacher owns
@@ -299,6 +312,135 @@ export const teacherRouter = router({
           students,
           weekly: series,
           yearStart: schoolYearStart().toISOString().slice(0, 10),
+        };
+      }),
+
+    /**
+     * Class insights (docs/statistics-plan.md, Phase 1a): skill heatmap,
+     * misconception report, students-to-watch list, and time-on-task — all
+     * aggregations of data the app already records, batched over the roster
+     * (never one query per student). Ownership-scoped like everything else
+     * here. Misconception ids are labeled client-side via the core catalog;
+     * mastery labels use the same decayed model the student sees.
+     */
+    insights: teacherProcedure
+      .input(z.object({ classId: z.number().int() }))
+      .query(async ({ ctx, input }) => {
+        const cls = await ownedClass(BigInt(ctx.user.id), input.classId);
+        const enrollments = await prisma.classEnrollment.findMany({
+          where: { classId: cls.id, status: 'active' },
+          select: { studentUserId: true, student: { select: { displayName: true } } },
+          orderBy: { joinedAt: 'asc' },
+        });
+        const ids = enrollments.map((e) => e.studentUserId);
+        const [cells, skills, misconceptions, work, weekly, items, regentsItems, tiers, tutor, readiness, growth] =
+          await Promise.all([
+            heatmapCells(ids),
+            skillColumns(),
+            misconceptionReport(ids),
+            recentWork(ids),
+            weeklyMinutes(ids, schoolYearStart()),
+            problemItemAnalysis(ids, schoolYearStart()),
+            regentsItemAnalysis(ids),
+            tierMix(ids),
+            tutorUsage(ids),
+            readinessByStudent(ids),
+            masteryGrowthSeries(ids, schoolYearStart()),
+          ]);
+
+        const students = enrollments.map((e) => ({
+          id: Number(e.studentUserId),
+          displayName: e.student.displayName,
+          cells: cells.get(String(e.studentUserId)) ?? [],
+        }));
+
+        // Watch list: flag-based, ranked by flag count; unflagged students
+        // are omitted — the teacher wants the short list, not the roster.
+        const MIN_ATTEMPTS = 5; // below this, 14-day rates are noise, not signal
+        const watchlist = enrollments
+          .map((e) => {
+            const key = String(e.studentUserId);
+            const w = work.get(key)!;
+            const strugglingSkillIds = (cells.get(key) ?? [])
+              .filter((c) => c.label === 'struggling')
+              .map((c) => c.skillId);
+            const inactive =
+              !w.lastActiveAt || w.lastActiveAt.getTime() < Date.now() - 7 * 86_400_000;
+            const hintRate = w.attempts14d > 0 ? w.hints14d / w.attempts14d : 0;
+            const accuracy = w.attempts14d > 0 ? w.correct14d / w.attempts14d : null;
+            const flags: string[] = [];
+            if (inactive) flags.push('inactive');
+            if (strugglingSkillIds.length > 0) flags.push('struggling');
+            if (w.attempts14d >= MIN_ATTEMPTS && hintRate >= 1.5) flags.push('hintReliant');
+            if (w.attempts14d >= MIN_ATTEMPTS && accuracy !== null && accuracy < 0.5)
+              flags.push('lowAccuracy');
+            return {
+              id: Number(e.studentUserId),
+              displayName: e.student.displayName,
+              flags,
+              strugglingSkillIds,
+              lastActiveAt: w.lastActiveAt?.toISOString() ?? null,
+              attempts14d: w.attempts14d,
+              hintRate: Math.round(hintRate * 10) / 10,
+              accuracyPct: accuracy === null ? null : Math.round(accuracy * 100),
+            };
+          })
+          .filter((s) => s.flags.length > 0)
+          .sort((a, b) => b.flags.length - a.flags.length || a.displayName.localeCompare(b.displayName));
+
+        const timeOnTask = enrollments.map((e) => {
+          const w = work.get(String(e.studentUserId))!;
+          return {
+            id: Number(e.studentUserId),
+            displayName: e.student.displayName,
+            minutes7d: w.minutes7d,
+            minutes30d: w.minutes30d,
+          };
+        });
+
+        return {
+          class: { id: Number(cls.id), name: cls.name },
+          skills,
+          students,
+          misconceptions,
+          watchlist,
+          timeOnTask,
+          weekly,
+          yearStart: schoolYearStart().toISOString().slice(0, 10),
+          // Phase 3 (docs/statistics-plan.md): weekly class-average mastery.
+          growth,
+          // Phase 2 sections (docs/statistics-plan.md).
+          itemAnalysis: items,
+          regentsItems,
+          tiers: enrollments.map((e) => ({
+            id: Number(e.studentUserId),
+            displayName: e.student.displayName,
+            ...tiers.get(String(e.studentUserId))!,
+          })),
+          tutorUsage: {
+            perStudent: enrollments
+              .map((e) => ({
+                id: Number(e.studentUserId),
+                displayName: e.student.displayName,
+                sessions: tutor.perStudent.get(String(e.studentUserId)) ?? 0,
+              }))
+              .filter((s) => s.sessions > 0)
+              .sort((a, b) => b.sessions - a.sessions),
+            topSkills: tutor.topSkills,
+          },
+          readiness: {
+            topics: regentsTopics.map((t) => ({
+              slug: t.slug,
+              icon: t.icon,
+              titleEn: t.titleEn,
+              titleEs: t.titleEs,
+            })),
+            students: enrollments.map((e) => ({
+              id: Number(e.studentUserId),
+              displayName: e.student.displayName,
+              bands: readiness.get(String(e.studentUserId)) ?? {},
+            })),
+          },
         };
       }),
 

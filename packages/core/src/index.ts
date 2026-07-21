@@ -1,8 +1,11 @@
 export * from './math/engine.js';
 export * from './math/calculator.js';
 export * from './math/misconceptions.js';
+export * from './math/misconceptionCatalog.js';
 export * from './math/generators.js';
 export * from './mastery.js';
+export * from './readiness.js';
+export * from './report.js';
 export * from './achievements.js';
 export * from './content/index.js';
 export { classroomScaffolds, type ScaffoldSection } from './content/classroomScaffolds.js';

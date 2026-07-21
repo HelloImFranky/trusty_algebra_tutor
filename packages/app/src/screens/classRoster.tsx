@@ -99,11 +99,19 @@ export function ClassRosterScreen({ classId }: { classId: number }) {
       <Title>{cls.name}</Title>
 
       {/* Live sprint leaderboard + year stats for this class. */}
-      <Link href={`/classes/${classId}/sprint`}>
-        <Text color={accent} fontWeight="800" fontSize={15}>
-          ⚡ {t('sprintStatsOpen')} →
-        </Text>
-      </Link>
+      <XStack gap={18} flexWrap="wrap">
+        <Link href={`/classes/${classId}/sprint`}>
+          <Text color={accent} fontWeight="800" fontSize={15}>
+            ⚡ {t('sprintStatsOpen')} →
+          </Text>
+        </Link>
+        {/* Heatmap, misconceptions, watch list, time on task. */}
+        <Link href={`/classes/${classId}/insights`}>
+          <Text color={accent} fontWeight="800" fontSize={15}>
+            📊 {t('classInsights')} →
+          </Text>
+        </Link>
+      </XStack>
 
       <AppCard gap={8}>
         <XStack gap={8} alignItems="center" flexWrap="wrap">

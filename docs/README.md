@@ -33,6 +33,7 @@ history; do not action them.
 | [`ui-ux-refresh-plan.md`](ui-ux-refresh-plan.md) | ✅ The light/dark refresh landed. |
 | [`stepanim-plan.md`](stepanim-plan.md) | ✅ Phases 1–5 shipped. Only Phase 6 (native-device pass) remains — needs a local simulator/device, cannot run in a cloud container. |
 | [`sprint-leaderboard-plan.md`](sprint-leaderboard-plan.md) | ✅ Shipped with its PR: fixed 1-min/10-question sprints, live class leaderboards (student + teacher), teacher sprint-stats page, light-blue default accent. |
+| [`statistics-plan.md`](statistics-plan.md) | ✅ Phases 1–3 shipped: teacher class insights (heatmap, misconceptions, watch list, item analysis, tiers, tutor usage), admin school overview (engagement, mastery/readiness distributions, equity slices, cost-per-student), Regents readiness bands, mastery-growth history (`mastery_snapshots`), and PDF/Word/CSV report downloads on every stats page. |
 | [`stepanim-next-steps.md`](stepanim-next-steps.md) | ✅ Companion status doc; the tracked items shipped. See `stepanim-plan.md`. |
 
 ## Live / outstanding work

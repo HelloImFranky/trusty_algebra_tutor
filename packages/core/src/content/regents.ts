@@ -202,9 +202,9 @@ export const regentsTopics: RegentsTopic[] = [
       {
         id: 'inequalities-q4',
         promptEn:
-          'A gym charges a $25 sign-up fee plus $4 per class. Jayden can spend at most $60. What is the **greatest** number of classes he can take, using $25 + 4c \\le 60$?',
+          'A gym charges a \\$25 sign-up fee plus \\$4 per class. Jayden can spend at most \\$60. What is the **greatest** number of classes he can take, using $25 + 4c \\le 60$?',
         promptEs:
-          'Un gimnasio cobra una cuota de inscripción de $25 más $4 por clase. Jayden puede gastar como máximo $60. ¿Cuál es el **mayor** número de clases que puede tomar, usando $25 + 4c \\le 60$?',
+          'Un gimnasio cobra una cuota de inscripción de \\$25 más \\$4 por clase. Jayden puede gastar como máximo \\$60. ¿Cuál es el **mayor** número de clases que puede tomar, usando $25 + 4c \\le 60$?',
         choicesEn: ['$7$', '$8$', '$9$', '$35$'],
         choicesEs: ['$7$', '$8$', '$9$', '$35$'],
         correctIndex: 1,

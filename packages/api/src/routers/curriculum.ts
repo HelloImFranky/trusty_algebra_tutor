@@ -130,6 +130,29 @@ export async function applyMastery(
       }
     : { score: 0, attemptsCount: 0, lastPracticedAt: null };
   const updated = updateMastery(prior, correct, hintsUsed);
+  // Weekly history (docs/statistics-plan.md, Phase 3): upsert this ISO
+  // week's snapshot alongside the live row, so each (user, skill, week)
+  // converges to the week's closing score and growth becomes queryable.
+  const week = new Date();
+  week.setUTCHours(0, 0, 0, 0);
+  week.setUTCDate(week.getUTCDate() - ((week.getUTCDay() + 6) % 7));
+  await prisma.masterySnapshot.upsert({
+    where: {
+      userId_skillId_weekStart: {
+        userId: BigInt(userId),
+        skillId: BigInt(skillId),
+        weekStart: week,
+      },
+    },
+    update: { score: updated.score, attemptsCount: updated.attemptsCount, updatedAt: new Date() },
+    create: {
+      userId: BigInt(userId),
+      skillId: BigInt(skillId),
+      weekStart: week,
+      score: updated.score,
+      attemptsCount: updated.attemptsCount,
+    },
+  });
   await prisma.mastery.upsert({
     where: { userId_skillId: { userId: BigInt(userId), skillId: BigInt(skillId) } },
     update: {

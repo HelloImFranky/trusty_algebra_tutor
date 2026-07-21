@@ -5,7 +5,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { TRPCError } from '@trpc/server';
-import { sprintTopicDefs } from '@tutor/core';
+import { regentsTopics, sprintTopicDefs } from '@tutor/core';
 import { appRouter } from './index.js';
 import type { AuthUser } from './auth.js';
 
@@ -1396,5 +1396,469 @@ describe('tutor sessions', () => {
       }
     }
     expect(limited).toBe(true);
+  });
+});
+
+describe('class insights + school overview (docs/statistics-plan.md, Phase 1)', () => {
+  const mkUser = async (role: string, username: string, displayName: string): Promise<AuthUser> => {
+    const row = await prisma.user.create({
+      data: { role, username, passwordHash: 'x', displayName },
+      select: { id: true },
+    });
+    return {
+      id: Number(row.id),
+      role: role as AuthUser['role'],
+      username,
+      displayName,
+      locale: 'en',
+      status: 'active',
+    };
+  };
+  let teacher: AuthUser;
+  let rival: AuthUser;
+  let admin: AuthUser;
+  let worker: AuthUser; // active but struggling + hint-reliant
+  let ghost: AuthUser; // inactive 10+ days
+  let classId = 0;
+  let skillId = 0;
+  let unitNumber = 0;
+
+  it('seeds a class with attempts carrying the analytics columns', async () => {
+    teacher = await mkUser('teacher', 'insights_teacher', 'Insights Teacher');
+    rival = await mkUser('teacher', 'insights_rival', 'Insights Rival');
+    admin = await mkUser('admin', 'insights_admin', 'Insights Admin');
+    worker = await mkUser('student', 'insights_worker', 'Worker');
+    ghost = await mkUser('student', 'insights_ghost', 'Ghost');
+    const cls = await as(teacher).teacher.classes.create({ name: 'Period 4 Insights' });
+    classId = cls.id;
+    await as(worker).teacher.classes.join({ code: cls.joinCode });
+    await as(ghost).teacher.classes.join({ code: cls.joinCode });
+
+    const problem = await prisma.problem.findFirstOrThrow({
+      include: { skill: { include: { lesson: { include: { unit: true } } } } },
+    });
+    skillId = Number(problem.skillId);
+    unitNumber = problem.skill.lesson.unit.number;
+
+    // Worker, this week: 6 attempts, 2 correct, heavy hints, one repeated
+    // diagnosed misconception, a minute per problem.
+    for (let i = 0; i < 6; i++) {
+      await prisma.attempt.create({
+        data: {
+          userId: BigInt(worker.id),
+          problemId: problem.id,
+          submittedLatex: 'x',
+          correct: i < 2,
+          hintsUsed: i < 2 ? 0 : 3,
+          misconceptionId: i >= 3 ? 'missed_inequality_flip' : null,
+          durationMs: 60_000,
+        },
+      });
+    }
+    // Ghost: one attempt, 10 days ago.
+    await prisma.attempt.create({
+      data: {
+        userId: BigInt(ghost.id),
+        problemId: problem.id,
+        submittedLatex: 'x',
+        correct: true,
+        createdAt: new Date(Date.now() - 10 * 86_400_000),
+      },
+    });
+    // Mastery rows: worker struggling on the skill, ghost mastered.
+    await prisma.mastery.createMany({
+      data: [
+        { userId: BigInt(worker.id), skillId: problem.skillId, score: 0.2, attemptsCount: 6, lastPracticedAt: new Date() },
+        { userId: BigInt(ghost.id), skillId: problem.skillId, score: 0.95, attemptsCount: 10, lastPracticedAt: new Date() },
+      ],
+    });
+  });
+
+  it('returns the heatmap with decayed labels over the full curriculum', async () => {
+    const res = await as(teacher).teacher.classes.insights({ classId });
+    expect(res.class).toMatchObject({ id: classId, name: 'Period 4 Insights' });
+    // Columns cover the curriculum and carry unit/lesson grouping info.
+    const col = res.skills.find((s) => s.skillId === skillId);
+    expect(col).toBeTruthy();
+    expect(col!.unitNumber).toBe(unitNumber);
+    // Cells: worker struggling, ghost mastered on the seeded skill.
+    const workerRow = res.students.find((s) => s.id === worker.id)!;
+    expect(workerRow.cells.find((c) => c.skillId === skillId)).toMatchObject({ label: 'struggling' });
+    const ghostRow = res.students.find((s) => s.id === ghost.id)!;
+    expect(ghostRow.cells.find((c) => c.skillId === skillId)).toMatchObject({ label: 'mastered' });
+  });
+
+  it('aggregates diagnosed misconceptions with student reach', async () => {
+    const res = await as(teacher).teacher.classes.insights({ classId });
+    const row = res.misconceptions.find((m) => m.misconceptionId === 'missed_inequality_flip');
+    expect(row).toMatchObject({ skillId, hits: 3, students: 1 });
+    expect(row!.skillNameEn.length).toBeGreaterThan(0);
+  });
+
+  it('ranks the watch list by flags and skips healthy students', async () => {
+    const res = await as(teacher).teacher.classes.insights({ classId });
+    const workerFlags = res.watchlist.find((w) => w.id === worker.id)!;
+    // Active, but struggling + hint-reliant (12 hints / 6 attempts) + low
+    // accuracy (2/6) — three flags, no inactive flag.
+    expect(workerFlags.flags.sort()).toEqual(['hintReliant', 'lowAccuracy', 'struggling']);
+    expect(workerFlags.hintRate).toBe(2);
+    expect(workerFlags.accuracyPct).toBe(33);
+    expect(workerFlags.strugglingSkillIds).toContain(skillId);
+    const ghostFlags = res.watchlist.find((w) => w.id === ghost.id)!;
+    expect(ghostFlags.flags).toEqual(['inactive']);
+    // Ranked by flag count: worker (3) before ghost (1).
+    expect(res.watchlist[0]!.id).toBe(worker.id);
+  });
+
+  it('reports time on task per student and a weekly class series', async () => {
+    const res = await as(teacher).teacher.classes.insights({ classId });
+    const workerTime = res.timeOnTask.find((s) => s.id === worker.id)!;
+    expect(workerTime).toMatchObject({ minutes7d: 6, minutes30d: 6 });
+    expect(res.yearStart.endsWith('-09-01')).toBe(true);
+    // 6 minutes of tracked work land in the weekly series.
+    expect(res.weekly.reduce((sum, w) => sum + w.minutes, 0)).toBeGreaterThanOrEqual(6);
+  });
+
+  it('keeps insights ownership-scoped and teacher-only', async () => {
+    await expect(as(rival).teacher.classes.insights({ classId })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    await expect(as(worker).teacher.classes.insights({ classId })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    await expect(as(admin).teacher.classes.insights({ classId })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+  });
+
+  it('gives the admin a de-identified school overview', async () => {
+    const res = await as(admin).admin.stats.overview();
+    // Engagement counts cover the seeded students (plus earlier suites).
+    expect(res.engagement.active30d).toBeGreaterThanOrEqual(2);
+    expect(res.engagement.active7d).toBeGreaterThanOrEqual(1);
+    expect(res.engagement.attempts30d).toBeGreaterThanOrEqual(7);
+    expect(res.engagement.minutes30d).toBeGreaterThanOrEqual(6);
+    expect(res.yearStart.endsWith('-09-01')).toBe(true);
+    expect(res.weekly.length).toBeGreaterThanOrEqual(1);
+    // Mastery distribution: the seeded unit has both a struggling and a
+    // mastered (student, skill) pair — counts only, no identities.
+    const unit = res.masteryByUnit.find((u) => u.unitNumber === unitNumber)!;
+    expect(unit.struggling).toBeGreaterThanOrEqual(1);
+    expect(unit.mastered).toBeGreaterThanOrEqual(1);
+    expect(JSON.stringify(res)).not.toContain('Worker');
+    // Adoption + consent coverage.
+    expect(res.adoption.teachersActive).toBeGreaterThanOrEqual(1);
+    expect(res.adoption.classes).toBeGreaterThanOrEqual(1);
+    expect(res.adoption.studentsEnrolled).toBeGreaterThanOrEqual(2);
+    expect(res.adoption.studentsTotal).toBeGreaterThanOrEqual(res.adoption.studentsEnrolled);
+    expect(typeof res.adoption.consentPending).toBe('number');
+  });
+
+  it('keeps the school overview admin-only', async () => {
+    await expect(as(worker).admin.stats.overview()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(as(teacher).admin.stats.overview()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+});
+
+describe('phase 2 statistics (readiness, item analysis, tiers, tutor usage)', () => {
+  // Reuses the class seeded by the previous suite (insights_teacher's
+  // "Period 4 Insights" with worker + ghost), looked up fresh by username.
+  const authUser = (row: { id: bigint; role: string; username: string; displayName: string }): AuthUser => ({
+    id: Number(row.id),
+    role: row.role as AuthUser['role'],
+    username: row.username,
+    displayName: row.displayName,
+    locale: 'en',
+    status: 'active',
+  });
+  let teacher: AuthUser;
+  let admin: AuthUser;
+  let worker: AuthUser;
+  let ghost: AuthUser;
+  let tierkid: AuthUser;
+  let classId = 0;
+  let modProblemId = 0n;
+  let modSkillNameEn = '';
+
+  it('seeds readiness, tier, Regents-item, and tutor-session evidence', async () => {
+    const byName = async (username: string) =>
+      authUser(await prisma.user.findUniqueOrThrow({ where: { username } }));
+    teacher = await byName('insights_teacher');
+    admin = await byName('insights_admin');
+    worker = await byName('insights_worker');
+    ghost = await byName('insights_ghost');
+    const cls = await prisma.class.findFirstOrThrow({ where: { name: 'Period 4 Insights' } });
+    classId = Number(cls.id);
+
+    // A third student practicing almost entirely in the modified tier.
+    const row = await prisma.user.create({
+      data: { role: 'student', username: 'insights_tierkid', passwordHash: 'x', displayName: 'Tierkid' },
+    });
+    tierkid = authUser(row);
+    await prisma.classEnrollment.create({
+      data: { classId: cls.id, studentUserId: row.id },
+    });
+    const firstProblem = await prisma.problem.findFirstOrThrow({ orderBy: { id: 'asc' } });
+    const modProblem = await prisma.problem.findFirstOrThrow({
+      where: { tier: 'modified', id: { not: firstProblem.id } },
+      include: { skill: true },
+    });
+    modProblemId = modProblem.id;
+    modSkillNameEn = modProblem.skill.nameEn;
+    for (let a = 0; a < 8; a++) {
+      await prisma.attempt.create({
+        data: {
+          userId: row.id,
+          problemId: modProblem.id,
+          submittedLatex: 'x',
+          correct: a < 6,
+          durationMs: 30_000,
+        },
+      });
+    }
+
+    // Readiness evidence on the 1:1 'inequalities' topic↔skill pair:
+    // worker = strong mastery, ghost = failed Regents answers (10 days old,
+    // so the inactive flag from the previous suite stays true).
+    const ineqSkill = await prisma.skill.findUniqueOrThrow({ where: { slug: 'inequalities' } });
+    await prisma.mastery.create({
+      data: {
+        userId: BigInt(worker.id),
+        skillId: ineqSkill.id,
+        score: 0.9,
+        attemptsCount: 10,
+        lastPracticedAt: new Date(),
+      },
+    });
+    const tenDaysAgo = new Date(Date.now() - 10 * 86_400_000);
+    for (let q = 1; q <= 4; q++) {
+      await prisma.regentsAnswer.create({
+        data: {
+          userId: BigInt(ghost.id),
+          topicSlug: 'inequalities',
+          questionId: `inequalities-q${q}`,
+          choiceIndex: 0,
+          correct: false,
+          round: 0,
+          createdAt: tenDaysAgo,
+        },
+      });
+    }
+    // Three answers on q1 total (min for item analysis): 1 of 3 correct.
+    await prisma.regentsAnswer.create({
+      data: {
+        userId: BigInt(worker.id),
+        topicSlug: 'inequalities',
+        questionId: 'inequalities-q1',
+        choiceIndex: 1,
+        correct: true,
+        round: 0,
+      },
+    });
+    await prisma.regentsAnswer.create({
+      data: {
+        userId: row.id,
+        topicSlug: 'inequalities',
+        questionId: 'inequalities-q1',
+        choiceIndex: 0,
+        correct: false,
+        round: 0,
+      },
+    });
+
+    // Two tutor sessions for worker, one tied to the modified problem.
+    await prisma.tutorSession.create({
+      data: { userId: BigInt(worker.id), problemId: modProblem.id },
+    });
+    await prisma.tutorSession.create({ data: { userId: BigInt(worker.id) } });
+  });
+
+  it('bands the teacher readiness grid from blended evidence', async () => {
+    const res = await as(teacher).teacher.classes.insights({ classId });
+    expect(res.readiness.topics.map((t) => t.slug)).toContain('inequalities');
+    const bandOf = (id: number) =>
+      res.readiness.students.find((s) => s.id === id)!.bands['inequalities'];
+    expect(bandOf(worker.id)).toBe('ready'); // 0.9 mastery, too few Regents answers to count
+    expect(bandOf(ghost.id)).toBe('needsWork'); // 0/4 Regents, no linked mastery
+    expect(bandOf(tierkid.id)).toBe('noData'); // one Regents answer, no mastery
+  });
+
+  it('surfaces hardest items with class success rates', async () => {
+    const res = await as(teacher).teacher.classes.insights({ classId });
+    const mod = res.itemAnalysis.find((p) => p.problemId === Number(modProblemId));
+    expect(mod).toMatchObject({ tier: 'modified', attempts: 8, correct: 6, students: 1 });
+    // The previous suite's problem (7 attempts, 3 correct across 2 students).
+    const hard = res.itemAnalysis[0]!;
+    expect(hard.correct / hard.attempts).toBeLessThanOrEqual(mod!.correct / mod!.attempts);
+    const q1 = res.regentsItems.find((q) => q.questionId === 'inequalities-q1');
+    expect(q1).toMatchObject({ topicSlug: 'inequalities', answered: 3, correct: 1 });
+  });
+
+  it('reports the tier mix and flags students stuck in modified', async () => {
+    const res = await as(teacher).teacher.classes.insights({ classId });
+    const kid = res.tiers.find((s) => s.id === tierkid.id)!;
+    expect(kid.modified).toBe(8);
+    expect(kid.stuckModified).toBe(true);
+    const w = res.tiers.find((s) => s.id === worker.id)!;
+    expect(w.modified + w.standard + w.challenge).toBe(6);
+  });
+
+  it('counts tutor sessions per student and per skill, never transcripts', async () => {
+    const res = await as(teacher).teacher.classes.insights({ classId });
+    const w = res.tutorUsage.perStudent.find((s) => s.id === worker.id);
+    expect(w?.sessions).toBe(2);
+    expect(res.tutorUsage.topSkills.some((sk) => sk.nameEn === modSkillNameEn)).toBe(true);
+    expect(JSON.stringify(res.tutorUsage)).not.toContain('transcript');
+  });
+
+  it('shows the same readiness bands on the student progress page', async () => {
+    const mine = await as(worker).progress.me();
+    const ineq = mine.regentsReadiness.find((r) => r.slug === 'inequalities');
+    expect(ineq?.band).toBe('ready');
+    const ghostView = await as(ghost).progress.me();
+    expect(ghostView.regentsReadiness.find((r) => r.slug === 'inequalities')?.band).toBe(
+      'needsWork',
+    );
+  });
+
+  it('aggregates a de-identified school readiness distribution for the admin', async () => {
+    const res = await as(admin).admin.stats.overview();
+    const ineq = res.readiness.find((r) => r.topicSlug === 'inequalities')!;
+    expect(ineq.ready).toBeGreaterThanOrEqual(1);
+    expect(ineq.needsWork).toBeGreaterThanOrEqual(1);
+    expect(res.readiness).toHaveLength(regentsTopics.length);
+    expect(JSON.stringify(res.readiness)).not.toContain('Worker');
+  });
+});
+
+describe('phase 3 statistics (snapshots, growth, slices)', () => {
+  const monday = (weeksAgo: number) => {
+    const d = new Date();
+    d.setUTCHours(0, 0, 0, 0);
+    d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7) - weeksAgo * 7);
+    return d;
+  };
+
+  it('writes a weekly mastery snapshot whenever mastery is written', async () => {
+    // student1 practiced through the API in earlier suites, so applyMastery
+    // ran and this week's snapshot rows must exist and mirror live mastery.
+    const live = await prisma.mastery.findFirstOrThrow({
+      where: { userId: BigInt(student.id), attemptsCount: { gt: 0 } },
+    });
+    const snap = await prisma.masterySnapshot.findUnique({
+      where: {
+        userId_skillId_weekStart: {
+          userId: live.userId,
+          skillId: live.skillId,
+          weekStart: monday(0),
+        },
+      },
+    });
+    expect(snap).not.toBeNull();
+    expect(snap!.score).toBeCloseTo(live.score, 10);
+    expect(snap!.attemptsCount).toBe(live.attemptsCount);
+  });
+
+  it('averages snapshots into weekly growth series for student and teacher', async () => {
+    const worker = await prisma.user.findUniqueOrThrow({ where: { username: 'insights_worker' } });
+    const skills = await prisma.skill.findMany({ take: 2, orderBy: { id: 'asc' } });
+    await prisma.masterySnapshot.createMany({
+      data: [
+        { userId: worker.id, skillId: skills[0]!.id, weekStart: monday(2), score: 0.2, attemptsCount: 3 },
+        { userId: worker.id, skillId: skills[1]!.id, weekStart: monday(2), score: 0.4, attemptsCount: 3 },
+        { userId: worker.id, skillId: skills[0]!.id, weekStart: monday(1), score: 0.6, attemptsCount: 5 },
+      ],
+      skipDuplicates: true,
+    });
+    const workerAuth: AuthUser = {
+      id: Number(worker.id),
+      role: 'student',
+      username: worker.username,
+      displayName: worker.displayName,
+      locale: 'en',
+      status: 'active',
+    };
+    const mine = await as(workerAuth).progress.me();
+    const w2 = mine.growth.find((g) => g.weekStart === monday(2).toISOString().slice(0, 10));
+    const w1 = mine.growth.find((g) => g.weekStart === monday(1).toISOString().slice(0, 10));
+    expect(w2?.avgScore).toBeCloseTo(0.3, 3);
+    expect(w1?.avgScore).toBeCloseTo(0.6, 3);
+
+    // The teacher's class series covers the same student, batched.
+    const teacher = await prisma.user.findUniqueOrThrow({ where: { username: 'insights_teacher' } });
+    const cls = await prisma.class.findFirstOrThrow({ where: { name: 'Period 4 Insights' } });
+    const teacherAuth: AuthUser = {
+      id: Number(teacher.id),
+      role: 'teacher',
+      username: teacher.username,
+      displayName: teacher.displayName,
+      locale: 'en',
+      status: 'active',
+    };
+    const insights = await as(teacherAuth).teacher.classes.insights({ classId: Number(cls.id) });
+    const t2 = insights.growth.find((g) => g.weekStart === monday(2).toISOString().slice(0, 10));
+    expect(t2?.avgScore).toBeCloseTo(0.3, 3);
+    expect(t2?.students).toBe(1);
+  });
+
+  it('slices the school by grade with a suppression floor', async () => {
+    // Five 12th-graders (unsuppressed cohort) and one 11th-grader (suppressed).
+    const problem = await prisma.problem.findFirstOrThrow();
+    for (let i = 0; i < 5; i++) {
+      const row = await prisma.user.create({
+        data: {
+          role: 'student',
+          username: `slice_g12_${i}`,
+          passwordHash: 'x',
+          displayName: `Slice ${i}`,
+          grade: 12,
+        },
+      });
+      await prisma.attempt.create({
+        data: { userId: row.id, problemId: problem.id, submittedLatex: 'x', correct: true, durationMs: 120_000 },
+      });
+      await prisma.mastery.create({
+        data: { userId: row.id, skillId: problem.skillId, score: 0.8, attemptsCount: 4, lastPracticedAt: new Date() },
+      });
+    }
+    await prisma.user.create({
+      data: { role: 'student', username: 'slice_g11', passwordHash: 'x', displayName: 'Lone Junior', grade: 11 },
+    });
+
+    const admin = await prisma.user.findUniqueOrThrow({ where: { username: 'insights_admin' } });
+    const adminAuth: AuthUser = {
+      id: Number(admin.id),
+      role: 'admin',
+      username: admin.username,
+      displayName: admin.displayName,
+      locale: 'en',
+      status: 'active',
+    };
+    const res = await as(adminAuth).admin.stats.overview();
+
+    const g12 = res.slices.byGrade.find((s) => s.key === '12')!;
+    expect(g12.students).toBe(5);
+    expect(g12.suppressed).toBe(false);
+    expect(g12.active30d).toBe(5);
+    expect(g12.minutes30d).toBe(10); // 5 × 2 minutes
+    expect(g12.avgMastery).toBeGreaterThan(0.5);
+
+    // A cohort under the floor exposes its size but no stats at all.
+    const g11 = res.slices.byGrade.find((s) => s.key === '11')!;
+    expect(g11).toMatchObject({
+      suppressed: true,
+      active30d: null,
+      minutes30d: null,
+      avgMastery: null,
+    });
+
+    // Locale slice exists and the big 'en' cohort reports stats.
+    const en = res.slices.byLocale.find((s) => s.key === 'en')!;
+    expect(en.suppressed).toBe(false);
+    expect(en.students).toBeGreaterThanOrEqual(5);
+
+    // School growth series present (snapshots exist from the API attempts).
+    expect(res.growth.length).toBeGreaterThanOrEqual(1);
+    expect(res.growth[0]!.avgScore).toBeGreaterThan(0);
   });
 });
