@@ -5,7 +5,7 @@
  * split; otherwise it falls back to a link-out to the Anthropic Console,
  * which needs no secret at all. Either way the browser only ever receives
  * aggregated numbers. See docs/tutor-usage-dashboard-plan.md. */
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Linking } from 'react-native';
 import { Text, XStack, YStack } from 'tamagui';
 import { regentsTopics, REPORT_COLORS, type Report } from '@tutor/core';
@@ -46,6 +46,43 @@ const STATUS_KEY: Record<string, I18nKey> = {
   disabled: 'statusDisabled',
 };
 
+/** Collapsible statistics topic (▸/▾, same affordance as the progress
+ * page's Regents-topic dropdowns). Collapsed by default so the school
+ * overview reads as a tidy index; each topic opens on demand. */
+function StatSection({
+  title,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  const tokens = useTokens();
+  const accent = useAccent();
+  return (
+    <YStack gap={10} borderTopWidth={1} borderTopColor={tokens.border} paddingTop={10}>
+      <XStack
+        justifyContent="space-between"
+        alignItems="center"
+        gap={8}
+        cursor="pointer"
+        onPress={onToggle}
+        hoverStyle={{ opacity: 0.8 }}
+        pressStyle={{ opacity: 0.6 }}
+      >
+        <SubTitle>{title}</SubTitle>
+        <Text fontSize={16} fontWeight="800" color={accent}>
+          {open ? '▾' : '▸'}
+        </Text>
+      </XStack>
+      {open && children}
+    </YStack>
+  );
+}
+
 export function AdminScreen() {
   const { t, locale } = useI18n();
   const accent = useAccent();
@@ -56,6 +93,9 @@ export function AdminScreen() {
   const isAdmin = authed && role === 'admin';
   const utils = trpc.useUtils();
   const [usageWindow, setUsageWindow] = useState<'7d' | '30d'>('30d');
+  // Which overview topics are expanded (all collapsed on load).
+  const [openStats, setOpenStats] = useState<Record<string, boolean>>({});
+  const toggleStat = (key: string) => setOpenStats((s) => ({ ...s, [key]: !s[key] }));
 
   const pending = trpc.admin.teachers.listPending.useQuery(undefined, { enabled: isAdmin });
   const all = trpc.admin.teachers.list.useQuery(undefined, { enabled: isAdmin });
@@ -205,9 +245,61 @@ export function AdminScreen() {
     <Screen maxWidth={820}>
       <Title>🛡️ {t('admin')}</Title>
 
+      {/* Teacher management first — approving and auditing accounts is the
+          admin's primary job; statistics follow below. */}
+      <AppCard gap={10}>
+        <SubTitle>{t('allTeachers')}</SubTitle>
+        {all.isLoading && <Loading />}
+        {all.error && <Feedback kind="bad">{all.error.message}</Feedback>}
+        {all.data?.teachers.map((tt) => (
+          <XStack key={tt.id} justifyContent="space-between" alignItems="center" gap={8} flexWrap="wrap">
+            <YStack>
+              <Text fontWeight="800" color={tokens.ink}>{tt.displayName}</Text>
+              <Muted size={12}>@{tt.username}</Muted>
+            </YStack>
+            <XStack gap={8} alignItems="center">
+              <Badge label={tt.status} text={t(STATUS_KEY[tt.status] ?? 'statusActive')} />
+              {tt.status === 'active' && (
+                <GhostButton size="$2" disabled={busy} onPress={() => disable.mutate({ userId: tt.id })}>
+                  {t('disable')}
+                </GhostButton>
+              )}
+            </XStack>
+          </XStack>
+        ))}
+      </AppCard>
+
+      <AppCard gap={10}>
+        <SubTitle>{t('pendingTeachers')}</SubTitle>
+        {pending.isLoading && <Loading />}
+        {pending.error && <Feedback kind="bad">{pending.error.message}</Feedback>}
+        {pending.data?.teachers.length === 0 && <Muted>{t('noPending')}</Muted>}
+        {pending.data?.teachers.map((tt) => (
+          <XStack key={tt.id} justifyContent="space-between" alignItems="center" gap={8} flexWrap="wrap">
+            <YStack>
+              <Text fontWeight="800" color={tokens.ink}>{tt.displayName}</Text>
+              <Muted size={12}>
+                @{tt.username}
+                {tt.email ? ` · ${tt.email}` : ''}
+              </Muted>
+            </YStack>
+            <XStack gap={8}>
+              <PrimaryButton size="$2" disabled={busy} onPress={() => approve.mutate({ userId: tt.id })}>
+                {t('approve')}
+              </PrimaryButton>
+              <GhostButton size="$2" disabled={busy} onPress={() => reject.mutate({ userId: tt.id })}>
+                {t('reject')}
+              </GhostButton>
+            </XStack>
+          </XStack>
+        ))}
+      </AppCard>
+
       {/* School overview (docs/statistics-plan.md, Phase 1b): de-identified
           aggregates only — engagement, mastery by unit, adoption, consent
-          coverage. The admin role still can't reach any individual student. */}
+          coverage. The admin role still can't reach any individual student.
+          Engagement chips stay visible as the top line; every deeper topic
+          is a collapsible dropdown so the page reads as an index. */}
       <AppCard gap={12}>
         <XStack justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={8}>
           <SubTitle>🏫 {t('schoolOverview')}</SubTitle>
@@ -242,7 +334,11 @@ export function AdminScreen() {
               />
             </XStack>
 
-            <SubTitle>📚 {t('masteryByUnitTitle')}</SubTitle>
+            <StatSection
+              title={`📚 ${t('masteryByUnitTitle')}`}
+              open={!!openStats.masteryByUnit}
+              onToggle={() => toggleStat('masteryByUnit')}
+            >
             {overview.data.masteryByUnit
               .filter((u) => u.struggling + u.practicing + u.proficient + u.mastered > 0)
               .map((u) => {
@@ -275,8 +371,13 @@ export function AdminScreen() {
               (u) => u.struggling + u.practicing + u.proficient + u.mastered === 0,
             ) && <Muted size={12}>{t('noDataYet')}</Muted>}
             <Muted size={11}>{t('masteryByUnitNote')}</Muted>
+            </StatSection>
 
-            <SubTitle>📈 {t('growthTitle')}</SubTitle>
+            <StatSection
+              title={`📈 ${t('growthTitle')}`}
+              open={!!openStats.growth}
+              onToggle={() => toggleStat('growth')}
+            >
             {overview.data.growth.length === 0 ? (
               <Muted size={12}>{t('noDataYet')}</Muted>
             ) : (
@@ -290,8 +391,13 @@ export function AdminScreen() {
               />
             )}
             <Muted size={11}>{t('growthNote')}</Muted>
+            </StatSection>
 
-            <SubTitle>🎯 {t('readinessTitle')}</SubTitle>
+            <StatSection
+              title={`🎯 ${t('readinessTitle')}`}
+              open={!!openStats.readiness}
+              onToggle={() => toggleStat('readiness')}
+            >
             {overview.data.readiness.map((r) => {
               const topic = regentsTopics.find((tp) => tp.slug === r.topicSlug);
               const total = r.ready + r.developing + r.needsWork + r.noData;
@@ -320,8 +426,13 @@ export function AdminScreen() {
               );
             })}
             <Muted size={11}>{t('readinessNote')}</Muted>
+            </StatSection>
 
-            <SubTitle>🏫 {t('adoptionTitle')}</SubTitle>
+            <StatSection
+              title={`🏫 ${t('adoptionTitle')}`}
+              open={!!openStats.adoption}
+              onToggle={() => toggleStat('adoption')}
+            >
             <XStack gap={10} flexWrap="wrap">
               <StatChip
                 icon={<Text fontSize={18}>🧑‍🏫</Text>}
@@ -349,6 +460,7 @@ export function AdminScreen() {
                 label={t('consentPendingStat')}
               />
             </XStack>
+            </StatSection>
 
             {/* Equity slices (Phase 3): usage/outcomes by grade and by
                 language. Cohorts under MIN_COHORT arrive suppressed from the
@@ -359,8 +471,12 @@ export function AdminScreen() {
                 ['slicesLocaleTitle', overview.data.slices.byLocale],
               ] as const
             ).map(([titleKey, slices]) => (
-              <YStack key={titleKey} gap={6}>
-                <SubTitle>🧭 {t(titleKey)}</SubTitle>
+              <StatSection
+                key={titleKey}
+                title={`🧭 ${t(titleKey)}`}
+                open={!!openStats[titleKey]}
+                onToggle={() => toggleStat(titleKey)}
+              >
                 {slices.map((s) => (
                   <XStack
                     key={s.key}
@@ -401,58 +517,10 @@ export function AdminScreen() {
                     )}
                   </XStack>
                 ))}
-              </YStack>
+              </StatSection>
             ))}
           </>
         )}
-      </AppCard>
-
-      <AppCard gap={10}>
-        <SubTitle>{t('pendingTeachers')}</SubTitle>
-        {pending.isLoading && <Loading />}
-        {pending.error && <Feedback kind="bad">{pending.error.message}</Feedback>}
-        {pending.data?.teachers.length === 0 && <Muted>{t('noPending')}</Muted>}
-        {pending.data?.teachers.map((tt) => (
-          <XStack key={tt.id} justifyContent="space-between" alignItems="center" gap={8} flexWrap="wrap">
-            <YStack>
-              <Text fontWeight="800" color={tokens.ink}>{tt.displayName}</Text>
-              <Muted size={12}>
-                @{tt.username}
-                {tt.email ? ` · ${tt.email}` : ''}
-              </Muted>
-            </YStack>
-            <XStack gap={8}>
-              <PrimaryButton size="$2" disabled={busy} onPress={() => approve.mutate({ userId: tt.id })}>
-                {t('approve')}
-              </PrimaryButton>
-              <GhostButton size="$2" disabled={busy} onPress={() => reject.mutate({ userId: tt.id })}>
-                {t('reject')}
-              </GhostButton>
-            </XStack>
-          </XStack>
-        ))}
-      </AppCard>
-
-      <AppCard gap={10}>
-        <SubTitle>{t('allTeachers')}</SubTitle>
-        {all.isLoading && <Loading />}
-        {all.error && <Feedback kind="bad">{all.error.message}</Feedback>}
-        {all.data?.teachers.map((tt) => (
-          <XStack key={tt.id} justifyContent="space-between" alignItems="center" gap={8} flexWrap="wrap">
-            <YStack>
-              <Text fontWeight="800" color={tokens.ink}>{tt.displayName}</Text>
-              <Muted size={12}>@{tt.username}</Muted>
-            </YStack>
-            <XStack gap={8} alignItems="center">
-              <Badge label={tt.status} text={t(STATUS_KEY[tt.status] ?? 'statusActive')} />
-              {tt.status === 'active' && (
-                <GhostButton size="$2" disabled={busy} onPress={() => disable.mutate({ userId: tt.id })}>
-                  {t('disable')}
-                </GhostButton>
-              )}
-            </XStack>
-          </XStack>
-        ))}
       </AppCard>
 
       <AppCard gap={8}>
