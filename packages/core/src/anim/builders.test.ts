@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildAddPolynomials,
+  buildFactorGcf,
   buildFoil,
+  buildGcfMonomials,
   buildMultiStepEquation,
   buildScriptForProblem,
   buildSlopeFromPoints,
@@ -202,6 +204,41 @@ describe('buildFoil', () => {
   });
 });
 
+describe('buildGcfMonomials', () => {
+  it('finds the GCF of two monomials, using the smaller exponent', () => {
+    // GCF(6x², 9x³) = 3x²
+    const s = buildGcfMonomials(6, 9, 2, 3);
+    const l = lines(s);
+    expect(l[0]).toBe('6x², 9x³');
+    expect(l[l.length - 1]).toBe('3x²');
+    const final = lastStep(s).tokens.filter((t) => t.emph === 'result');
+    expect(final.map((t) => t.text).join('')).toBe('3x²');
+  });
+
+  it('reduces the coefficient GCF and keeps the lowest power (up to x⁶)', () => {
+    // GCF(12x⁴, 8x⁶) = 4x⁴
+    expect(lines(buildGcfMonomials(12, 8, 4, 6)).pop()).toBe('4x⁴');
+  });
+});
+
+describe('buildFactorGcf', () => {
+  it('factors (g·a)x² + (g·b)x as g·x(a·x + b)', () => {
+    // 12x² + 6x = 6x(2x + 1)  (g=6, a=2, b=1)
+    const s = buildFactorGcf(6, 2, 1);
+    const l = lines(s);
+    expect(l[0]).toBe('12x² + 6x');
+    expect(l[l.length - 1]).toBe('6x(2x + 1)');
+  });
+
+  it('handles a negative second coefficient', () => {
+    // 12x² − 15x = 3x(4x − 5)  (g=3, a=4, b=-5)
+    const s = buildFactorGcf(3, 4, -5);
+    const l = lines(s);
+    expect(l[0]).toBe('12x² − 15x');
+    expect(l[l.length - 1]).toBe('3x(4x − 5)');
+  });
+});
+
 describe('buildSlopeFromPoints', () => {
   it('substitutes, computes, and simplifies the fraction', () => {
     // (1, 2) → (5, 8): rise 6, run 4 → 3/2
@@ -309,6 +346,18 @@ describe('buildScriptForProblem dispatch', () => {
     expect(lines(s).pop()).toBe('x² − x − 30');
     // mono_times_poly ({m, a, b}) shares the skill but stays unanimated
     expect(buildScriptForProblem('polynomial-operations', { m: 2, a: 3, b: 4 })).toBeNull();
+  });
+
+  it('routes factor-gcf gcf_monomials params to the GCF-of-monomials builder', () => {
+    const s = buildScriptForProblem('factor-gcf', { m1: 6, m2: 9, e1: 2, e2: 3 });
+    expect(lines(s)[0]).toBe('6x², 9x³');
+    expect(lines(s).pop()).toBe('3x²');
+  });
+
+  it('routes factor-gcf factor_gcf params to the factoring builder', () => {
+    const s = buildScriptForProblem('factor-gcf', { g: 6, a: 2, b: 1 });
+    expect(lines(s)[0]).toBe('12x² + 6x');
+    expect(lines(s).pop()).toBe('6x(2x + 1)');
   });
 
   it('routes slope-intercepts point params to the slope builder', () => {

@@ -15,6 +15,15 @@ const M = (n: number) => String(n).replace('-', '−');
 /** Coefficient rendering: 1x → x, −1x → −x. */
 const cf = (a: number, v: string) => (a === 1 ? v : a === -1 ? `−${v}` : `${M(a)}${v}`);
 
+const SUP: Record<string, string> = {
+  '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+  '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+};
+/** Unicode superscript for an exponent, e.g. 3 → "³". */
+const sup = (n: number) => String(n).split('').map((d) => SUP[d] ?? d).join('');
+/** "x" raised to a power as display text: xp(3) → "x³" (x¹ collapses to "x"). */
+const xp = (e: number) => (e === 1 ? 'x' : `x${sup(e)}`);
+
 const tok = (
   id: string,
   text: string,
@@ -573,6 +582,143 @@ export function buildFoil(p: number, q: number): EqScript {
   };
 }
 
+/**
+ * gcf_monomials template: find the GCF of m1·x^e1 and m2·x^e2, params
+ * {m1, m2, e1, e2}. Handles the coefficient GCF and the variable (smaller
+ * exponent) as two separate beats, then combines them. Coefficients are
+ * always ≥ 2 (both are multiples of a shared factor ≥ 2), so they always show.
+ */
+export function buildGcfMonomials(m1: number, m2: number, e1: number, e2: number): EqScript {
+  const gc = gcd(m1, m2);
+  const se = Math.min(e1, e2); // the shared variable uses the SMALLER power
+
+  // one monomial as [coefficient, x-power] with independent emphasis
+  const mono = (
+    cId: string,
+    vId: string,
+    coef: number,
+    e: number,
+    cEmph?: Emph,
+    vEmph?: Emph,
+  ): EqToken[] => [
+    tok(cId, M(coef), 'num', cEmph ? { emph: cEmph } : undefined),
+    tok(vId, xp(e), 'var', { tight: true, ...(vEmph ? { emph: vEmph } : {}) }),
+  ];
+  // "m1x^e1, m2x^e2" — spotlight the coefficients or the variables
+  const pair = (cEmph?: Emph, vEmph?: Emph): EqToken[] => [
+    ...mono('m1c', 'm1v', m1, e1, cEmph, vEmph),
+    tok('sep', ',', 'op', { tight: true }),
+    ...mono('m2c', 'm2v', m2, e2, cEmph, vEmph),
+  ];
+
+  const steps: EqStep[] = [
+    {
+      tokens: pair(),
+      explainEn: `Find the GCF of ${m1}${xp(e1)} and ${m2}${xp(e2)} — the biggest monomial that divides BOTH. Do the number and the variable separately.`,
+      explainEs: `Encuentra el MCD de ${m1}${xp(e1)} y ${m2}${xp(e2)} — el mayor monomio que divide a AMBOS. Haz el número y la variable por separado.`,
+    },
+    {
+      tokens: pair('focus'),
+      explainEn: `First the coefficients: the GCF of ${m1} and ${m2} is ${gc}.`,
+      explainEs: `Primero los coeficientes: el MCD de ${m1} y ${m2} es ${gc}.`,
+    },
+    {
+      tokens: pair(undefined, 'focus'),
+      explainEn: `Now the variable: both share x. Use the SMALLER exponent — ${xp(se)}.`,
+      explainEs: `Ahora la variable: ambos tienen x. Usa el exponente MENOR — ${xp(se)}.`,
+    },
+    {
+      tokens: [
+        tok('rc', M(gc), 'num', { emph: 'result' }),
+        tok('rv', xp(se), 'var', { emph: 'result', tight: true }),
+      ],
+      explainEn: `Put them together: the GCF is ${gc}${xp(se)}.`,
+      explainEs: `Júntalos: el MCD es ${gc}${xp(se)}.`,
+      holdMs: 3000,
+    },
+  ];
+
+  return {
+    id: `gen-gcf-mono-${m1}-${m2}-${e1}-${e2}`,
+    titleEn: 'Find the GCF, step by step',
+    titleEs: 'Encuentra el MCD, paso a paso',
+    steps,
+  };
+}
+
+/**
+ * factor_gcf template: factor (g·a)x² + (g·b)x → g·x(a·x + b), params
+ * {g, a, b} (g, a ≥ 2; b nonzero). Finds the GCF g·x of the two terms,
+ * divides each term by it (shown as fractions), then writes the factored
+ * form. Mirrors the template's own answer key: the GCF is g·x.
+ */
+export function buildFactorGcf(g: number, a: number, b: number): EqScript {
+  const A1 = g * a; // x² coefficient (positive: g, a ≥ 2)
+  const A2 = g * b; // x coefficient (signed)
+  const absA2 = Math.abs(A2);
+  const bOp = b >= 0 ? '+' : '−';
+  const gx = `${M(g)}x`;
+
+  // "A1x² ± A2x" with independent emphasis on coefficients / variables
+  const poly = (c1?: Emph, v1?: Emph, c2?: Emph, v2?: Emph): EqToken[] => [
+    tok('t1c', M(A1), 'num', c1 ? { emph: c1 } : undefined),
+    tok('t1v', 'x²', 'var', { tight: true, ...(v1 ? { emph: v1 } : {}) }),
+    tok('op', bOp, 'op'),
+    tok('t2c', M(absA2), 'num', c2 ? { emph: c2 } : undefined),
+    tok('t2v', 'x', 'var', { tight: true, ...(v2 ? { emph: v2 } : {}) }),
+  ];
+
+  const steps: EqStep[] = [
+    {
+      tokens: poly(),
+      explainEn: `To factor ${A1}x² ${bOp} ${absA2}x, pull out the GCF — the biggest thing that divides BOTH terms.`,
+      explainEs: `Para factorizar ${A1}x² ${bOp} ${absA2}x, saca el MCD — lo más grande que divide a AMBOS términos.`,
+    },
+    {
+      tokens: poly('focus', undefined, 'focus', undefined),
+      explainEn: `The coefficients ${A1} and ${absA2} share a factor of ${g}.`,
+      explainEs: `Los coeficientes ${A1} y ${absA2} comparten un factor de ${g}.`,
+    },
+    {
+      tokens: poly(undefined, 'focus', undefined, 'focus'),
+      explainEn: `Both terms have an x too. So the GCF is ${gx}.`,
+      explainEs: `Ambos términos también tienen x. Así que el MCD es ${gx}.`,
+    },
+    {
+      tokens: [
+        tok('gcf', gx, 'var', { emph: 'apply' }),
+        tok('lp', '(', 'op', { tight: true }),
+        ftok('q1', `${M(A1)}x²`, gx, { emph: 'focus' }),
+        tok('op', bOp, 'op'),
+        ftok('q2', `${M(absA2)}x`, gx, { emph: 'focus' }),
+        tok('rp', ')', 'op', { tight: true }),
+      ],
+      explainEn: `Write ${gx} outside the parentheses and divide each term by it.`,
+      explainEs: `Escribe ${gx} afuera del paréntesis y divide cada término entre él.`,
+    },
+    {
+      tokens: [
+        tok('gcf', gx, 'var'),
+        tok('lp', '(', 'op', { tight: true }),
+        tok('q1c', cf(a, 'x'), 'var', { emph: 'result', tight: true }),
+        tok('op', bOp, 'op'),
+        tok('q2c', M(Math.abs(b)), 'num', { emph: 'result' }),
+        tok('rp', ')', 'op', { tight: true }),
+      ],
+      explainEn: `${A1}x² ÷ ${gx} = ${cf(a, 'x')} and ${absA2}x ÷ ${gx} = ${Math.abs(b)}. Factored: ${gx}(${cf(a, 'x')} ${bOp} ${Math.abs(b)}). Distribute ${gx} back to check!`,
+      explainEs: `${A1}x² ÷ ${gx} = ${cf(a, 'x')} y ${absA2}x ÷ ${gx} = ${Math.abs(b)}. Factorizado: ${gx}(${cf(a, 'x')} ${bOp} ${Math.abs(b)}). ¡Distribuye ${gx} para verificar!`,
+      holdMs: 3000,
+    },
+  ];
+
+  return {
+    id: `gen-factor-gcf-${g}-${a}-${b}`,
+    titleEn: 'Factor out the GCF, step by step',
+    titleEs: 'Factoriza el MCD, paso a paso',
+    steps,
+  };
+}
+
 /** slope_two_points template: line through (x1, y1) and (x2, y2). */
 export function buildSlopeFromPoints(
   x1: number,
@@ -742,6 +888,22 @@ export function buildScriptForProblem(
     // it's a read-off question, nothing to animate
     if (m === null || b === null || 'which' in p) return null;
     return buildSlopeInterceptRewrite(m, b);
+  }
+
+  // factor-gcf carries two shapes: gcf_monomials {m1, m2, e1, e2} (find the
+  // GCF of two monomials) and factor_gcf {g, a, b} (factor a binomial). The
+  // {g, a, b} shape has an `a` key too, so handle both here before the
+  // generic {a, b, x} equation dispatch below.
+  if (skillSlug === 'factor-gcf') {
+    const [m1, m2, e1, e2] = ['m1', 'm2', 'e1', 'e2'].map(num);
+    if (m1 !== null && m2 !== null && e1 !== null && e2 !== null) {
+      return buildGcfMonomials(m1, m2, e1, e2);
+    }
+    const g = num('g');
+    const ga = num('a');
+    const gb = num('b');
+    if (g !== null && ga !== null && gb !== null) return buildFactorGcf(g, ga, gb);
+    return null;
   }
 
   const a = num('a');

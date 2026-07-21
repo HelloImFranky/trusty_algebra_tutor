@@ -9,4 +9,6 @@ export {
   buildSlopeInterceptRewrite,
   buildAddPolynomials,
   buildFoil,
+  buildGcfMonomials,
+  buildFactorGcf,
 } from '@tutor/core';
