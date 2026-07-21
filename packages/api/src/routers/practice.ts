@@ -2,6 +2,7 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { prisma, Prisma } from '@tutor/db';
 import {
+  answerChoicesFor,
   decayedScore,
   tierForScore,
   grade,
@@ -49,6 +50,9 @@ async function problemPayload(p: ProblemRow, locale: Locale) {
     gradingMode: p.gradingMode,
     params: extra?.paramsJson ?? null,
     skillSlug: extra?.skill.slug ?? null,
+    // Word-answer questions (rational/irrational, yes/no, …) come with a
+    // fixed choice set so the client offers buttons instead of a keypad.
+    choices: answerChoicesFor(extra?.paramsJson ?? null),
     steps: steps.map((s) => ({
       position: s.position,
       prompt: locale === 'es' ? s.promptEs : s.promptEn,

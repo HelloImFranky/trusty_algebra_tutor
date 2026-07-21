@@ -18,7 +18,7 @@ import {
   MessageCircle,
   X,
 } from '@tamagui/lucide-icons';
-import { Text, XStack, YStack } from 'tamagui';
+import { Button, Text, XStack, YStack } from 'tamagui';
 import { client } from '../lib/trpc';
 import { attemptOrQueue } from '../lib/offline';
 import { useI18n } from '../lib/i18n';
@@ -48,6 +48,9 @@ interface Problem {
   gradingMode: string;
   params?: unknown;
   skillSlug?: string | null;
+  /** Fixed answer choices for word-answer questions (rational/irrational,
+   * yes/no, up/down, …); null/absent for free-response questions. */
+  choices?: string[] | null;
   steps: ProblemStep[];
 }
 
@@ -245,7 +248,41 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
             {t('yourAnswer')}
           </Text>
           <MathText text={problem.prompt} size={18} />
-          <MathInput value={answer} onChange={setAnswer} onSubmit={submit} disabled={phase === 'done'} keypad />
+          {problem.choices && problem.choices.length > 0 ? (
+            <XStack gap={10} flexWrap="wrap">
+              {problem.choices.map((choice) => {
+                const selected = answer === choice;
+                return (
+                  <Button
+                    key={choice}
+                    flex={1}
+                    flexBasis={130}
+                    minWidth={110}
+                    height={52}
+                    borderRadius={14}
+                    borderWidth={2}
+                    borderColor={selected ? accent : tokens.border}
+                    backgroundColor={selected ? tokens.subtle : tokens.surface}
+                    disabled={phase === 'done'}
+                    pressStyle={{ opacity: 0.85 }}
+                    onPress={() => setAnswer(choice)}
+                    aria-label={choice}
+                  >
+                    <Text
+                      fontSize={17}
+                      fontWeight="800"
+                      color={selected ? accent : tokens.ink}
+                      textTransform="capitalize"
+                    >
+                      {choice}
+                    </Text>
+                  </Button>
+                );
+              })}
+            </XStack>
+          ) : (
+            <MathInput value={answer} onChange={setAnswer} onSubmit={submit} disabled={phase === 'done'} keypad />
+          )}
           {feedback === 'good' && <Feedback kind="good">{t('correct')}</Feedback>}
           {feedback === 'bad' && (
             <Feedback kind="bad" icon={<X size={15} color={COLORS.bad} />}>
@@ -345,7 +382,12 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
                 {t('step')} {stepIndex + 1} {t('of')} {problem.steps.length}
               </Text>
               <MathText text={step.prompt} />
-              <MathInput value={stepAnswer} onChange={setStepAnswer} onSubmit={checkStep} keypad />
+              <MathInput
+                value={stepAnswer}
+                onChange={setStepAnswer}
+                onSubmit={checkStep}
+                keypad={!(problem.choices && problem.choices.length > 0)}
+              />
               {stepFeedback === 'good' && <Feedback kind="good">{t('correct')}</Feedback>}
               {stepFeedback === 'bad' && <Feedback kind="bad">{t('incorrect')}</Feedback>}
               {stepFeedback && stepFeedback !== 'good' && stepFeedback !== 'bad' && (
