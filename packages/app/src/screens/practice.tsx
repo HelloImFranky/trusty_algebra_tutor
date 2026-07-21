@@ -157,21 +157,22 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
     }
   };
 
-  /** Escalating hint ladder (§4.2): nudge → step hint → guided steps → tutor. */
+  /** The Hint button is a simple on/off toggle: first tap shows the nudge,
+   * a second tap clears it. The deeper escalations have their own buttons
+   * ("Walk me through it" for the guided/animated walkthrough, "Ask the
+   * tutor" for the LLM chat), so the hint button never advances the phase
+   * or opens the tutor on its own. */
   const nudge = () => {
-    setHintsUsed((h) => h + 1);
-    if (hintsUsed === 0) {
-      setHintText(
-        problem.steps[0]?.hint ??
-          problem.steps[0]?.prompt ??
-          (locale === 'es' ? 'Repasa los pasos de la lección.' : 'Look back at the lesson steps.'),
-      );
-    } else if (problem.steps.length > 0) {
-      setPhase('steps');
+    if (hintText) {
       setHintText('');
-    } else {
-      setShowTutor(true);
+      return;
     }
+    setHintsUsed((h) => h + 1);
+    setHintText(
+      problem.steps[0]?.hint ??
+        problem.steps[0]?.prompt ??
+        (locale === 'es' ? 'Repasa los pasos de la lección.' : 'Look back at the lesson steps.'),
+    );
   };
 
   const checkStep = async () => {
