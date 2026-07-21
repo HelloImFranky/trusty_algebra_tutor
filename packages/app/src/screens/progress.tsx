@@ -325,11 +325,15 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
 
       {!studentId && role === 'student' && <JoinClassCard />}
 
-      {/* Full-page report export (PDF/Word keep charts; CSV = data only). */}
-      <ReportButtons
-        filenameBase={`progress-${(data.student?.displayName ?? 'me').replace(/\s+/g, '_')}`}
-        buildReport={buildProgressReport}
-      />
+      {/* Full-page report export (PDF/Word keep charts; CSV = data only).
+          Students don't get the stats download — only guardians/teachers
+          reviewing a student, and admins, can export the report. */}
+      {role !== 'student' && (
+        <ReportButtons
+          filenameBase={`progress-${(data.student?.displayName ?? 'me').replace(/\s+/g, '_')}`}
+          buildReport={buildProgressReport}
+        />
+      )}
 
 
       <XStack gap={8} flexWrap="wrap">
