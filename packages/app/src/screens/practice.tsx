@@ -245,7 +245,7 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
             {t('yourAnswer')}
           </Text>
           <MathText text={problem.prompt} size={18} />
-          <MathInput value={answer} onChange={setAnswer} onSubmit={submit} disabled={phase === 'done'} />
+          <MathInput value={answer} onChange={setAnswer} onSubmit={submit} disabled={phase === 'done'} keypad />
           {feedback === 'good' && <Feedback kind="good">{t('correct')}</Feedback>}
           {feedback === 'bad' && (
             <Feedback kind="bad" icon={<X size={15} color={COLORS.bad} />}>
@@ -345,7 +345,7 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
                 {t('step')} {stepIndex + 1} {t('of')} {problem.steps.length}
               </Text>
               <MathText text={step.prompt} />
-              <MathInput value={stepAnswer} onChange={setStepAnswer} onSubmit={checkStep} />
+              <MathInput value={stepAnswer} onChange={setStepAnswer} onSubmit={checkStep} keypad />
               {stepFeedback === 'good' && <Feedback kind="good">{t('correct')}</Feedback>}
               {stepFeedback === 'bad' && <Feedback kind="bad">{t('incorrect')}</Feedback>}
               {stepFeedback && stepFeedback !== 'good' && stepFeedback !== 'bad' && (
