@@ -32,6 +32,7 @@ import {
   Title,
   useAccent,
   useFeedbackColors,
+  useHintBg,
   useTokens,
 } from '../components/ui';
 
@@ -88,6 +89,7 @@ export function AdminScreen() {
   const accent = useAccent();
   const tokens = useTokens();
   const bad = useFeedbackColors('bad');
+  const hintBg = useHintBg();
   const authed = useRequireAuth();
   const role = useAuth((s) => s.auth?.user.role);
   const isAdmin = authed && role === 'admin';
@@ -288,7 +290,16 @@ export function AdminScreen() {
           ))}
       </AppCard>
 
-      <AppCard gap={10}>
+      {/* Mustard/yellow surface so a pending approval — the one time-sensitive
+          action on this page — stands out from the neutral cards around it.
+          Theme-aware via the hint tokens (warm yellow light, deep amber dark);
+          the left border matches the "pending" status badge. */}
+      <AppCard
+        gap={10}
+        backgroundColor={hintBg}
+        borderLeftWidth={4}
+        borderLeftColor={HINT.fg}
+      >
         <SubTitle>{t('pendingTeachers')}</SubTitle>
         {pending.isLoading && <Loading />}
         {pending.error && <Feedback kind="bad">{pending.error.message}</Feedback>}
