@@ -246,27 +246,46 @@ export function AdminScreen() {
       <Title>🛡️ {t('admin')}</Title>
 
       {/* Teacher management first — approving and auditing accounts is the
-          admin's primary job; statistics follow below. */}
+          admin's primary job; statistics follow below. All teachers is a
+          collapsible list (it can grow long); the header carries the count
+          so the roster size is visible without expanding. */}
       <AppCard gap={10}>
-        <SubTitle>{t('allTeachers')}</SubTitle>
+        <XStack
+          justifyContent="space-between"
+          alignItems="center"
+          gap={8}
+          cursor="pointer"
+          onPress={() => toggleStat('allTeachers')}
+          hoverStyle={{ opacity: 0.8 }}
+          pressStyle={{ opacity: 0.6 }}
+        >
+          <XStack gap={8} alignItems="center">
+            <SubTitle>{t('allTeachers')}</SubTitle>
+            {all.data && <Muted>{all.data.teachers.length}</Muted>}
+          </XStack>
+          <Text fontSize={16} fontWeight="800" color={accent}>
+            {openStats.allTeachers ? '▾' : '▸'}
+          </Text>
+        </XStack>
         {all.isLoading && <Loading />}
         {all.error && <Feedback kind="bad">{all.error.message}</Feedback>}
-        {all.data?.teachers.map((tt) => (
-          <XStack key={tt.id} justifyContent="space-between" alignItems="center" gap={8} flexWrap="wrap">
-            <YStack>
-              <Text fontWeight="800" color={tokens.ink}>{tt.displayName}</Text>
-              <Muted size={12}>@{tt.username}</Muted>
-            </YStack>
-            <XStack gap={8} alignItems="center">
-              <Badge label={tt.status} text={t(STATUS_KEY[tt.status] ?? 'statusActive')} />
-              {tt.status === 'active' && (
-                <GhostButton size="$2" disabled={busy} onPress={() => disable.mutate({ userId: tt.id })}>
-                  {t('disable')}
-                </GhostButton>
-              )}
+        {openStats.allTeachers &&
+          all.data?.teachers.map((tt) => (
+            <XStack key={tt.id} justifyContent="space-between" alignItems="center" gap={8} flexWrap="wrap">
+              <YStack>
+                <Text fontWeight="800" color={tokens.ink}>{tt.displayName}</Text>
+                <Muted size={12}>@{tt.username}</Muted>
+              </YStack>
+              <XStack gap={8} alignItems="center">
+                <Badge label={tt.status} text={t(STATUS_KEY[tt.status] ?? 'statusActive')} />
+                {tt.status === 'active' && (
+                  <GhostButton size="$2" disabled={busy} onPress={() => disable.mutate({ userId: tt.id })}>
+                    {t('disable')}
+                  </GhostButton>
+                )}
+              </XStack>
             </XStack>
-          </XStack>
-        ))}
+          ))}
       </AppCard>
 
       <AppCard gap={10}>
