@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma, Prisma } from '@tutor/db';
 import {
   answerChoicesFor,
-  keypadKindForAnswer,
+  keypadKindForProblem,
   decayedScore,
   tierForScore,
   grade,
@@ -45,8 +45,8 @@ async function problemPayload(p: ProblemRow, locale: Locale) {
   ]);
   // Word-answer questions (rational/irrational, yes/no, …) come with a fixed
   // choice set so the client offers buttons instead of a keypad; everything
-  // else gets a dedicated pad ('numeric' for bare numbers, 'algebra' for
-  // expressions) chosen from the answer's shape.
+  // else gets a dedicated per-lesson pad chosen from the problem's generator
+  // template (falling back to the answer's shape for hand-authored problems).
   const choices = answerChoicesFor(extra?.paramsJson ?? null);
   return {
     id: Number(p.id),
@@ -57,7 +57,9 @@ async function problemPayload(p: ProblemRow, locale: Locale) {
     params: extra?.paramsJson ?? null,
     skillSlug: extra?.skill.slug ?? null,
     choices,
-    keypad: choices ? null : keypadKindForAnswer(extra?.answerLatex ?? ''),
+    keypad: choices
+      ? null
+      : keypadKindForProblem(extra?.paramsJson ?? null, extra?.answerLatex ?? ''),
     steps: steps.map((s) => ({
       position: s.position,
       prompt: locale === 'es' ? s.promptEs : s.promptEn,
