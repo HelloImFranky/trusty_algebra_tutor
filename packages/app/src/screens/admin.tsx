@@ -22,9 +22,11 @@ import {
   Muted,
   PrimaryButton,
   Screen,
+  StatChip,
   SubTitle,
   Title,
   useAccent,
+  useFeedbackColors,
   useTokens,
 } from '../components/ui';
 
@@ -40,9 +42,10 @@ const STATUS_KEY: Record<string, I18nKey> = {
 };
 
 export function AdminScreen() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const accent = useAccent();
   const tokens = useTokens();
+  const bad = useFeedbackColors('bad');
   const authed = useRequireAuth();
   const role = useAuth((s) => s.auth?.user.role);
   const isAdmin = authed && role === 'admin';
@@ -52,6 +55,7 @@ export function AdminScreen() {
   const pending = trpc.admin.teachers.listPending.useQuery(undefined, { enabled: isAdmin });
   const all = trpc.admin.teachers.list.useQuery(undefined, { enabled: isAdmin });
   const usage = trpc.admin.usage.summary.useQuery({ window: usageWindow }, { enabled: isAdmin });
+  const overview = trpc.admin.stats.overview.useQuery(undefined, { enabled: isAdmin });
 
   const refresh = () => {
     void utils.admin.teachers.listPending.invalidate();
@@ -74,6 +78,104 @@ export function AdminScreen() {
   return (
     <Screen maxWidth={820}>
       <Title>🛡️ {t('admin')}</Title>
+
+      {/* School overview (docs/statistics-plan.md, Phase 1b): de-identified
+          aggregates only — engagement, mastery by unit, adoption, consent
+          coverage. The admin role still can't reach any individual student. */}
+      <AppCard gap={12}>
+        <SubTitle>🏫 {t('schoolOverview')}</SubTitle>
+        {overview.isLoading && <Loading />}
+        {overview.error && <Feedback kind="bad">{overview.error.message}</Feedback>}
+        {overview.data && (
+          <>
+            <XStack gap={10} flexWrap="wrap">
+              <StatChip
+                icon={<Text fontSize={18}>🧑‍🎓</Text>}
+                value={overview.data.engagement.active7d}
+                label={t('activeStudents7d')}
+              />
+              <StatChip
+                icon={<Text fontSize={18}>📆</Text>}
+                value={overview.data.engagement.active30d}
+                label={t('activeStudents30d')}
+              />
+              <StatChip
+                icon={<Text fontSize={18}>✏️</Text>}
+                value={overview.data.engagement.attempts30d}
+                label={t('schoolAttempts30d')}
+              />
+              <StatChip
+                icon={<Text fontSize={18}>⏱️</Text>}
+                value={overview.data.engagement.minutes30d}
+                label={t('schoolMinutes30d')}
+              />
+            </XStack>
+
+            <SubTitle>📚 {t('masteryByUnitTitle')}</SubTitle>
+            {overview.data.masteryByUnit
+              .filter((u) => u.struggling + u.practicing + u.proficient + u.mastered > 0)
+              .map((u) => {
+                const total = u.struggling + u.practicing + u.proficient + u.mastered;
+                return (
+                  <YStack key={u.unitNumber} gap={4}>
+                    <XStack justifyContent="space-between" gap={8} flexWrap="wrap">
+                      <Text fontSize={13} fontWeight="700" color={tokens.ink}>
+                        {u.unitNumber}. {locale === 'es' ? u.titleEs : u.titleEn}
+                      </Text>
+                      <Muted size={12}>{total}</Muted>
+                    </XStack>
+                    {/* Stacked distribution bar: struggling → mastered. */}
+                    <XStack height={10} borderRadius={999} overflow="hidden" backgroundColor={tokens.subtle}>
+                      <YStack flexGrow={u.struggling} backgroundColor={bad.ink} />
+                      <YStack flexGrow={u.practicing} backgroundColor={accent} opacity={0.3} />
+                      <YStack flexGrow={u.proficient} backgroundColor={accent} opacity={0.6} />
+                      <YStack flexGrow={u.mastered} backgroundColor={accent} />
+                    </XStack>
+                    <XStack gap={12} flexWrap="wrap">
+                      <Muted size={11}>🔴 {u.struggling} {t('struggling')}</Muted>
+                      <Muted size={11}>{u.practicing} {t('practicing')}</Muted>
+                      <Muted size={11}>{u.proficient} {t('proficient')}</Muted>
+                      <Muted size={11}>{u.mastered} {t('mastered')}</Muted>
+                    </XStack>
+                  </YStack>
+                );
+              })}
+            {overview.data.masteryByUnit.every(
+              (u) => u.struggling + u.practicing + u.proficient + u.mastered === 0,
+            ) && <Muted size={12}>{t('noDataYet')}</Muted>}
+            <Muted size={11}>{t('masteryByUnitNote')}</Muted>
+
+            <SubTitle>🏫 {t('adoptionTitle')}</SubTitle>
+            <XStack gap={10} flexWrap="wrap">
+              <StatChip
+                icon={<Text fontSize={18}>🧑‍🏫</Text>}
+                value={overview.data.adoption.teachersActive}
+                label={t('adoptionTeachers')}
+              />
+              <StatChip
+                icon={<Text fontSize={18}>🏷️</Text>}
+                value={overview.data.adoption.classes}
+                label={t('adoptionClasses')}
+              />
+              <StatChip
+                icon={<Text fontSize={18}>🎒</Text>}
+                value={overview.data.adoption.studentsEnrolled}
+                label={t('adoptionEnrolled')}
+              />
+              <StatChip
+                icon={<Text fontSize={18}>👥</Text>}
+                value={overview.data.adoption.studentsTotal}
+                label={t('adoptionAccounts')}
+              />
+              <StatChip
+                icon={<Text fontSize={18}>🛡️</Text>}
+                value={overview.data.adoption.consentPending}
+                label={t('consentPendingStat')}
+              />
+            </XStack>
+          </>
+        )}
+      </AppCard>
 
       <AppCard gap={10}>
         <SubTitle>{t('pendingTeachers')}</SubTitle>

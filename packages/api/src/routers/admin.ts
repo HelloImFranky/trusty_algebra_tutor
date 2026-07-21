@@ -4,6 +4,13 @@ import { prisma } from '@tutor/db';
 import { adminUsageAvailable, fetchUsageSummary, type UsageSummary } from '@tutor/core/admin';
 import { adminProcedure, router } from '../trpc.js';
 import { recordGuardianConsent } from '../authz.js';
+import {
+  schoolAdoption,
+  schoolEngagement,
+  unitMasteryDistribution,
+  weeklyMinutes,
+} from '../classInsights.js';
+import { schoolYearStart } from '../sprintStats.js';
 
 /**
  * Admin console (docs/teacher-dashboard-plan.md, Stage 2). Least privilege:
@@ -123,6 +130,32 @@ export const adminRouter = router({
       });
       return { ok: true };
     }),
+
+  stats: router({
+    /**
+     * School overview (docs/statistics-plan.md, Phase 1b): engagement,
+     * mastery distribution by unit, adoption, and consent coverage — for the
+     * principal / department-head persona. Everything is a de-identified
+     * aggregate (counts and series, no names, no per-student rows), which is
+     * what keeps this compatible with the router's least-privilege rule
+     * above: the admin still cannot reach any individual student's records.
+     */
+    overview: adminProcedure.query(async () => {
+      const [engagement, weekly, masteryByUnit, adoption] = await Promise.all([
+        schoolEngagement(),
+        weeklyMinutes(null, schoolYearStart()),
+        unitMasteryDistribution(),
+        schoolAdoption(),
+      ]);
+      return {
+        engagement,
+        weekly,
+        masteryByUnit,
+        adoption,
+        yearStart: schoolYearStart().toISOString().slice(0, 10),
+      };
+    }),
+  }),
 
   usage: router({
     /**

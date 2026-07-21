@@ -1398,3 +1398,164 @@ describe('tutor sessions', () => {
     expect(limited).toBe(true);
   });
 });
+
+describe('class insights + school overview (docs/statistics-plan.md, Phase 1)', () => {
+  const mkUser = async (role: string, username: string, displayName: string): Promise<AuthUser> => {
+    const row = await prisma.user.create({
+      data: { role, username, passwordHash: 'x', displayName },
+      select: { id: true },
+    });
+    return {
+      id: Number(row.id),
+      role: role as AuthUser['role'],
+      username,
+      displayName,
+      locale: 'en',
+      status: 'active',
+    };
+  };
+  let teacher: AuthUser;
+  let rival: AuthUser;
+  let admin: AuthUser;
+  let worker: AuthUser; // active but struggling + hint-reliant
+  let ghost: AuthUser; // inactive 10+ days
+  let classId = 0;
+  let skillId = 0;
+  let unitNumber = 0;
+
+  it('seeds a class with attempts carrying the analytics columns', async () => {
+    teacher = await mkUser('teacher', 'insights_teacher', 'Insights Teacher');
+    rival = await mkUser('teacher', 'insights_rival', 'Insights Rival');
+    admin = await mkUser('admin', 'insights_admin', 'Insights Admin');
+    worker = await mkUser('student', 'insights_worker', 'Worker');
+    ghost = await mkUser('student', 'insights_ghost', 'Ghost');
+    const cls = await as(teacher).teacher.classes.create({ name: 'Period 4 Insights' });
+    classId = cls.id;
+    await as(worker).teacher.classes.join({ code: cls.joinCode });
+    await as(ghost).teacher.classes.join({ code: cls.joinCode });
+
+    const problem = await prisma.problem.findFirstOrThrow({
+      include: { skill: { include: { lesson: { include: { unit: true } } } } },
+    });
+    skillId = Number(problem.skillId);
+    unitNumber = problem.skill.lesson.unit.number;
+
+    // Worker, this week: 6 attempts, 2 correct, heavy hints, one repeated
+    // diagnosed misconception, a minute per problem.
+    for (let i = 0; i < 6; i++) {
+      await prisma.attempt.create({
+        data: {
+          userId: BigInt(worker.id),
+          problemId: problem.id,
+          submittedLatex: 'x',
+          correct: i < 2,
+          hintsUsed: i < 2 ? 0 : 3,
+          misconceptionId: i >= 3 ? 'missed_inequality_flip' : null,
+          durationMs: 60_000,
+        },
+      });
+    }
+    // Ghost: one attempt, 10 days ago.
+    await prisma.attempt.create({
+      data: {
+        userId: BigInt(ghost.id),
+        problemId: problem.id,
+        submittedLatex: 'x',
+        correct: true,
+        createdAt: new Date(Date.now() - 10 * 86_400_000),
+      },
+    });
+    // Mastery rows: worker struggling on the skill, ghost mastered.
+    await prisma.mastery.createMany({
+      data: [
+        { userId: BigInt(worker.id), skillId: problem.skillId, score: 0.2, attemptsCount: 6, lastPracticedAt: new Date() },
+        { userId: BigInt(ghost.id), skillId: problem.skillId, score: 0.95, attemptsCount: 10, lastPracticedAt: new Date() },
+      ],
+    });
+  });
+
+  it('returns the heatmap with decayed labels over the full curriculum', async () => {
+    const res = await as(teacher).teacher.classes.insights({ classId });
+    expect(res.class).toMatchObject({ id: classId, name: 'Period 4 Insights' });
+    // Columns cover the curriculum and carry unit/lesson grouping info.
+    const col = res.skills.find((s) => s.skillId === skillId);
+    expect(col).toBeTruthy();
+    expect(col!.unitNumber).toBe(unitNumber);
+    // Cells: worker struggling, ghost mastered on the seeded skill.
+    const workerRow = res.students.find((s) => s.id === worker.id)!;
+    expect(workerRow.cells.find((c) => c.skillId === skillId)).toMatchObject({ label: 'struggling' });
+    const ghostRow = res.students.find((s) => s.id === ghost.id)!;
+    expect(ghostRow.cells.find((c) => c.skillId === skillId)).toMatchObject({ label: 'mastered' });
+  });
+
+  it('aggregates diagnosed misconceptions with student reach', async () => {
+    const res = await as(teacher).teacher.classes.insights({ classId });
+    const row = res.misconceptions.find((m) => m.misconceptionId === 'missed_inequality_flip');
+    expect(row).toMatchObject({ skillId, hits: 3, students: 1 });
+    expect(row!.skillNameEn.length).toBeGreaterThan(0);
+  });
+
+  it('ranks the watch list by flags and skips healthy students', async () => {
+    const res = await as(teacher).teacher.classes.insights({ classId });
+    const workerFlags = res.watchlist.find((w) => w.id === worker.id)!;
+    // Active, but struggling + hint-reliant (12 hints / 6 attempts) + low
+    // accuracy (2/6) — three flags, no inactive flag.
+    expect(workerFlags.flags.sort()).toEqual(['hintReliant', 'lowAccuracy', 'struggling']);
+    expect(workerFlags.hintRate).toBe(2);
+    expect(workerFlags.accuracyPct).toBe(33);
+    expect(workerFlags.strugglingSkillIds).toContain(skillId);
+    const ghostFlags = res.watchlist.find((w) => w.id === ghost.id)!;
+    expect(ghostFlags.flags).toEqual(['inactive']);
+    // Ranked by flag count: worker (3) before ghost (1).
+    expect(res.watchlist[0]!.id).toBe(worker.id);
+  });
+
+  it('reports time on task per student and a weekly class series', async () => {
+    const res = await as(teacher).teacher.classes.insights({ classId });
+    const workerTime = res.timeOnTask.find((s) => s.id === worker.id)!;
+    expect(workerTime).toMatchObject({ minutes7d: 6, minutes30d: 6 });
+    expect(res.yearStart.endsWith('-09-01')).toBe(true);
+    // 6 minutes of tracked work land in the weekly series.
+    expect(res.weekly.reduce((sum, w) => sum + w.minutes, 0)).toBeGreaterThanOrEqual(6);
+  });
+
+  it('keeps insights ownership-scoped and teacher-only', async () => {
+    await expect(as(rival).teacher.classes.insights({ classId })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    await expect(as(worker).teacher.classes.insights({ classId })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    await expect(as(admin).teacher.classes.insights({ classId })).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    });
+  });
+
+  it('gives the admin a de-identified school overview', async () => {
+    const res = await as(admin).admin.stats.overview();
+    // Engagement counts cover the seeded students (plus earlier suites).
+    expect(res.engagement.active30d).toBeGreaterThanOrEqual(2);
+    expect(res.engagement.active7d).toBeGreaterThanOrEqual(1);
+    expect(res.engagement.attempts30d).toBeGreaterThanOrEqual(7);
+    expect(res.engagement.minutes30d).toBeGreaterThanOrEqual(6);
+    expect(res.yearStart.endsWith('-09-01')).toBe(true);
+    expect(res.weekly.length).toBeGreaterThanOrEqual(1);
+    // Mastery distribution: the seeded unit has both a struggling and a
+    // mastered (student, skill) pair — counts only, no identities.
+    const unit = res.masteryByUnit.find((u) => u.unitNumber === unitNumber)!;
+    expect(unit.struggling).toBeGreaterThanOrEqual(1);
+    expect(unit.mastered).toBeGreaterThanOrEqual(1);
+    expect(JSON.stringify(res)).not.toContain('Worker');
+    // Adoption + consent coverage.
+    expect(res.adoption.teachersActive).toBeGreaterThanOrEqual(1);
+    expect(res.adoption.classes).toBeGreaterThanOrEqual(1);
+    expect(res.adoption.studentsEnrolled).toBeGreaterThanOrEqual(2);
+    expect(res.adoption.studentsTotal).toBeGreaterThanOrEqual(res.adoption.studentsEnrolled);
+    expect(typeof res.adoption.consentPending).toBe('number');
+  });
+
+  it('keeps the school overview admin-only', async () => {
+    await expect(as(worker).admin.stats.overview()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(as(teacher).admin.stats.overview()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+});

@@ -1,6 +1,7 @@
 export * from './math/engine.js';
 export * from './math/calculator.js';
 export * from './math/misconceptions.js';
+export * from './math/misconceptionCatalog.js';
 export * from './math/generators.js';
 export * from './mastery.js';
 export * from './achievements.js';

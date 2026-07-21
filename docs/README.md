@@ -41,6 +41,7 @@ Partially built or awaiting a decision — verify against code before acting.
 
 | Doc | Status |
 |---|---|
+| [`statistics-plan.md`](statistics-plan.md) | 🚧 Phase 1 in progress (teacher class insights + admin school overview). Phases 2–3 designed, not built. |
 | [`guardian-consent-plan.md`](guardian-consent-plan.md) | 🚧 Tier 0 shipped (school/admin attestation — migration `013`, `authz.ts`, teacher/admin routers). Tiers 1–2 (email-plus, guardian accounts) scoped but **not built**. |
 | [`tutor-anthropic-haiku-plan.md`](tutor-anthropic-haiku-plan.md) | 🚧 **Planning only — not built.** Gated on sign-off. (The separate link-out and usage-dashboard pieces shipped.) |
 | [`security-review-2.md`](security-review-2.md) | 🚧 Mixed. Items marked ✅ in the doc are fixed; 📝 items may remain open. Treat as a record, verify before acting. |
