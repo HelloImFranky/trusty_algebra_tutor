@@ -4,7 +4,7 @@ import { createFont, createTamagui } from 'tamagui';
 
 /**
  * Archivo, loaded per-platform: web gets one CSS family with real font-weight
- * switching (see apps/web/app/layout.tsx's next/font/google); native can't
+ * switching (see apps/web/app/layout.tsx's next/font/local); native can't
  * fake weights on one family, so each weight is its own registered family
  * name (see apps/native/app/_layout.tsx's useFonts + @expo-google-fonts).
  */

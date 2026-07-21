@@ -1,10 +1,19 @@
 import type { Metadata, Viewport } from 'next';
-import { Archivo } from 'next/font/google';
+import localFont from 'next/font/local';
 import { Providers } from './providers';
 
-// Weights match tamagui.config.ts's face map (400/600/800). display: 'swap'
+// Self-hosted Archivo (variable font, latin subset) instead of next/font/google.
+// The build-time fetch from Google Fonts is flaky on Vercel and fails the whole
+// production build ("Failed to fetch `Archivo` from Google Fonts") when the
+// build machine can't reach fonts.gstatic.com; shipping the woff2 in-repo makes
+// the build deterministic and offline-safe. The '400 800' range spans the axis
+// weights tamagui.config.ts's face map uses (400/600/800); display: 'swap'
 // avoids blocking first paint on the font.
-const archivo = Archivo({ subsets: ['latin'], weight: ['400', '600', '800'], display: 'swap' });
+const archivo = localFont({
+  src: './fonts/Archivo-Variable-latin.woff2',
+  weight: '400 800',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'Algebra Tutor',
