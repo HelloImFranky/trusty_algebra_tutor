@@ -24,6 +24,7 @@ import { useI18n } from '../lib/i18n';
 import { useRequireAuth } from '../components/AppChrome';
 import { Mascot } from '../components/Mascot';
 import { MathInput } from '../components/MathInput';
+import type { KeypadKind } from '../components/MathKeypad';
 import { MathText } from '../components/MathText';
 import { AnimatedEquation } from '../components/stepanim/AnimatedEquation';
 import { buildScriptForProblem } from '../components/stepanim/builders';
@@ -49,9 +50,10 @@ interface Problem {
   /** Fixed answer choices for word-answer questions (rational/irrational,
    * yes/no, up/down, …); null/absent for free-response questions. */
   choices?: string[] | null;
-  /** Which dedicated keypad this problem's answer needs ('numeric' for bare
-   * numbers, 'algebra' for expressions); null when it's a choice question. */
-  keypad?: 'numeric' | 'algebra' | null;
+  /** Which dedicated per-lesson keypad this problem's answer needs (e.g.
+   * 'numeric', 'polynomial', 'inequality', 'points'); null when it's a choice
+   * question. See keypadKindForProblem in @tutor/core. */
+  keypad?: KeypadKind | null;
   steps: ProblemStep[];
 }
 
