@@ -266,17 +266,21 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
                 <SecondaryButton icon={<Lightbulb size={15} />} onPress={nudge}>
                   {t('hint')}
                 </SecondaryButton>
-                {feedback === 'bad' && animScript && !showAnim && (
-                  <GhostButton icon={<Film size={15} />} onPress={() => openAnim(0)}>
-                    {t('animatedExample')}
-                  </GhostButton>
-                )}
-                {problem.steps.length > 0 && (
+                {(animScript || problem.steps.length > 0) && (
                   <GhostButton
                     icon={<Footprints size={15} />}
                     onPress={() => {
-                      setPhase('steps');
-                      setHintsUsed((h) => h + 1);
+                      // "Walk me through it" IS the animated worked example.
+                      // Toggle the animation when a builder understands this
+                      // problem; only fall back to the per-step guided mode
+                      // when there's no animation to play.
+                      if (animScript) {
+                        if (showAnim) setShowAnim(false);
+                        else openAnim(0);
+                      } else {
+                        setPhase('steps');
+                        setHintsUsed((h) => h + 1);
+                      }
                     }}
                   >
                     {t('showStep')}
