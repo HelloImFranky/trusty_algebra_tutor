@@ -14,6 +14,7 @@ import { useI18n, type I18nKey } from '../lib/i18n';
 import { useAuth } from '../lib/auth';
 import { useRequireAuth } from '../components/AppChrome';
 import { JoinClassCard } from '../components/JoinClassCard';
+import { ReadinessPill } from '../components/Readiness';
 import {
   AppCard, Badge, Feedback, Loading, Muted, NEUTRAL, ProgressBar, Screen, StatChip,
   SubTitle, Title, useAccent, useTokens, COLORS,
@@ -338,6 +339,30 @@ export function ProgressScreen({ studentId }: { studentId?: number }) {
             </YStack>
           );
         })}
+      </AppCard>
+
+      {/* Regents readiness (docs/statistics-plan.md, Phase 2): the shared
+          core traffic light — mastery of each topic's linked skills blended
+          with Regents Review accuracy. */}
+      <AppCard gap={8}>
+        <SubTitle>🎯 {t('readinessTitle')}</SubTitle>
+        {data.regentsReadiness.map((r, i) => (
+          <XStack
+            key={r.slug}
+            justifyContent="space-between"
+            alignItems="center"
+            gap={8}
+            paddingVertical={5}
+            borderTopWidth={i === 0 ? 0 : 1}
+            borderTopColor={tokens.border}
+          >
+            <Text fontSize={14} fontWeight="700" color={tokens.ink}>
+              {r.icon} {locale === 'es' ? r.titleEs : r.titleEn}
+            </Text>
+            <ReadinessPill band={r.band} />
+          </XStack>
+        ))}
+        <Muted size={11}>{t('readinessNote')}</Muted>
       </AppCard>
 
       {data.struggleFlags.length > 0 && (

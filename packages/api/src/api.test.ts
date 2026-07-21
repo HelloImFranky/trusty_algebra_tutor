@@ -5,7 +5,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { TRPCError } from '@trpc/server';
-import { sprintTopicDefs } from '@tutor/core';
+import { regentsTopics, sprintTopicDefs } from '@tutor/core';
 import { appRouter } from './index.js';
 import type { AuthUser } from './auth.js';
 
@@ -1557,5 +1557,176 @@ describe('class insights + school overview (docs/statistics-plan.md, Phase 1)', 
   it('keeps the school overview admin-only', async () => {
     await expect(as(worker).admin.stats.overview()).rejects.toMatchObject({ code: 'FORBIDDEN' });
     await expect(as(teacher).admin.stats.overview()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+});
+
+describe('phase 2 statistics (readiness, item analysis, tiers, tutor usage)', () => {
+  // Reuses the class seeded by the previous suite (insights_teacher's
+  // "Period 4 Insights" with worker + ghost), looked up fresh by username.
+  const authUser = (row: { id: bigint; role: string; username: string; displayName: string }): AuthUser => ({
+    id: Number(row.id),
+    role: row.role as AuthUser['role'],
+    username: row.username,
+    displayName: row.displayName,
+    locale: 'en',
+    status: 'active',
+  });
+  let teacher: AuthUser;
+  let admin: AuthUser;
+  let worker: AuthUser;
+  let ghost: AuthUser;
+  let tierkid: AuthUser;
+  let classId = 0;
+  let modProblemId = 0n;
+  let modSkillNameEn = '';
+
+  it('seeds readiness, tier, Regents-item, and tutor-session evidence', async () => {
+    const byName = async (username: string) =>
+      authUser(await prisma.user.findUniqueOrThrow({ where: { username } }));
+    teacher = await byName('insights_teacher');
+    admin = await byName('insights_admin');
+    worker = await byName('insights_worker');
+    ghost = await byName('insights_ghost');
+    const cls = await prisma.class.findFirstOrThrow({ where: { name: 'Period 4 Insights' } });
+    classId = Number(cls.id);
+
+    // A third student practicing almost entirely in the modified tier.
+    const row = await prisma.user.create({
+      data: { role: 'student', username: 'insights_tierkid', passwordHash: 'x', displayName: 'Tierkid' },
+    });
+    tierkid = authUser(row);
+    await prisma.classEnrollment.create({
+      data: { classId: cls.id, studentUserId: row.id },
+    });
+    const firstProblem = await prisma.problem.findFirstOrThrow({ orderBy: { id: 'asc' } });
+    const modProblem = await prisma.problem.findFirstOrThrow({
+      where: { tier: 'modified', id: { not: firstProblem.id } },
+      include: { skill: true },
+    });
+    modProblemId = modProblem.id;
+    modSkillNameEn = modProblem.skill.nameEn;
+    for (let a = 0; a < 8; a++) {
+      await prisma.attempt.create({
+        data: {
+          userId: row.id,
+          problemId: modProblem.id,
+          submittedLatex: 'x',
+          correct: a < 6,
+          durationMs: 30_000,
+        },
+      });
+    }
+
+    // Readiness evidence on the 1:1 'inequalities' topic↔skill pair:
+    // worker = strong mastery, ghost = failed Regents answers (10 days old,
+    // so the inactive flag from the previous suite stays true).
+    const ineqSkill = await prisma.skill.findUniqueOrThrow({ where: { slug: 'inequalities' } });
+    await prisma.mastery.create({
+      data: {
+        userId: BigInt(worker.id),
+        skillId: ineqSkill.id,
+        score: 0.9,
+        attemptsCount: 10,
+        lastPracticedAt: new Date(),
+      },
+    });
+    const tenDaysAgo = new Date(Date.now() - 10 * 86_400_000);
+    for (let q = 1; q <= 4; q++) {
+      await prisma.regentsAnswer.create({
+        data: {
+          userId: BigInt(ghost.id),
+          topicSlug: 'inequalities',
+          questionId: `inequalities-q${q}`,
+          choiceIndex: 0,
+          correct: false,
+          round: 0,
+          createdAt: tenDaysAgo,
+        },
+      });
+    }
+    // Three answers on q1 total (min for item analysis): 1 of 3 correct.
+    await prisma.regentsAnswer.create({
+      data: {
+        userId: BigInt(worker.id),
+        topicSlug: 'inequalities',
+        questionId: 'inequalities-q1',
+        choiceIndex: 1,
+        correct: true,
+        round: 0,
+      },
+    });
+    await prisma.regentsAnswer.create({
+      data: {
+        userId: row.id,
+        topicSlug: 'inequalities',
+        questionId: 'inequalities-q1',
+        choiceIndex: 0,
+        correct: false,
+        round: 0,
+      },
+    });
+
+    // Two tutor sessions for worker, one tied to the modified problem.
+    await prisma.tutorSession.create({
+      data: { userId: BigInt(worker.id), problemId: modProblem.id },
+    });
+    await prisma.tutorSession.create({ data: { userId: BigInt(worker.id) } });
+  });
+
+  it('bands the teacher readiness grid from blended evidence', async () => {
+    const res = await as(teacher).teacher.classes.insights({ classId });
+    expect(res.readiness.topics.map((t) => t.slug)).toContain('inequalities');
+    const bandOf = (id: number) =>
+      res.readiness.students.find((s) => s.id === id)!.bands['inequalities'];
+    expect(bandOf(worker.id)).toBe('ready'); // 0.9 mastery, too few Regents answers to count
+    expect(bandOf(ghost.id)).toBe('needsWork'); // 0/4 Regents, no linked mastery
+    expect(bandOf(tierkid.id)).toBe('noData'); // one Regents answer, no mastery
+  });
+
+  it('surfaces hardest items with class success rates', async () => {
+    const res = await as(teacher).teacher.classes.insights({ classId });
+    const mod = res.itemAnalysis.find((p) => p.problemId === Number(modProblemId));
+    expect(mod).toMatchObject({ tier: 'modified', attempts: 8, correct: 6, students: 1 });
+    // The previous suite's problem (7 attempts, 3 correct across 2 students).
+    const hard = res.itemAnalysis[0]!;
+    expect(hard.correct / hard.attempts).toBeLessThanOrEqual(mod!.correct / mod!.attempts);
+    const q1 = res.regentsItems.find((q) => q.questionId === 'inequalities-q1');
+    expect(q1).toMatchObject({ topicSlug: 'inequalities', answered: 3, correct: 1 });
+  });
+
+  it('reports the tier mix and flags students stuck in modified', async () => {
+    const res = await as(teacher).teacher.classes.insights({ classId });
+    const kid = res.tiers.find((s) => s.id === tierkid.id)!;
+    expect(kid.modified).toBe(8);
+    expect(kid.stuckModified).toBe(true);
+    const w = res.tiers.find((s) => s.id === worker.id)!;
+    expect(w.modified + w.standard + w.challenge).toBe(6);
+  });
+
+  it('counts tutor sessions per student and per skill, never transcripts', async () => {
+    const res = await as(teacher).teacher.classes.insights({ classId });
+    const w = res.tutorUsage.perStudent.find((s) => s.id === worker.id);
+    expect(w?.sessions).toBe(2);
+    expect(res.tutorUsage.topSkills.some((sk) => sk.nameEn === modSkillNameEn)).toBe(true);
+    expect(JSON.stringify(res.tutorUsage)).not.toContain('transcript');
+  });
+
+  it('shows the same readiness bands on the student progress page', async () => {
+    const mine = await as(worker).progress.me();
+    const ineq = mine.regentsReadiness.find((r) => r.slug === 'inequalities');
+    expect(ineq?.band).toBe('ready');
+    const ghostView = await as(ghost).progress.me();
+    expect(ghostView.regentsReadiness.find((r) => r.slug === 'inequalities')?.band).toBe(
+      'needsWork',
+    );
+  });
+
+  it('aggregates a de-identified school readiness distribution for the admin', async () => {
+    const res = await as(admin).admin.stats.overview();
+    const ineq = res.readiness.find((r) => r.topicSlug === 'inequalities')!;
+    expect(ineq.ready).toBeGreaterThanOrEqual(1);
+    expect(ineq.needsWork).toBeGreaterThanOrEqual(1);
+    expect(res.readiness).toHaveLength(regentsTopics.length);
+    expect(JSON.stringify(res.readiness)).not.toContain('Worker');
   });
 });

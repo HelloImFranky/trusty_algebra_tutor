@@ -1,5 +1,12 @@
 import { Prisma, prisma } from '@tutor/db';
-import { decayedScore, masteryLabel } from '@tutor/core';
+import {
+  decayedScore,
+  masteryLabel,
+  readinessBand,
+  regentsTopics,
+  regentsTopicSkillSlugs,
+  type ReadinessBand,
+} from '@tutor/core';
 
 /**
  * Batched aggregates for the teacher class-insights page and the admin
@@ -64,6 +71,7 @@ export async function skillColumns() {
     )
     .map((s) => ({
       skillId: Number(s.id),
+      slug: s.slug,
       nameEn: s.nameEn,
       nameEs: s.nameEs,
       lessonCode: s.lesson.code,
@@ -346,4 +354,297 @@ export async function schoolAdoption(): Promise<SchoolAdoption> {
       prisma.user.count({ where: { role: 'student', status: 'active', guardianConsent: false } }),
     ]);
   return { teachersActive, teachersPending, classes, studentsEnrolled: enrolled, studentsTotal, consentPending };
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2 (docs/statistics-plan.md): item analysis, tier mix, Regents
+// readiness, tutor-usage counts.
+// ---------------------------------------------------------------------------
+
+export interface ProblemItemRow {
+  problemId: number;
+  promptEn: string;
+  promptEs: string;
+  tier: string;
+  skillNameEn: string;
+  skillNameEs: string;
+  attempts: number;
+  correct: number;
+  students: number;
+}
+
+const ITEM_MIN_ATTEMPTS = 5;
+const ITEM_ROWS = 15;
+
+/**
+ * Hardest practice problems for these students since the school year
+ * started — lowest success rate first, only items with enough attempts to
+ * mean something. Mirrors how NY teachers read NYSED's per-question Regents
+ * item analyses, but for the practice bank.
+ */
+export async function problemItemAnalysis(
+  studentIds: bigint[],
+  since: Date,
+): Promise<ProblemItemRow[]> {
+  if (studentIds.length === 0) return [];
+  const rows = await prisma.$queryRaw<
+    {
+      problemId: bigint;
+      promptEn: string;
+      promptEs: string;
+      tier: string;
+      skillNameEn: string;
+      skillNameEs: string;
+      attempts: bigint;
+      correct: bigint;
+      students: bigint;
+    }[]
+  >`
+    SELECT p.id AS "problemId", p.prompt_en AS "promptEn", p.prompt_es AS "promptEs",
+           p.tier, s.name_en AS "skillNameEn", s.name_es AS "skillNameEs",
+           count(*) AS attempts,
+           count(*) FILTER (WHERE a.correct) AS correct,
+           count(DISTINCT a.user_id) AS students
+    FROM attempts a
+    JOIN problems p ON p.id = a.problem_id
+    JOIN skills s ON s.id = p.skill_id
+    WHERE a.user_id IN (${Prisma.join(studentIds)}) AND a.created_at >= ${since}
+    GROUP BY 1, 2, 3, 4, 5, 6
+    HAVING count(*) >= ${ITEM_MIN_ATTEMPTS}
+    ORDER BY count(*) FILTER (WHERE a.correct)::float / count(*) ASC, count(*) DESC
+    LIMIT ${ITEM_ROWS}`;
+  return rows.map((r) => ({
+    problemId: Number(r.problemId),
+    promptEn: r.promptEn,
+    promptEs: r.promptEs,
+    tier: r.tier,
+    skillNameEn: r.skillNameEn,
+    skillNameEs: r.skillNameEs,
+    attempts: Number(r.attempts),
+    correct: Number(r.correct),
+    students: Number(r.students),
+  }));
+}
+
+export interface RegentsItemRow {
+  /** Bank question id — the client resolves prompt text from core content. */
+  questionId: string;
+  topicSlug: string;
+  answered: number;
+  correct: number;
+}
+
+const REGENTS_ITEM_MIN_ANSWERS = 3;
+const REGENTS_ITEM_ROWS = 10;
+
+/** Hardest handwritten-bank Regents questions (round 0 only — generated
+ * "practice again" ids don't map back to the bank). */
+export async function regentsItemAnalysis(studentIds: bigint[]): Promise<RegentsItemRow[]> {
+  if (studentIds.length === 0) return [];
+  const rows = await prisma.$queryRaw<
+    { questionId: string; topicSlug: string; answered: bigint; correct: bigint }[]
+  >`
+    SELECT question_id AS "questionId", topic_slug AS "topicSlug",
+           count(*) AS answered, count(*) FILTER (WHERE correct) AS correct
+    FROM regents_answers
+    WHERE user_id IN (${Prisma.join(studentIds)}) AND round = 0
+    GROUP BY 1, 2
+    HAVING count(*) >= ${REGENTS_ITEM_MIN_ANSWERS}
+    ORDER BY count(*) FILTER (WHERE correct)::float / count(*) ASC, count(*) DESC
+    LIMIT ${REGENTS_ITEM_ROWS}`;
+  return rows.map((r) => ({
+    questionId: r.questionId,
+    topicSlug: r.topicSlug,
+    answered: Number(r.answered),
+    correct: Number(r.correct),
+  }));
+}
+
+export interface TierMixRow {
+  modified: number;
+  standard: number;
+  challenge: number;
+  /** Mostly practicing in the modified tier — a differentiation signal. */
+  stuckModified: boolean;
+}
+
+const TIER_WINDOW_DAYS = 30;
+const STUCK_MIN_ATTEMPTS = 8;
+const STUCK_SHARE = 0.6;
+
+/** Per-student practice-tier mix over the last 30 days. */
+export async function tierMix(studentIds: bigint[]): Promise<Map<string, TierMixRow>> {
+  const out = new Map<string, TierMixRow>();
+  if (studentIds.length === 0) return out;
+  const rows = await prisma.$queryRaw<{ userId: bigint; tier: string; n: bigint }[]>`
+    SELECT a.user_id AS "userId", p.tier, count(*) AS n
+    FROM attempts a
+    JOIN problems p ON p.id = a.problem_id
+    WHERE a.user_id IN (${Prisma.join(studentIds)})
+      AND a.created_at > now() - make_interval(days => ${TIER_WINDOW_DAYS}::int)
+    GROUP BY 1, 2`;
+  for (const id of studentIds) {
+    out.set(String(id), { modified: 0, standard: 0, challenge: 0, stuckModified: false });
+  }
+  for (const r of rows) {
+    const row = out.get(String(r.userId));
+    if (!row) continue;
+    if (r.tier === 'modified') row.modified = Number(r.n);
+    else if (r.tier === 'challenge') row.challenge = Number(r.n);
+    else row.standard = Number(r.n);
+  }
+  for (const row of out.values()) {
+    const total = row.modified + row.standard + row.challenge;
+    row.stuckModified = total >= STUCK_MIN_ATTEMPTS && row.modified / total >= STUCK_SHARE;
+  }
+  return out;
+}
+
+export interface TutorUsage {
+  perStudent: Map<string, number>;
+  /** Most tutor-visited skills (via the session's problem), re-teach signals. */
+  topSkills: { nameEn: string; nameEs: string; sessions: number }[];
+}
+
+const TUTOR_WINDOW_DAYS = 30;
+const TUTOR_TOP_ROWS = 5;
+
+/** Tutor-chat session counts over 30 days — counts only, transcripts stay
+ * private to the student. */
+export async function tutorUsage(studentIds: bigint[]): Promise<TutorUsage> {
+  if (studentIds.length === 0) return { perStudent: new Map(), topSkills: [] };
+  const ids = Prisma.join(studentIds);
+  const perRows = await prisma.$queryRaw<{ userId: bigint; sessions: bigint }[]>`
+    SELECT user_id AS "userId", count(*) AS sessions
+    FROM tutor_sessions
+    WHERE user_id IN (${ids}) AND created_at > now() - make_interval(days => ${TUTOR_WINDOW_DAYS}::int)
+    GROUP BY 1`;
+  const skillRows = await prisma.$queryRaw<
+    { nameEn: string; nameEs: string; sessions: bigint }[]
+  >`
+    SELECT s.name_en AS "nameEn", s.name_es AS "nameEs", count(*) AS sessions
+    FROM tutor_sessions t
+    JOIN problems p ON p.id = t.problem_id
+    JOIN skills s ON s.id = p.skill_id
+    WHERE t.user_id IN (${ids}) AND t.created_at > now() - make_interval(days => ${TUTOR_WINDOW_DAYS}::int)
+    GROUP BY 1, 2
+    ORDER BY count(*) DESC
+    LIMIT ${TUTOR_TOP_ROWS}`;
+  return {
+    perStudent: new Map(perRows.map((r) => [String(r.userId), Number(r.sessions)])),
+    topSkills: skillRows.map((r) => ({
+      nameEn: r.nameEn,
+      nameEs: r.nameEs,
+      sessions: Number(r.sessions),
+    })),
+  };
+}
+
+/**
+ * Per-student Regents readiness bands, one per topic (docs/statistics-plan.md
+ * Phase 2). Blends decayed mastery over the topic's linked skills with
+ * lifetime Regents accuracy via the shared core model, so the student,
+ * teacher, and admin views always agree.
+ */
+export async function readinessByStudent(
+  studentIds: bigint[],
+): Promise<Map<string, Record<string, ReadinessBand>>> {
+  const out = new Map<string, Record<string, ReadinessBand>>();
+  if (studentIds.length === 0) return out;
+  const ids = Prisma.join(studentIds);
+  const masteryRows = await prisma.$queryRaw<
+    {
+      userId: bigint;
+      slug: string;
+      score: number;
+      attemptsCount: number;
+      lastPracticedAt: Date | null;
+    }[]
+  >`
+    SELECT m.user_id AS "userId", s.slug, m.score, m.attempts_count AS "attemptsCount",
+           m.last_practiced_at AS "lastPracticedAt"
+    FROM mastery m
+    JOIN skills s ON s.id = m.skill_id
+    WHERE m.user_id IN (${ids}) AND m.attempts_count > 0`;
+  const regentsRows = await prisma.$queryRaw<
+    { userId: bigint; topicSlug: string; answered: bigint; correct: bigint }[]
+  >`
+    SELECT user_id AS "userId", topic_slug AS "topicSlug",
+           count(*) AS answered, count(*) FILTER (WHERE correct) AS correct
+    FROM regents_answers
+    WHERE user_id IN (${ids})
+    GROUP BY 1, 2`;
+
+  const scoreByUserSlug = new Map<string, Map<string, number>>();
+  for (const r of masteryRows) {
+    const key = String(r.userId);
+    const bySlug = scoreByUserSlug.get(key) ?? new Map<string, number>();
+    bySlug.set(
+      r.slug,
+      decayedScore({ score: r.score, attemptsCount: r.attemptsCount, lastPracticedAt: r.lastPracticedAt }),
+    );
+    scoreByUserSlug.set(key, bySlug);
+  }
+  const regentsByUserTopic = new Map<string, { answered: number; correct: number }>();
+  for (const r of regentsRows) {
+    regentsByUserTopic.set(`${r.userId}|${r.topicSlug}`, {
+      answered: Number(r.answered),
+      correct: Number(r.correct),
+    });
+  }
+
+  for (const id of studentIds) {
+    const key = String(id);
+    const bySlug = scoreByUserSlug.get(key);
+    const bands: Record<string, ReadinessBand> = {};
+    for (const topic of regentsTopics) {
+      const linked = regentsTopicSkillSlugs[topic.slug] ?? [];
+      const scores = linked
+        .map((slug) => bySlug?.get(slug))
+        .filter((s): s is number => s !== undefined);
+      const masteryAvg =
+        scores.length > 0 ? scores.reduce((sum, s) => sum + s, 0) / scores.length : null;
+      const reg = regentsByUserTopic.get(`${key}|${topic.slug}`);
+      bands[topic.slug] = readinessBand({
+        masteryAvg,
+        regentsAnswered: reg?.answered ?? 0,
+        regentsCorrect: reg?.correct ?? 0,
+      });
+    }
+    out.set(key, bands);
+  }
+  return out;
+}
+
+export interface TopicReadinessDistribution {
+  topicSlug: string;
+  ready: number;
+  developing: number;
+  needsWork: number;
+  noData: number;
+}
+
+/** School-wide readiness distribution per Regents topic — counts of active
+ * students per band, no identities (admin scope). */
+export async function schoolReadinessDistribution(): Promise<TopicReadinessDistribution[]> {
+  const students = await prisma.user.findMany({
+    where: { role: 'student', status: 'active' },
+    select: { id: true },
+  });
+  const byStudent = await readinessByStudent(students.map((s) => s.id));
+  const out = regentsTopics.map((t) => ({
+    topicSlug: t.slug,
+    ready: 0,
+    developing: 0,
+    needsWork: 0,
+    noData: 0,
+  }));
+  const byTopic = new Map(out.map((o) => [o.topicSlug, o]));
+  for (const bands of byStudent.values()) {
+    for (const [slug, band] of Object.entries(bands)) {
+      const row = byTopic.get(slug);
+      if (row) row[band]++;
+    }
+  }
+  return out;
 }

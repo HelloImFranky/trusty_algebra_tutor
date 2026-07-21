@@ -7,6 +7,7 @@ import { recordGuardianConsent } from '../authz.js';
 import {
   schoolAdoption,
   schoolEngagement,
+  schoolReadinessDistribution,
   unitMasteryDistribution,
   weeklyMinutes,
 } from '../classInsights.js';
@@ -141,17 +142,19 @@ export const adminRouter = router({
      * above: the admin still cannot reach any individual student's records.
      */
     overview: adminProcedure.query(async () => {
-      const [engagement, weekly, masteryByUnit, adoption] = await Promise.all([
+      const [engagement, weekly, masteryByUnit, adoption, readiness] = await Promise.all([
         schoolEngagement(),
         weeklyMinutes(null, schoolYearStart()),
         unitMasteryDistribution(),
         schoolAdoption(),
+        schoolReadinessDistribution(),
       ]);
       return {
         engagement,
         weekly,
         masteryByUnit,
         adoption,
+        readiness,
         yearStart: schoolYearStart().toISOString().slice(0, 10),
       };
     }),

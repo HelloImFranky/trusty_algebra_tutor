@@ -2,15 +2,20 @@ import crypto from 'node:crypto';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { Prisma, prisma } from '@tutor/db';
-import { decayedScore, masteryLabel } from '@tutor/core';
+import { decayedScore, masteryLabel, regentsTopics } from '@tutor/core';
 import { fixedWindowLimiter, router, studentProcedure, teacherProcedure } from '../trpc.js';
 import { recordGuardianConsent, teacherCanSeeStudent } from '../authz.js';
 import { schoolYearStart, seasonTotals, sprintLeaderboard, weeklySeries } from '../sprintStats.js';
 import {
   heatmapCells,
   misconceptionReport,
+  problemItemAnalysis,
+  readinessByStudent,
   recentWork,
+  regentsItemAnalysis,
   skillColumns,
+  tierMix,
+  tutorUsage,
   weeklyMinutes,
 } from '../classInsights.js';
 
@@ -327,13 +332,19 @@ export const teacherRouter = router({
           orderBy: { joinedAt: 'asc' },
         });
         const ids = enrollments.map((e) => e.studentUserId);
-        const [cells, skills, misconceptions, work, weekly] = await Promise.all([
-          heatmapCells(ids),
-          skillColumns(),
-          misconceptionReport(ids),
-          recentWork(ids),
-          weeklyMinutes(ids, schoolYearStart()),
-        ]);
+        const [cells, skills, misconceptions, work, weekly, items, regentsItems, tiers, tutor, readiness] =
+          await Promise.all([
+            heatmapCells(ids),
+            skillColumns(),
+            misconceptionReport(ids),
+            recentWork(ids),
+            weeklyMinutes(ids, schoolYearStart()),
+            problemItemAnalysis(ids, schoolYearStart()),
+            regentsItemAnalysis(ids),
+            tierMix(ids),
+            tutorUsage(ids),
+            readinessByStudent(ids),
+          ]);
 
         const students = enrollments.map((e) => ({
           id: Number(e.studentUserId),
@@ -394,6 +405,38 @@ export const teacherRouter = router({
           timeOnTask,
           weekly,
           yearStart: schoolYearStart().toISOString().slice(0, 10),
+          // Phase 2 sections (docs/statistics-plan.md).
+          itemAnalysis: items,
+          regentsItems,
+          tiers: enrollments.map((e) => ({
+            id: Number(e.studentUserId),
+            displayName: e.student.displayName,
+            ...tiers.get(String(e.studentUserId))!,
+          })),
+          tutorUsage: {
+            perStudent: enrollments
+              .map((e) => ({
+                id: Number(e.studentUserId),
+                displayName: e.student.displayName,
+                sessions: tutor.perStudent.get(String(e.studentUserId)) ?? 0,
+              }))
+              .filter((s) => s.sessions > 0)
+              .sort((a, b) => b.sessions - a.sessions),
+            topSkills: tutor.topSkills,
+          },
+          readiness: {
+            topics: regentsTopics.map((t) => ({
+              slug: t.slug,
+              icon: t.icon,
+              titleEn: t.titleEn,
+              titleEs: t.titleEs,
+            })),
+            students: enrollments.map((e) => ({
+              id: Number(e.studentUserId),
+              displayName: e.student.displayName,
+              bands: readiness.get(String(e.studentUserId)) ?? {},
+            })),
+          },
         };
       }),
 

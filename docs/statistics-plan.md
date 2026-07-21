@@ -1,9 +1,10 @@
 # Statistics Expansion — Design & Implementation Plan
 
 > [!NOTE]
-> **Phase 1 in progress** on branch `claude/algebra-app-statistics-hf4c76`.
-> Phases 2–3 are designed here but not yet started. Status index:
-> [`README.md`](README.md).
+> **Phases 1–2 implemented** on branch `claude/algebra-app-statistics-hf4c76`
+> (teacher class insights, admin school overview, item analysis, tier mix,
+> Regents readiness, tutor-usage counts, CSV export). Phase 3 is designed
+> below but not started. Status index: [`README.md`](README.md).
 
 ## Why this exists
 

@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { Linking } from 'react-native';
 import { Text, XStack, YStack } from 'tamagui';
+import { regentsTopics } from '@tutor/core';
 import { trpc } from '../lib/trpc';
 import { useI18n, type I18nKey } from '../lib/i18n';
 import { useAuth } from '../lib/auth';
@@ -16,8 +17,10 @@ import { UsageDashboard, UsageWindowPicker } from '../components/UsageDashboard'
 import {
   AppCard,
   Badge,
+  COLORS,
   Feedback,
   GhostButton,
+  HINT,
   Loading,
   Muted,
   PrimaryButton,
@@ -144,6 +147,36 @@ export function AdminScreen() {
               (u) => u.struggling + u.practicing + u.proficient + u.mastered === 0,
             ) && <Muted size={12}>{t('noDataYet')}</Muted>}
             <Muted size={11}>{t('masteryByUnitNote')}</Muted>
+
+            <SubTitle>🎯 {t('readinessTitle')}</SubTitle>
+            {overview.data.readiness.map((r) => {
+              const topic = regentsTopics.find((tp) => tp.slug === r.topicSlug);
+              const total = r.ready + r.developing + r.needsWork + r.noData;
+              const withData = total - r.noData;
+              return (
+                <YStack key={r.topicSlug} gap={4}>
+                  <XStack justifyContent="space-between" gap={8} flexWrap="wrap">
+                    <Text fontSize={13} fontWeight="700" color={tokens.ink}>
+                      {topic?.icon} {locale === 'es' ? topic?.titleEs : topic?.titleEn}
+                    </Text>
+                    <Muted size={12}>{withData}</Muted>
+                  </XStack>
+                  <XStack height={10} borderRadius={999} overflow="hidden" backgroundColor={tokens.subtle}>
+                    <YStack flexGrow={r.needsWork} backgroundColor={bad.ink} />
+                    <YStack flexGrow={r.developing} backgroundColor={HINT.fg} />
+                    <YStack flexGrow={r.ready} backgroundColor={COLORS.good} />
+                    <YStack flexGrow={r.noData} backgroundColor={tokens.subtle} />
+                  </XStack>
+                  <XStack gap={12} flexWrap="wrap">
+                    <Muted size={11}>{r.ready} {t('readinessReady')}</Muted>
+                    <Muted size={11}>{r.developing} {t('readinessDeveloping')}</Muted>
+                    <Muted size={11}>{r.needsWork} {t('readinessNeedsWork')}</Muted>
+                    <Muted size={11}>{r.noData} {t('readinessNoData')}</Muted>
+                  </XStack>
+                </YStack>
+              );
+            })}
+            <Muted size={11}>{t('readinessNote')}</Muted>
 
             <SubTitle>🏫 {t('adoptionTitle')}</SubTitle>
             <XStack gap={10} flexWrap="wrap">

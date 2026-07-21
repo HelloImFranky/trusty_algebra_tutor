@@ -5,14 +5,16 @@
  * time on task. All read-only aggregations of the class the teacher owns;
  * per-student depth stays behind the existing /progress/:id drill-down.
  */
-import { ScrollView } from 'react-native';
+import { Platform, ScrollView } from 'react-native';
 import { Link } from 'solito/link';
 import { Text, XStack, YStack } from 'tamagui';
-import { misconceptionLabel } from '@tutor/core';
+import { misconceptionLabel, regentsTopics } from '@tutor/core';
 import { trpc } from '../lib/trpc';
 import { useI18n, type I18nKey } from '../lib/i18n';
 import { useAuth } from '../lib/auth';
 import { useRequireAuth } from '../components/AppChrome';
+import { MathText } from '../components/MathText';
+import { ReadinessDot, ReadinessPill, type Band } from '../components/Readiness';
 import {
   AppCard,
   Badge,
@@ -20,6 +22,7 @@ import {
   Loading,
   Muted,
   Screen,
+  SecondaryButton,
   StatChip,
   SubTitle,
   Title,
@@ -62,6 +65,22 @@ function useCellStyle() {
   };
 }
 
+/** Browser-only CSV download — teachers live in grade books. */
+function downloadCsv(filename: string, rows: string[][]) {
+  const csv = rows
+    .map((r) =>
+      r.map((cell) => (/[",\n]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell)).join(','),
+    )
+    .join('\n');
+  const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function LegendSwatch({ label, text }: { label: MasteryLabelName; text: string }) {
   const cellStyle = useCellStyle();
   const s = cellStyle(label);
@@ -101,7 +120,19 @@ export function ClassInsightsScreen({ classId }: { classId: number }) {
   }
   if (!insights.data) return <Loading />;
 
-  const { class: cls, skills, students, misconceptions, watchlist, timeOnTask } = insights.data;
+  const {
+    class: cls,
+    skills,
+    students,
+    misconceptions,
+    watchlist,
+    timeOnTask,
+    itemAnalysis,
+    regentsItems,
+    tiers,
+    tutorUsage,
+    readiness,
+  } = insights.data;
   const skillName = (id: number) => {
     const s = skills.find((sk) => sk.skillId === id);
     return s ? (locale === 'es' ? s.nameEs : s.nameEn) : `#${id}`;
@@ -113,6 +144,38 @@ export function ClassInsightsScreen({ classId }: { classId: number }) {
     iso ? new Date(iso).toLocaleDateString(locale === 'es' ? 'es' : 'en') : t('neverActive');
   const totalMinutes7d = timeOnTask.reduce((sum, s) => sum + s.minutes7d, 0);
   const totalMinutes30d = timeOnTask.reduce((sum, s) => sum + s.minutes30d, 0);
+  const regentsQuestion = (topicSlug: string, questionId: string) => {
+    const q = regentsTopics
+      .find((tp) => tp.slug === topicSlug)
+      ?.questions.find((qq) => qq.id === questionId);
+    return q ? (locale === 'es' ? q.promptEs : q.promptEn) : questionId;
+  };
+  const topicTitle = (slug: string) => {
+    const tp = readiness.topics.find((x) => x.slug === slug);
+    return tp ? (locale === 'es' ? tp.titleEs : tp.titleEn) : slug;
+  };
+
+  const exportHeatmap = () =>
+    downloadCsv(`${cls.name.replace(/\s+/g, '_')}-mastery.csv`, [
+      ['Student', ...skills.map((s) => (locale === 'es' ? s.nameEs : s.nameEn))],
+      ...students.map((s) => {
+        const bySkill = new Map(s.cells.map((c) => [c.skillId, c.label]));
+        return [s.displayName, ...skills.map((sk) => bySkill.get(sk.skillId) ?? 'not_started')];
+      }),
+    ]);
+  const exportWatchlist = () =>
+    downloadCsv(`${cls.name.replace(/\s+/g, '_')}-watchlist.csv`, [
+      ['Student', 'Flags', 'Last active', 'Attempts 14d', 'Hints/problem', 'Accuracy %', 'Struggling skills'],
+      ...watchlist.map((w) => [
+        w.displayName,
+        w.flags.join('; '),
+        w.lastActiveAt ?? '',
+        String(w.attempts14d),
+        String(w.hintRate),
+        w.accuracyPct === null ? '' : String(w.accuracyPct),
+        w.strugglingSkillIds.map(skillName).join('; '),
+      ]),
+    ]);
 
   return (
     <Screen maxWidth={980}>
@@ -125,7 +188,14 @@ export function ClassInsightsScreen({ classId }: { classId: number }) {
 
       {/* Students to watch — the short list first: it's what the page is for. */}
       <AppCard gap={10}>
-        <SubTitle>🚩 {t('watchlistTitle')}</SubTitle>
+        <XStack justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={8}>
+          <SubTitle>🚩 {t('watchlistTitle')}</SubTitle>
+          {Platform.OS === 'web' && watchlist.length > 0 && (
+            <SecondaryButton size="$2" onPress={exportWatchlist}>
+              ⬇️ {t('exportWatchlistCsv')}
+            </SecondaryButton>
+          )}
+        </XStack>
         {watchlist.length === 0 && <Muted size={12}>{t('watchlistEmpty')}</Muted>}
         {watchlist.map((w) => (
           <YStack key={w.id} gap={6} paddingVertical={4} borderTopWidth={1} borderTopColor={tokens.border}>
@@ -165,9 +235,67 @@ export function ClassInsightsScreen({ classId }: { classId: number }) {
         ))}
       </AppCard>
 
+      {/* Regents readiness grid: students × topics, shared core traffic light. */}
+      <AppCard gap={10}>
+        <SubTitle>🎯 {t('readinessTitle')}</SubTitle>
+        {students.length === 0 ? (
+          <Muted size={12}>{t('emptyRoster')}</Muted>
+        ) : (
+          <>
+            <XStack gap={8} flexWrap="wrap">
+              {(['ready', 'developing', 'needsWork', 'noData'] as Band[]).map((b) => (
+                <ReadinessPill key={b} band={b} />
+              ))}
+            </XStack>
+            <ScrollView horizontal showsHorizontalScrollIndicator>
+              <YStack gap={3}>
+                <XStack gap={4} marginLeft={130}>
+                  {readiness.topics.map((tp) => (
+                    <YStack key={tp.slug} width={18} alignItems="center">
+                      <Text fontSize={11}>{tp.icon}</Text>
+                    </YStack>
+                  ))}
+                </XStack>
+                {readiness.students.map((s) => (
+                  <XStack key={s.id} gap={4} alignItems="center">
+                    <YStack width={126} marginRight={4}>
+                      <Link href={`/progress/${s.id}`}>
+                        <Text fontSize={12} fontWeight="700" color={accent} numberOfLines={1}>
+                          {s.displayName}
+                        </Text>
+                      </Link>
+                    </YStack>
+                    {readiness.topics.map((tp) => (
+                      <YStack key={tp.slug} width={18} alignItems="center">
+                        <ReadinessDot band={(s.bands[tp.slug] ?? 'noData') as Band} />
+                      </YStack>
+                    ))}
+                  </XStack>
+                ))}
+              </YStack>
+            </ScrollView>
+            <XStack gap={10} flexWrap="wrap">
+              {readiness.topics.map((tp) => (
+                <Muted key={tp.slug} size={10.5}>
+                  {tp.icon} {locale === 'es' ? tp.titleEs : tp.titleEn}
+                </Muted>
+              ))}
+            </XStack>
+            <Muted size={11}>{t('readinessNote')}</Muted>
+          </>
+        )}
+      </AppCard>
+
       {/* Skill heatmap: students × curriculum skills, decayed mastery colors. */}
       <AppCard gap={10}>
-        <SubTitle>🗺️ {t('heatmapTitle')}</SubTitle>
+        <XStack justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={8}>
+          <SubTitle>🗺️ {t('heatmapTitle')}</SubTitle>
+          {Platform.OS === 'web' && students.length > 0 && (
+            <SecondaryButton size="$2" onPress={exportHeatmap}>
+              ⬇️ {t('exportHeatmapCsv')}
+            </SecondaryButton>
+          )}
+        </XStack>
         {students.length === 0 ? (
           <Muted size={12}>{t('emptyRoster')}</Muted>
         ) : (
@@ -253,6 +381,120 @@ export function ClassInsightsScreen({ classId }: { classId: number }) {
             </XStack>
           </YStack>
         ))}
+      </AppCard>
+
+      {/* Item analysis: hardest practice problems + hardest Regents bank
+          questions, lowest class success rate first. */}
+      <AppCard gap={10}>
+        <SubTitle>🧩 {t('itemAnalysisTitle')}</SubTitle>
+        {itemAnalysis.length === 0 && <Muted size={12}>{t('itemAnalysisEmpty')}</Muted>}
+        {itemAnalysis.map((p, i) => (
+          <YStack
+            key={p.problemId}
+            gap={3}
+            paddingVertical={6}
+            borderTopWidth={i === 0 ? 0 : 1}
+            borderTopColor={tokens.border}
+          >
+            <MathText text={locale === 'es' ? p.promptEs : p.promptEn} size={13.5} />
+            <XStack gap={10} flexWrap="wrap" alignItems="center">
+              <Badge label={p.tier} text={t(`tier${p.tier[0]!.toUpperCase()}${p.tier.slice(1)}` as I18nKey)} />
+              <Muted size={12}>{locale === 'es' ? p.skillNameEs : p.skillNameEn}</Muted>
+              <Muted size={12}>
+                {Math.round((p.correct / p.attempts) * 100)}% {t('itemCorrectCol')} ·{' '}
+                {p.attempts} {t('itemTriesCol')} · {p.students} {t('misconStudents')}
+              </Muted>
+            </XStack>
+          </YStack>
+        ))}
+        {regentsItems.length > 0 && (
+          <>
+            <SubTitle>📚 {t('regentsItemsTitle')}</SubTitle>
+            {regentsItems.map((q) => (
+              <YStack key={q.questionId} gap={3} paddingVertical={6} borderTopWidth={1} borderTopColor={tokens.border}>
+                <MathText text={regentsQuestion(q.topicSlug, q.questionId)} size={13.5} />
+                <Muted size={12}>
+                  {topicTitle(q.topicSlug)} · {Math.round((q.correct / q.answered) * 100)}%{' '}
+                  {t('itemCorrectCol')} · {q.answered} {t('itemTriesCol')}
+                </Muted>
+              </YStack>
+            ))}
+          </>
+        )}
+      </AppCard>
+
+      {/* Practice-tier mix: differentiation signal, never a student label. */}
+      <AppCard gap={10}>
+        <SubTitle>🪜 {t('tiersTitle')}</SubTitle>
+        {tiers.filter((s) => s.modified + s.standard + s.challenge > 0).length === 0 && (
+          <Muted size={12}>{t('noDataYet')}</Muted>
+        )}
+        {tiers
+          .filter((s) => s.modified + s.standard + s.challenge > 0)
+          .sort((a, b) => Number(b.stuckModified) - Number(a.stuckModified))
+          .map((s, i) => {
+            const total = s.modified + s.standard + s.challenge;
+            return (
+              <XStack
+                key={s.id}
+                gap={10}
+                alignItems="center"
+                flexWrap="wrap"
+                paddingVertical={5}
+                borderTopWidth={i === 0 ? 0 : 1}
+                borderTopColor={tokens.border}
+              >
+                <YStack width={126}>
+                  <Link href={`/progress/${s.id}`}>
+                    <Text fontSize={13} fontWeight="700" color={accent} numberOfLines={1}>
+                      {s.displayName}
+                    </Text>
+                  </Link>
+                </YStack>
+                <Muted size={12}>
+                  {t('tierModified')} {Math.round((s.modified / total) * 100)}% ·{' '}
+                  {t('tierStandard')} {Math.round((s.standard / total) * 100)}% ·{' '}
+                  {t('tierChallenge')} {Math.round((s.challenge / total) * 100)}%
+                </Muted>
+                {s.stuckModified && <Badge label="modified" text={t('stuckModifiedFlag')} />}
+              </XStack>
+            );
+          })}
+        <Muted size={11}>{t('tiersNote')}</Muted>
+      </AppCard>
+
+      {/* AI-tutor use: counts only, transcripts stay private to the student. */}
+      <AppCard gap={10}>
+        <SubTitle>🤖 {t('tutorUsageTitle')}</SubTitle>
+        {tutorUsage.perStudent.length === 0 && <Muted size={12}>{t('tutorUsageEmpty')}</Muted>}
+        {tutorUsage.perStudent.map((s) => (
+          <XStack key={s.id} justifyContent="space-between" alignItems="center" gap={8}>
+            <Link href={`/progress/${s.id}`}>
+              <Text fontSize={13} fontWeight="700" color={accent}>
+                {s.displayName}
+              </Text>
+            </Link>
+            <Muted size={12}>
+              {s.sessions} {t('tutorSessionsLabel')}
+            </Muted>
+          </XStack>
+        ))}
+        {tutorUsage.topSkills.length > 0 && (
+          <>
+            <Muted size={12}>{t('tutorTopSkills')}:</Muted>
+            {tutorUsage.topSkills.map((sk) => (
+              <XStack key={sk.nameEn} justifyContent="space-between" alignItems="center" gap={8}>
+                <Text fontSize={13} color={tokens.ink}>
+                  {locale === 'es' ? sk.nameEs : sk.nameEn}
+                </Text>
+                <Muted size={12}>
+                  {sk.sessions} {t('tutorSessionsLabel')}
+                </Muted>
+              </XStack>
+            ))}
+          </>
+        )}
+        <Muted size={11}>{t('tutorUsageNote')}</Muted>
       </AppCard>
 
       {/* Time on task. */}
