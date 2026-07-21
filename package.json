@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.2.0",
   "description": "Middle school Algebra 1 tutor modeled on the Algebra 891 classroom (scaffolded lessons, Regents review, adaptive practice, EN/ES). Turborepo: Next.js web + Expo native + tRPC + Prisma.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HelloImFranky/trusty_algebra_tutor.git"
+  },
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -19,9 +23,13 @@
     "seed": "npm run seed --workspace @tutor/db",
     "migrate": "npm run migrate --workspace @tutor/db",
     "create-admin": "npm run create-admin --workspace @tutor/api",
-    "deploy": "node scripts/deploy-vercel.mjs"
+    "deploy": "node scripts/deploy-vercel.mjs",
+    "release": "commit-and-tag-version",
+    "release:dry": "commit-and-tag-version --dry-run",
+    "release:first": "commit-and-tag-version --first-release"
   },
   "devDependencies": {
+    "commit-and-tag-version": "^13.1.0",
     "turbo": "^2.5.0"
   },
   "engines": {
