@@ -1,11 +1,12 @@
 /**
- * Shared chrome: brand top bar (calculator, reference sheet, settings) and
- * navigation tabs. Desktop-width web gets the nav links in the top bar like
- * a traditional website; phones (native app and narrow web) keep the
+ * Shared chrome: brand top bar (calculator, reference sheet) and navigation
+ * tabs. Desktop-width web gets the nav links in the top bar like a
+ * traditional website; phones (native app and narrow web) keep the
  * app-style bottom tab bar. Calculator lives in the top chrome so students
- * can pop it open from any screen without losing their place; Settings is
- * also chrome-level so account/preferences (including Sign out) are always
- * one tap away. Wraps every signed-in screen on web and native.
+ * can pop it open from any screen without losing their place. Settings is a
+ * navigation destination (bottom tab bar on phones, top nav row on desktop
+ * web) — there is exactly one entry point, not a duplicate top-bar icon.
+ * Wraps every signed-in screen on web and native.
  */
 import { useEffect, type ComponentType, type ReactNode } from 'react';
 import { Platform, useWindowDimensions } from 'react-native';
@@ -21,7 +22,7 @@ import {
   Zap,
 } from '@tamagui/lucide-icons';
 import type { IconProps } from '@tamagui/helpers-icon';
-import { Button, Text, XStack, YStack } from 'tamagui';
+import { Text, XStack, YStack } from 'tamagui';
 import { useAuth } from '../lib/auth';
 import { useI18n } from '../lib/i18n';
 import { CalculatorButton } from './CalculatorButton';
@@ -48,7 +49,6 @@ export function AppChrome({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? '/';
   const accent = useAccent();
   const tokens = useTokens();
-  const CHROME_BTN = { backgroundColor: tokens.subtle, color: tokens.ink, borderRadius: 999 } as const;
   // Mid-neutral for inactive tab items — same visual weight in either mode.
   const inactive: Hex = tokens.muted;
 
@@ -117,16 +117,11 @@ export function AppChrome({ children }: { children: ReactNode }) {
               and opens as a bottom sheet OVER the current page instead
               of navigating away, so students never lose their spot in a
               lesson / practice / review. Reference sheet next (also a
-              sheet). Settings last: preferences + Sign out. */}
+              sheet). Settings is NOT here — it lives in the navigation
+              (bottom tab bar on phones, top nav row on desktop web) so
+              there's a single, un-duplicated entry point to preferences. */}
           {auth && <CalculatorButton />}
           {auth && <ReferenceSheetButton compact={!topNav} />}
-          {auth && (
-            <Link href="/settings">
-              <Button size="$2" {...CHROME_BTN} aria-label={t('settings')}>
-                <Settings size={15} color={tokens.ink} />
-              </Button>
-            </Link>
-          )}
         </XStack>
       </XStack>
 
