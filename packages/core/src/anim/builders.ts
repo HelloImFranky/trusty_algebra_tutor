@@ -1596,6 +1596,156 @@ export function buildProjectileGround(T: number): EqScript {
   };
 }
 
+/** "(x, y)" solution-point tokens (green result). */
+const pointTokens = (px: number, py: number): EqToken[] => [
+  tok('lp', '(', 'op'),
+  tok('sx', M(px), 'num', { emph: 'result', tight: true }),
+  tok('comma', ',', 'op', { tight: true }),
+  tok('sy', M(py), 'num', { emph: 'result' }),
+  tok('rp', ')', 'op', { tight: true }),
+];
+
+/**
+ * system_substitution template: x = a·y + k ; c·x + y = d → (x, y), params
+ * {x, y, a, c}. Substitute equation 1 into equation 2, solve y, back-solve x.
+ * Returns null when c·a + 1 = 0 (the substitution degenerates).
+ */
+export function buildSystemSubstitution(x: number, y: number, a: number, c: number): EqScript {
+  const k = x - a * y;
+  const d = c * x + y;
+  const A = c * a + 1; // y-coefficient after substituting
+  const ck = c * k;
+  const steps: EqStep[] = [
+    {
+      tokens: [
+        tok('c2', cf(c, 'x'), 'var'),
+        tok('p', '+', 'op'),
+        tok('yv', 'y', 'var'),
+        tok('rel', '=', 'rel'),
+        tok('dd', M(d), 'num'),
+      ],
+      explainEn: `Equation ② is ${cf(c, 'x')} + y = ${M(d)}. Equation ① says x = ${cf(a, 'y')} ${signOp(k)} ${Math.abs(k)} — substitute it for x.`,
+      explainEs: `La ecuación ② es ${cf(c, 'x')} + y = ${M(d)}. La ecuación ① dice x = ${cf(a, 'y')} ${signOp(k)} ${Math.abs(k)} — sustitúyela por x.`,
+    },
+    {
+      tokens: [
+        tok('c2', M(c), 'num', { emph: 'focus' }),
+        tok('lp', '(', 'op', { tight: true }),
+        tok('iay', cf(a, 'y'), 'var', { tight: true }),
+        tok('io', signOp(k), 'op'),
+        tok('ik', M(Math.abs(k)), 'num'),
+        tok('rp', ')', 'op', { tight: true }),
+        tok('p', '+', 'op'),
+        tok('yv', 'y', 'var'),
+        tok('rel', '=', 'rel'),
+        tok('dd', M(d), 'num'),
+      ],
+      explainEn: `Substitute (${cf(a, 'y')} ${signOp(k)} ${Math.abs(k)}) for x. Now the equation has only y.`,
+      explainEs: `Sustituye (${cf(a, 'y')} ${signOp(k)} ${Math.abs(k)}) por x. Ahora la ecuación solo tiene y.`,
+    },
+    {
+      tokens: [
+        tok('Ay', cf(A, 'y'), 'var', { emph: 'result' }),
+        tok('o', signOp(ck), 'op'),
+        tok('ck', M(Math.abs(ck)), 'num'),
+        tok('rel', '=', 'rel'),
+        tok('dd', M(d), 'num'),
+      ],
+      explainEn: `Distribute and combine: ${cf(c * a, 'y')} + y = ${cf(A, 'y')}, and ${M(c)}·${M(k)} = ${M(ck)}. So ${cf(A, 'y')} ${signOp(ck)} ${Math.abs(ck)} = ${M(d)}.`,
+      explainEs: `Distribuye y combina: ${cf(c * a, 'y')} + y = ${cf(A, 'y')}, y ${M(c)}·${M(k)} = ${M(ck)}. Así que ${cf(A, 'y')} ${signOp(ck)} ${Math.abs(ck)} = ${M(d)}.`,
+    },
+    {
+      tokens: [tok('yv2', 'y', 'var'), tok('rel', '=', 'rel'), tok('yr', M(y), 'num', { emph: 'result' })],
+      explainEn: `Solve for y: subtract ${M(ck)}, then divide by ${A}. y = ${M(y)}.`,
+      explainEs: `Resuelve para y: resta ${M(ck)} y luego divide entre ${A}. y = ${M(y)}.`,
+    },
+    {
+      tokens: [tok('xv', 'x', 'var'), tok('rel', '=', 'rel'), tok('xr', M(x), 'num', { emph: 'result' })],
+      explainEn: `Back-substitute into ①: x = ${cf(a, 'y')} ${signOp(k)} ${Math.abs(k)} = ${cf(a, `(${M(y)})`)} ${signOp(k)} ${Math.abs(k)} = ${M(x)}.`,
+      explainEs: `Sustituye de vuelta en ①: x = ${cf(a, 'y')} ${signOp(k)} ${Math.abs(k)} = ${cf(a, `(${M(y)})`)} ${signOp(k)} ${Math.abs(k)} = ${M(x)}.`,
+    },
+    {
+      tokens: pointTokens(x, y),
+      explainEn: `The solution is the intersection point (${M(x)}, ${M(y)}).`,
+      explainEs: `La solución es el punto de intersección (${M(x)}, ${M(y)}).`,
+      holdMs: 3000,
+    },
+  ];
+  return {
+    id: `gen-sys-sub-${x}-${y}-${a}-${c}`,
+    titleEn: 'Solve by substitution, step by step',
+    titleEs: 'Resuelve por sustitución, paso a paso',
+    steps,
+  };
+}
+
+/**
+ * system_elimination template: a·x + b·y = e ; c·x − b·y = f → (x, y), params
+ * {x, y, a, b, c} (opposite y-coefficients). Add the equations to eliminate y,
+ * solve x, back-solve y.
+ */
+export function buildSystemElimination(x: number, y: number, a: number, b: number, c: number): EqScript {
+  const e = a * x + b * y;
+  const f = c * x - b * y;
+  const sumX = a + c; // (a+c)x = e+f
+  const sumC = e + f;
+  const steps: EqStep[] = [
+    {
+      tokens: [
+        tok('ax', cf(a, 'x'), 'var'),
+        tok('p', '+', 'op'),
+        tok('by', cf(b, 'y'), 'var', { emph: 'focus' }),
+        tok('rel', '=', 'rel'),
+        tok('e', M(e), 'num'),
+      ],
+      explainEn: `Equation ①: ${cf(a, 'x')} + ${cf(b, 'y')} = ${M(e)}. Equation ②: ${cf(c, 'x')} − ${cf(b, 'y')} = ${M(f)}.`,
+      explainEs: `Ecuación ①: ${cf(a, 'x')} + ${cf(b, 'y')} = ${M(e)}. Ecuación ②: ${cf(c, 'x')} − ${cf(b, 'y')} = ${M(f)}.`,
+    },
+    {
+      tokens: [
+        tok('cx', cf(c, 'x'), 'var'),
+        tok('m', '−', 'op'),
+        tok('by2', cf(b, 'y'), 'var', { emph: 'focus' }),
+        tok('rel', '=', 'rel'),
+        tok('f', M(f), 'num'),
+      ],
+      explainEn: `The y-terms +${cf(b, 'y')} and −${cf(b, 'y')} are OPPOSITE. ADD the two equations to eliminate y.`,
+      explainEs: `Los términos +${cf(b, 'y')} y −${cf(b, 'y')} son OPUESTOS. SUMA las dos ecuaciones para eliminar y.`,
+    },
+    {
+      tokens: [
+        tok('sx', cf(sumX, 'x'), 'var', { emph: 'result' }),
+        tok('rel', '=', 'rel'),
+        tok('sc', M(sumC), 'num', { emph: 'result' }),
+      ],
+      explainEn: `Add straight down: ${cf(b, 'y')} − ${cf(b, 'y')} = 0, so y is gone. ${cf(a, 'x')} + ${cf(c, 'x')} = ${cf(sumX, 'x')} and ${M(e)} + ${M(f)} = ${M(sumC)}.`,
+      explainEs: `Suma hacia abajo: ${cf(b, 'y')} − ${cf(b, 'y')} = 0, así que y desaparece. ${cf(a, 'x')} + ${cf(c, 'x')} = ${cf(sumX, 'x')} y ${M(e)} + ${M(f)} = ${M(sumC)}.`,
+    },
+    {
+      tokens: [tok('xv', 'x', 'var'), tok('rel', '=', 'rel'), tok('xr', M(x), 'num', { emph: 'result' })],
+      explainEn: `Divide both sides by ${sumX}: x = ${M(sumC)} ÷ ${sumX} = ${M(x)}.`,
+      explainEs: `Divide ambos lados entre ${sumX}: x = ${M(sumC)} ÷ ${sumX} = ${M(x)}.`,
+    },
+    {
+      tokens: [tok('yv', 'y', 'var'), tok('rel', '=', 'rel'), tok('yr', M(y), 'num', { emph: 'result' })],
+      explainEn: `Substitute x = ${M(x)} into ①: ${cf(a, 'x')} + ${cf(b, 'y')} = ${M(e)} gives y = ${M(y)}.`,
+      explainEs: `Sustituye x = ${M(x)} en ①: ${cf(a, 'x')} + ${cf(b, 'y')} = ${M(e)} da y = ${M(y)}.`,
+    },
+    {
+      tokens: pointTokens(x, y),
+      explainEn: `The solution is (${M(x)}, ${M(y)}).`,
+      explainEs: `La solución es (${M(x)}, ${M(y)}).`,
+      holdMs: 3000,
+    },
+  ];
+  return {
+    id: `gen-sys-elim-${x}-${y}-${a}-${b}-${c}`,
+    titleEn: 'Solve by elimination, step by step',
+    titleEs: 'Resuelve por eliminación, paso a paso',
+    steps,
+  };
+}
+
 /**
  * Pick a builder from the problem's skill slug + params shape.
  * Returns null when no builder understands the problem.
@@ -1740,6 +1890,20 @@ export function buildScriptForProblem(
     const T = num('t');
     if (T !== null) return buildProjectileGround(T);
     return null;
+  }
+
+  // system_substitution {x, y, a, c} — degenerates when c·a + 1 = 0.
+  if (skillSlug === 'systems-substitution') {
+    const [sx, sy, sa, sc] = ['x', 'y', 'a', 'c'].map(num);
+    if (sx === null || sy === null || sa === null || sc === null || sc * sa + 1 === 0) return null;
+    return buildSystemSubstitution(sx, sy, sa, sc);
+  }
+
+  // system_elimination {x, y, a, b, c}
+  if (skillSlug === 'systems-elimination') {
+    const [ex, ey, ea, eb, ec] = ['x', 'y', 'a', 'b', 'c'].map(num);
+    if (ex === null || ey === null || ea === null || eb === null || ec === null) return null;
+    return buildSystemElimination(ex, ey, ea, eb, ec);
   }
 
   const a = num('a');

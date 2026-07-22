@@ -24,4 +24,6 @@ export {
   buildSolveSqrt,
   buildSolveQuadraticFactoring,
   buildProjectileGround,
+  buildSystemSubstitution,
+  buildSystemElimination,
 } from '@tutor/core';

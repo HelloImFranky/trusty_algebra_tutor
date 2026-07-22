@@ -17,6 +17,8 @@ import {
   buildSimplifyRadical,
   buildSolveQuadraticFactoring,
   buildSolveSqrt,
+  buildSystemElimination,
+  buildSystemSubstitution,
   buildMultiStepEquation,
   buildScriptForProblem,
   buildSlopeFromPoints,
@@ -302,6 +304,28 @@ describe('buildDots', () => {
   });
 });
 
+describe('buildSystemSubstitution', () => {
+  it('substitutes, solves y, back-solves x, ends at the point', () => {
+    // x = 2y + k, cx + y = d with solution (x,y)=(3,-1), a=2, c=1
+    const s = buildSystemSubstitution(3, -1, 2, 1);
+    const l = lines(s);
+    expect(l[l.length - 1]).toBe('(3, −1)');
+    expect(l).toContain('y = −1');
+    expect(l).toContain('x = 3');
+  });
+});
+
+describe('buildSystemElimination', () => {
+  it('adds equations to eliminate y and ends at the point', () => {
+    // solution (2, 3), a=1,b=2,c=3 → eq1: x+2y=8, eq2: 3x−2y=0
+    const s = buildSystemElimination(2, 3, 1, 2, 3);
+    const l = lines(s);
+    expect(l[0]).toBe('x + 2y = 8');
+    expect(l[1]).toBe('3x − 2y = 0');
+    expect(l[l.length - 1]).toBe('(2, 3)');
+  });
+});
+
 describe('buildEvaluateFunction', () => {
   it('substitutes, squares, and adds (f(x)=ax²+b)', () => {
     // f(x) = 2x² − 5, f(-3) = 18 − 5 = 13
@@ -558,6 +582,13 @@ describe('buildScriptForProblem dispatch', () => {
     const dots = buildScriptForProblem('factor-trinomials', { a: 2, b: 3 });
     expect(lines(dots)[0]).toBe('4x² − 9');
     expect(lines(dots).pop()).toBe('(2x + 3) (2x − 3)');
+  });
+
+  it('routes systems skills to their builders (null on the degenerate sub case)', () => {
+    expect(lines(buildScriptForProblem('systems-substitution', { x: 3, y: -1, a: 2, c: 1 })).pop()).toBe('(3, −1)');
+    expect(lines(buildScriptForProblem('systems-elimination', { x: 2, y: 3, a: 1, b: 2, c: 3 })).pop()).toBe('(2, 3)');
+    // c·a + 1 = 0 → substitution degenerates → null
+    expect(buildScriptForProblem('systems-substitution', { x: 1, y: 1, a: -1, c: 1 })).toBeNull();
   });
 
   it('routes evaluate-functions params to the function-evaluation builder', () => {
