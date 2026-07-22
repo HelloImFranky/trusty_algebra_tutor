@@ -454,6 +454,47 @@ describe('practice loop', () => {
     expect(bad.correct).toBe(false);
   });
 
+  it('counts the justification: "is this a function?" needs the right evidence', async () => {
+    const prob = await prisma.problem.findFirst({
+      where: { skill: { slug: 'understanding-functions' } },
+    });
+    if (!prob) return; // fixture may not seed this lesson
+    const evidenceStep = await prisma.problemStep.findFirst({
+      where: { problemId: prob.id },
+      orderBy: { position: 'asc' },
+    });
+    const verdict = prob.answerLatex;
+    const evidence = evidenceStep!.expectedLatex;
+
+    // right verdict, no evidence → not correct (the "why" is required)
+    const noWhy = await as(student).practice.attempt({
+      problemId: Number(prob.id),
+      submittedLatex: verdict,
+    });
+    expect(noWhy.correct).toBe(false);
+    expect(noWhy.verdictCorrect).toBe(true);
+    expect(noWhy.justificationCorrect).toBe(false);
+
+    // right verdict, wrong evidence → still not correct
+    const badWhy = await as(student).practice.attempt({
+      problemId: Number(prob.id),
+      submittedLatex: verdict,
+      justificationLatex: `${evidence}-nope`,
+    });
+    expect(badWhy.correct).toBe(false);
+    expect(badWhy.justificationCorrect).toBe(false);
+
+    // right verdict AND right evidence → correct
+    const ok = await as(student).practice.attempt({
+      problemId: Number(prob.id),
+      submittedLatex: verdict,
+      justificationLatex: evidence,
+    });
+    expect(ok.correct).toBe(true);
+    expect(ok.verdictCorrect).toBe(true);
+    expect(ok.justificationCorrect).toBe(true);
+  });
+
   it('diagnoses a predicted misconception and returns targeted feedback', async () => {
     const prob = await prisma.problem.findFirst({
       where: { NOT: { misconceptionsJson: { equals: Prisma.DbNull } } },
