@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildAddPolynomials,
+  buildCombineLikeTerms,
+  buildDistributeSimplify,
+  buildDots,
+  buildEvaluateExpression,
   buildFactorGcf,
+  buildFactorTrinomial,
   buildFoil,
   buildGcfMonomials,
   buildMultiStepEquation,
@@ -204,6 +209,91 @@ describe('buildFoil', () => {
   });
 });
 
+describe('buildEvaluateExpression', () => {
+  it('substitutes, squares, multiplies, then sums (negative value)', () => {
+    // 2x² + 3x − 5 at x = −1 → 2 − 3 − 5 = −6
+    const s = buildEvaluateExpression(2, 3, -5, -1);
+    const l = lines(s);
+    expect(l[0]).toBe('2x² + 3x − 5');
+    expect(l[1]).toBe('2(−1)² + 3(−1) − 5');
+    expect(l[2]).toBe('2 − 3 − 5');
+    expect(l[l.length - 1]).toBe('−6');
+  });
+
+  it('drops the constant term when c = 0', () => {
+    // 3x² − 2x at x = 2 → 12 − 4 = 8
+    const s = buildEvaluateExpression(3, -2, 0, 2);
+    const l = lines(s);
+    expect(l[0]).toBe('3x² − 2x');
+    expect(l[l.length - 1]).toBe('8');
+  });
+});
+
+describe('buildCombineLikeTerms', () => {
+  it('groups x-terms and constants, writes standard form', () => {
+    // 3x + 6 + 2x² + 4x + 5 → 2x² + 7x + 11
+    const s = buildCombineLikeTerms(2, 3, 4, 5, 6);
+    const l = lines(s);
+    expect(l[0]).toBe('3x + 6 + 2x² + 4x + 5');
+    expect(l[l.length - 1]).toBe('2x² + 7x + 11');
+  });
+
+  it('drops terms that combine to zero', () => {
+    // −4x + 8 + x² + 4x − 8 → x² (x-terms and constants both cancel)
+    expect(lines(buildCombineLikeTerms(1, -4, 4, -8, 8)).pop()).toBe('x²');
+  });
+});
+
+describe('buildDistributeSimplify', () => {
+  it('distributes then combines into standard form', () => {
+    // 2(3x + 1) + 4x + 5 → 10x + 7
+    const s = buildDistributeSimplify(2, 3, 1, 4, 5);
+    const l = lines(s);
+    expect(l[0]).toBe('2(3x + 1) + 4x + 5');
+    expect(l[l.length - 1]).toBe('10x + 7');
+  });
+
+  it('handles negatives and a vanishing x-term', () => {
+    // −2(x − 3) + 2x + 1 → −2x + 6 + 2x + 1 → 7
+    expect(lines(buildDistributeSimplify(-2, 1, -3, 2, 1)).pop()).toBe('7');
+  });
+});
+
+describe('buildFactorTrinomial', () => {
+  it('factors x² + Bx + C into (x + p)(x + q)', () => {
+    // x² − 2x − 15 = (x + 3)(x − 5)
+    const s = buildFactorTrinomial(3, -5);
+    const l = lines(s);
+    expect(l[0]).toBe('x² − 2x − 15');
+    expect(l[l.length - 1]).toBe('(x + 3) (x − 5)');
+  });
+
+  it('drops the middle term when the numbers are opposites (B = 0)', () => {
+    // x² − 16 = (x + 4)(x − 4)
+    const s = buildFactorTrinomial(4, -4);
+    const l = lines(s);
+    expect(l[0]).toBe('x² − 16');
+    expect(l[l.length - 1]).toBe('(x + 4) (x − 4)');
+  });
+});
+
+describe('buildDots', () => {
+  it('factors a difference of squares with a leading coefficient', () => {
+    // 4x² − 9 = (2x + 3)(2x − 3)
+    const s = buildDots(2, 3);
+    const l = lines(s);
+    expect(l[0]).toBe('4x² − 9');
+    expect(l[l.length - 1]).toBe('(2x + 3) (2x − 3)');
+  });
+
+  it('handles a = 1 (bare x²)', () => {
+    // x² − 16 = (x + 4)(x − 4)
+    const s = buildDots(1, 4);
+    expect(lines(s)[0]).toBe('x² − 16');
+    expect(lines(s).pop()).toBe('(x + 4) (x − 4)');
+  });
+});
+
 describe('buildGcfMonomials', () => {
   it('finds the GCF of two monomials, using the smaller exponent', () => {
     // GCF(6x², 9x³) = 3x²
@@ -346,6 +436,29 @@ describe('buildScriptForProblem dispatch', () => {
     expect(lines(s).pop()).toBe('x² − x − 30');
     // mono_times_poly ({m, a, b}) shares the skill but stays unanimated
     expect(buildScriptForProblem('polynomial-operations', { m: 2, a: 3, b: 4 })).toBeNull();
+  });
+
+  it('routes evaluate-expressions params to the evaluate builder', () => {
+    const s = buildScriptForProblem('evaluate-expressions', { a: 2, b: 3, c: -5, v: -1 });
+    expect(lines(s)[0]).toBe('2x² + 3x − 5');
+    expect(lines(s).pop()).toBe('−6');
+  });
+
+  it('routes combine-like-terms shapes to the right builder (k splits them)', () => {
+    // distribute_simplify has k; combine_like_terms has e
+    const dist = buildScriptForProblem('combine-like-terms', { k: 2, a: 3, b: 1, c: 4, d: 5 });
+    expect(lines(dist).pop()).toBe('10x + 7');
+    const comb = buildScriptForProblem('combine-like-terms', { a: 2, b: 3, c: 4, d: 5, e: 6 });
+    expect(lines(comb)[0]).toBe('3x + 6 + 2x² + 4x + 5');
+    expect(lines(comb).pop()).toBe('2x² + 7x + 11');
+  });
+
+  it('routes factor-trinomials shapes to trinomial vs DOTS builders', () => {
+    const tri = buildScriptForProblem('factor-trinomials', { p: 3, q: -5 });
+    expect(lines(tri).pop()).toBe('(x + 3) (x − 5)');
+    const dots = buildScriptForProblem('factor-trinomials', { a: 2, b: 3 });
+    expect(lines(dots)[0]).toBe('4x² − 9');
+    expect(lines(dots).pop()).toBe('(2x + 3) (2x − 3)');
   });
 
   it('routes factor-gcf gcf_monomials params to the GCF-of-monomials builder', () => {

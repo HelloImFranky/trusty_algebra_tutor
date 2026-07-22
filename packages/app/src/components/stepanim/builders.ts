@@ -11,4 +11,9 @@ export {
   buildFoil,
   buildGcfMonomials,
   buildFactorGcf,
+  buildEvaluateExpression,
+  buildCombineLikeTerms,
+  buildDistributeSimplify,
+  buildFactorTrinomial,
+  buildDots,
 } from '@tutor/core';

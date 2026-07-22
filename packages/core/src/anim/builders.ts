@@ -46,6 +46,27 @@ const ftok = (
   return { id, text: `${wrap(num)}/${wrap(den)}`, kind: 'frac', num, den, ...extra };
 };
 
+/** "+"/"−" operator for a signed value. */
+const signOp = (n: number) => (n >= 0 ? '+' : '−');
+
+/**
+ * Result tokens for a polynomial in standard form (highest degree first),
+ * dropping zero terms — e.g. [{2,'x²'},{0,'x'},{−3,''}] → "2x² − 3". Emits a
+ * single "0" when every term is zero. Ids are r0, r1… with ro1, ro2… operators.
+ */
+function standardFormTokens(terms: { coef: number; unit: string }[]): EqToken[] {
+  const kept = terms.filter((t) => t.coef !== 0);
+  if (kept.length === 0) return [tok('r0', '0', 'num', { emph: 'result' })];
+  return kept.flatMap((t, i) => {
+    const kind: TokenKind = t.unit ? 'var' : 'num';
+    const text = t.unit
+      ? cf(i === 0 ? t.coef : Math.abs(t.coef), t.unit)
+      : M(i === 0 ? t.coef : Math.abs(t.coef));
+    const term = tok(`r${i}`, text, kind, { emph: 'result' });
+    return i === 0 ? [term] : [tok(`ro${i}`, signOp(t.coef), 'op'), term];
+  });
+}
+
 /**
  * Steps for solving A·v + B rel C (A ≠ 0), including the inequality flip
  * when dividing by a negative A. Token ids are stable ('ax', 'op', 'b',
@@ -719,6 +740,328 @@ export function buildFactorGcf(g: number, a: number, b: number): EqScript {
   };
 }
 
+/**
+ * evaluate_expression template: evaluate a·x² + b·x + c at x = v, params
+ * {a, b, c, v} (a, b, v nonzero; c may be 0). Substitutes (v) for each x,
+ * squares/multiplies, then sums to the final value.
+ */
+export function buildEvaluateExpression(a: number, b: number, c: number, v: number): EqScript {
+  const q2 = a * v * v; // value of the x² term
+  const q1 = b * v; // value of the x term
+  const ans = q2 + q1 + c;
+  const hasC = c !== 0;
+  const paren = `(${M(v)})`;
+
+  // trailing "± c" tokens shared by the first two steps (dropped when c = 0)
+  const cTail = (): EqToken[] =>
+    hasC ? [tok('o0', signOp(c), 'op'), tok('t0', M(Math.abs(c)), 'num')] : [];
+
+  const steps: EqStep[] = [
+    {
+      tokens: [
+        tok('t2', cf(a, 'x²'), 'var'),
+        tok('o1', signOp(b), 'op'),
+        tok('t1', cf(Math.abs(b), 'x'), 'var'),
+        ...cTail(),
+      ],
+      explainEn: `Evaluate ${cf(a, 'x²')} ${signOp(b)} ${cf(Math.abs(b), 'x')}${hasC ? ` ${signOp(c)} ${Math.abs(c)}` : ''} when x = ${M(v)}. "Evaluate" means: substitute the value in.`,
+      explainEs: `Evalúa ${cf(a, 'x²')} ${signOp(b)} ${cf(Math.abs(b), 'x')}${hasC ? ` ${signOp(c)} ${Math.abs(c)}` : ''} cuando x = ${M(v)}. "Evaluar" significa: sustituye el valor.`,
+    },
+    {
+      tokens: [
+        tok('t2', cf(a, `${paren}²`), 'var', { emph: 'focus' }),
+        tok('o1', signOp(b), 'op'),
+        tok('t1', cf(Math.abs(b), paren), 'var', { emph: 'focus' }),
+        ...cTail(),
+      ],
+      explainEn: `Substitute: every x becomes ${paren}. Keep the parentheses so the signs stay clear.`,
+      explainEs: `Sustituye: cada x se convierte en ${paren}. Mantén los paréntesis para que los signos queden claros.`,
+    },
+    {
+      tokens: [
+        tok('t2', M(q2), 'num', { emph: 'result' }),
+        tok('o1', signOp(q1), 'op'),
+        tok('t1', M(Math.abs(q1)), 'num', { emph: 'result' }),
+        ...cTail(),
+      ],
+      explainEn: `${paren}² = ${v * v}. Multiply: ${M(a)}·${v * v} = ${M(q2)} and ${M(b)}·${M(v)} = ${M(q1)} (do exponents and products before adding).`,
+      explainEs: `${paren}² = ${v * v}. Multiplica: ${M(a)}·${v * v} = ${M(q2)} y ${M(b)}·${M(v)} = ${M(q1)} (exponentes y productos antes de sumar).`,
+    },
+    {
+      tokens: [tok('r', M(ans), 'num', { emph: 'result' })],
+      explainEn: `Add it up: ${M(q2)} ${signOp(q1)} ${Math.abs(q1)}${hasC ? ` ${signOp(c)} ${Math.abs(c)}` : ''} = ${M(ans)}. The expression is worth ${M(ans)} when x = ${M(v)}.`,
+      explainEs: `Suma todo: ${M(q2)} ${signOp(q1)} ${Math.abs(q1)}${hasC ? ` ${signOp(c)} ${Math.abs(c)}` : ''} = ${M(ans)}. La expresión vale ${M(ans)} cuando x = ${M(v)}.`,
+      holdMs: 3000,
+    },
+  ];
+
+  return {
+    id: `gen-evaluate-${a}-${b}-${c}-${v}`,
+    titleEn: 'Evaluate the expression, step by step',
+    titleEs: 'Evalúa la expresión, paso a paso',
+    steps,
+  };
+}
+
+/**
+ * combine_like_terms template: simplify the out-of-order expression
+ * b·x + e + a·x² + c·x + d into standard form, params {a, b, c, d, e}
+ * (a, b, c, d nonzero; e ≥ 1). Groups the x-terms and the constants, then
+ * writes a·x² + (b+c)·x + (e+d) highest-degree-first.
+ */
+export function buildCombineLikeTerms(a: number, b: number, c: number, d: number, e: number): EqScript {
+  const xCo = b + c;
+  const k = e + d;
+
+  // the messy given order: bx + e + ax² + cx + d
+  const messy = (xEmph?: Emph, kEmph?: Emph): EqToken[] => [
+    tok('xb', cf(b, 'x'), 'var', xEmph ? { emph: xEmph } : undefined),
+    tok('oe', '+', 'op'),
+    tok('te', M(e), 'num', kEmph ? { emph: kEmph } : undefined),
+    tok('oa', signOp(a), 'op'),
+    tok('xa', cf(Math.abs(a), 'x²'), 'var'),
+    tok('oc', signOp(c), 'op'),
+    tok('xc', cf(Math.abs(c), 'x'), 'var', xEmph ? { emph: xEmph } : undefined),
+    tok('od', signOp(d), 'op'),
+    tok('td', M(Math.abs(d)), 'num', kEmph ? { emph: kEmph } : undefined),
+  ];
+
+  const steps: EqStep[] = [
+    {
+      tokens: messy(),
+      explainEn: 'Simplify by combining like terms. The terms are out of order — group the ones that match.',
+      explainEs: 'Simplifica combinando términos semejantes. Los términos están desordenados — agrupa los que coinciden.',
+    },
+    {
+      tokens: messy('focus'),
+      explainEn: `The x-terms are ${cf(b, 'x')} and ${cf(c, 'x')}: ${cf(b, 'x')} ${signOp(c)} ${cf(Math.abs(c), 'x')} = ${xCo === 0 ? '0' : cf(xCo, 'x')}.`,
+      explainEs: `Los términos con x son ${cf(b, 'x')} y ${cf(c, 'x')}: ${cf(b, 'x')} ${signOp(c)} ${cf(Math.abs(c), 'x')} = ${xCo === 0 ? '0' : cf(xCo, 'x')}.`,
+    },
+    {
+      tokens: messy(undefined, 'focus'),
+      explainEn: `The constants are ${e} and ${M(d)}: ${e} ${signOp(d)} ${Math.abs(d)} = ${M(k)}. (${cf(a, 'x²')} has no like term — it stays.)`,
+      explainEs: `Las constantes son ${e} y ${M(d)}: ${e} ${signOp(d)} ${Math.abs(d)} = ${M(k)}. (${cf(a, 'x²')} no tiene semejante — se queda.)`,
+    },
+    {
+      tokens: standardFormTokens([
+        { coef: a, unit: 'x²' },
+        { coef: xCo, unit: 'x' },
+        { coef: k, unit: '' },
+      ]),
+      explainEn: `Standard form lists highest degree first: ${cf(a, 'x²')}${xCo ? ` ${signOp(xCo)} ${cf(Math.abs(xCo), 'x')}` : ''}${k ? ` ${signOp(k)} ${Math.abs(k)}` : ''}.`,
+      explainEs: `La forma estándar pone primero el mayor grado: ${cf(a, 'x²')}${xCo ? ` ${signOp(xCo)} ${cf(Math.abs(xCo), 'x')}` : ''}${k ? ` ${signOp(k)} ${Math.abs(k)}` : ''}.`,
+      holdMs: 3000,
+    },
+  ];
+
+  return {
+    id: `gen-combine-${a}-${b}-${c}-${d}-${e}`,
+    titleEn: 'Combine like terms, step by step',
+    titleEs: 'Combina términos semejantes, paso a paso',
+    steps,
+  };
+}
+
+/**
+ * distribute_simplify template: simplify k(a·x + b) + c·x + d into standard
+ * form, params {k, a, b, c, d} (all nonzero except d may be 0-ranged).
+ * Distributes k, then combines like terms into (k·a+c)·x + (k·b+d).
+ */
+export function buildDistributeSimplify(k: number, a: number, b: number, c: number, d: number): EqScript {
+  const xCo = k * a + c;
+  const kk = k * b + d;
+
+  // trailing "+ cx + d" — the terms outside the parentheses, unchanged early on
+  const tail = (): EqToken[] => [
+    tok('oc', signOp(c), 'op'),
+    tok('cx', cf(Math.abs(c), 'x'), 'var'),
+    tok('od', signOp(d), 'op'),
+    tok('td', M(Math.abs(d)), 'num'),
+  ];
+
+  const steps: EqStep[] = [
+    {
+      tokens: [
+        tok('k', M(k), 'num'),
+        tok('lp', '(', 'op', { tight: true }),
+        tok('ia', cf(a, 'x'), 'var', { tight: true }),
+        tok('io', signOp(b), 'op'),
+        tok('ib', M(Math.abs(b)), 'num'),
+        tok('rp', ')', 'op', { tight: true }),
+        ...tail(),
+      ],
+      explainEn: `Simplify. First distribute the ${M(k)} to EACH term inside the parentheses.`,
+      explainEs: `Simplifica. Primero distribuye el ${M(k)} a CADA término dentro del paréntesis.`,
+    },
+    {
+      tokens: [
+        tok('k', M(k), 'num', { emph: 'focus' }),
+        tok('lp', '(', 'op', { tight: true }),
+        tok('ia', cf(a, 'x'), 'var', { tight: true, emph: 'focus' }),
+        tok('io', signOp(b), 'op'),
+        tok('ib', M(Math.abs(b)), 'num', { emph: 'focus' }),
+        tok('rp', ')', 'op', { tight: true }),
+        ...tail(),
+      ],
+      explainEn: `Distribute: ${M(k)}·${cf(a, 'x')} = ${cf(k * a, 'x')} and ${M(k)}·${M(b)} = ${M(k * b)}.`,
+      explainEs: `Distribuye: ${M(k)}·${cf(a, 'x')} = ${cf(k * a, 'x')} y ${M(k)}·${M(b)} = ${M(k * b)}.`,
+    },
+    {
+      tokens: [
+        tok('dax', cf(k * a, 'x'), 'var', { emph: 'result' }),
+        tok('dob', signOp(k * b), 'op'),
+        tok('db', M(Math.abs(k * b)), 'num', { emph: 'result' }),
+        ...tail(),
+      ],
+      explainEn: `The parentheses are gone: ${cf(k * a, 'x')} ${signOp(k * b)} ${Math.abs(k * b)} ${signOp(c)} ${cf(Math.abs(c), 'x')} ${signOp(d)} ${Math.abs(d)}. Now combine like terms.`,
+      explainEs: `Ya no hay paréntesis: ${cf(k * a, 'x')} ${signOp(k * b)} ${Math.abs(k * b)} ${signOp(c)} ${cf(Math.abs(c), 'x')} ${signOp(d)} ${Math.abs(d)}. Ahora combina términos semejantes.`,
+    },
+    {
+      tokens: standardFormTokens([
+        { coef: xCo, unit: 'x' },
+        { coef: kk, unit: '' },
+      ]),
+      explainEn: `Combine: ${cf(k * a, 'x')} ${signOp(c)} ${cf(Math.abs(c), 'x')} = ${xCo === 0 ? '0' : cf(xCo, 'x')}, and ${M(k * b)} ${signOp(d)} ${Math.abs(d)} = ${M(kk)}.`,
+      explainEs: `Combina: ${cf(k * a, 'x')} ${signOp(c)} ${cf(Math.abs(c), 'x')} = ${xCo === 0 ? '0' : cf(xCo, 'x')}, y ${M(k * b)} ${signOp(d)} ${Math.abs(d)} = ${M(kk)}.`,
+      holdMs: 3000,
+    },
+  ];
+
+  return {
+    id: `gen-distribute-${k}-${a}-${b}-${c}-${d}`,
+    titleEn: 'Distribute and simplify, step by step',
+    titleEs: 'Distribuye y simplifica, paso a paso',
+    steps,
+  };
+}
+
+/**
+ * factor_trinomial template: x² + B·x + C → (x + p)(x + q), params {p, q}
+ * (p, q nonzero and distinct; B = p+q, C = p·q). The reverse of FOIL: find
+ * the pair that multiplies to C and adds to B. Uses the same factored-form
+ * token layout as buildFoil. B can be 0 (then the middle term is absent).
+ */
+export function buildFactorTrinomial(p: number, q: number): EqScript {
+  const B = p + q;
+  const C = p * q;
+
+  // x² ± Bx ± C — the middle term is dropped when B = 0
+  const trinomial = (cEmph?: Emph, bEmph?: Emph): EqToken[] => [
+    tok('x2', 'x²', 'var'),
+    ...(B !== 0
+      ? [tok('ob', signOp(B), 'op'), tok('bx', cf(Math.abs(B), 'x'), 'var', bEmph ? { emph: bEmph } : undefined)]
+      : []),
+    tok('oc', signOp(C), 'op'),
+    tok('c', M(Math.abs(C)), 'num', cEmph ? { emph: cEmph } : undefined),
+  ];
+
+  // (x + p)(x + q) — same ids/layout as buildFoil's factored form
+  const factored = (emph?: Emph): EqToken[] => [
+    tok('lp1', '(', 'op'),
+    tok('x1', 'x', 'var', { tight: true }),
+    tok('s1', signOp(p), 'op'),
+    tok('p', M(Math.abs(p)), 'num', emph ? { emph } : undefined),
+    tok('rp1', ')', 'op', { tight: true }),
+    tok('lp2', '(', 'op'),
+    tok('x2b', 'x', 'var', { tight: true }),
+    tok('s2', signOp(q), 'op'),
+    tok('q', M(Math.abs(q)), 'num', emph ? { emph } : undefined),
+    tok('rp2', ')', 'op', { tight: true }),
+  ];
+
+  const bTxt = B === 0 ? '0' : M(B);
+  const steps: EqStep[] = [
+    {
+      tokens: trinomial(),
+      explainEn: `Factor this trinomial: find two numbers that MULTIPLY to ${M(C)} and ADD to ${bTxt}.`,
+      explainEs: `Factoriza este trinomio: encuentra dos números que MULTIPLIQUEN a ${M(C)} y SUMEN ${bTxt}.`,
+    },
+    {
+      tokens: trinomial('focus'),
+      explainEn: `The two numbers must multiply to the constant, ${M(C)}.`,
+      explainEs: `Los dos números deben multiplicarse para dar la constante, ${M(C)}.`,
+    },
+    {
+      tokens: trinomial(undefined, 'focus'),
+      explainEn:
+        B === 0
+          ? `…and add to 0, so they are opposites. ${M(p)} and ${M(q)} work: ${M(p)}·${M(q)} = ${M(C)}, ${M(p)} + ${M(q)} = 0.`
+          : `…and add to the middle coefficient, ${M(B)}. ${M(p)} and ${M(q)} work: ${M(p)}·${M(q)} = ${M(C)}, ${M(p)} + ${M(q)} = ${M(B)}.`,
+      explainEs:
+        B === 0
+          ? `…y sumen 0, así que son opuestos. ${M(p)} y ${M(q)} funcionan: ${M(p)}·${M(q)} = ${M(C)}, ${M(p)} + ${M(q)} = 0.`
+          : `…y sumen el coeficiente del medio, ${M(B)}. ${M(p)} y ${M(q)} funcionan: ${M(p)}·${M(q)} = ${M(C)}, ${M(p)} + ${M(q)} = ${M(B)}.`,
+    },
+    {
+      tokens: factored('result'),
+      explainEn: `Put each number into its own binomial: (x ${signOp(p)} ${Math.abs(p)})(x ${signOp(q)} ${Math.abs(q)}). FOIL it to check!`,
+      explainEs: `Pon cada número en su propio binomio: (x ${signOp(p)} ${Math.abs(p)})(x ${signOp(q)} ${Math.abs(q)}). ¡Compruébalo con FOIL!`,
+      holdMs: 3000,
+    },
+  ];
+
+  return {
+    id: `gen-factor-tri-${p}-${q}`,
+    titleEn: 'Factor the trinomial, step by step',
+    titleEs: 'Factoriza el trinomio, paso a paso',
+    steps,
+  };
+}
+
+/**
+ * dots template: difference of two squares a²·x² − b² → (a·x + b)(a·x − b),
+ * params {a, b} (a ≥ 1, b ≥ 1). Rewrites each term as a perfect square, then
+ * writes the two conjugate binomials.
+ */
+export function buildDots(a: number, b: number): EqScript {
+  const aTxt = a === 1 ? 'x' : `${M(a)}x`;
+
+  const steps: EqStep[] = [
+    {
+      tokens: [
+        tok('sq1', a === 1 ? 'x²' : `${M(a * a)}x²`, 'var'),
+        tok('op', '−', 'op'),
+        tok('sq2', M(b * b), 'num'),
+      ],
+      explainEn: `Two perfect squares with a MINUS between them — that's a difference of squares (DOTS).`,
+      explainEs: `Dos cuadrados perfectos con un MENOS en medio — es una diferencia de cuadrados (DOTS).`,
+    },
+    {
+      tokens: [
+        tok('sq1', `(${aTxt})²`, 'var', { emph: 'focus' }),
+        tok('op', '−', 'op'),
+        tok('sq2', `(${M(b)})²`, 'num', { emph: 'focus' }),
+      ],
+      explainEn: `Write each as a square: √(${a === 1 ? '' : a * a}x²) = ${aTxt}, and √${b * b} = ${b}. So it's (${aTxt})² − (${b})².`,
+      explainEs: `Escribe cada uno como cuadrado: √(${a === 1 ? '' : a * a}x²) = ${aTxt}, y √${b * b} = ${b}. Así que es (${aTxt})² − (${b})².`,
+    },
+    {
+      tokens: [
+        tok('lp1', '(', 'op'),
+        tok('r1', aTxt, 'var', { tight: true, emph: 'result' }),
+        tok('s1', '+', 'op'),
+        tok('b1', M(b), 'num', { emph: 'result' }),
+        tok('rp1', ')', 'op', { tight: true }),
+        tok('lp2', '(', 'op'),
+        tok('r2', aTxt, 'var', { tight: true, emph: 'result' }),
+        tok('s2', '−', 'op'),
+        tok('b2', M(b), 'num', { emph: 'result' }),
+        tok('rp2', ')', 'op', { tight: true }),
+      ],
+      explainEn: `DOTS factors into the SAME two terms with opposite signs: (${aTxt} + ${b})(${aTxt} − ${b}). FOIL to check — the middle terms cancel.`,
+      explainEs: `DOTS se factoriza en los MISMOS dos términos con signos opuestos: (${aTxt} + ${b})(${aTxt} − ${b}). Comprueba con FOIL — los términos del medio se cancelan.`,
+      holdMs: 3000,
+    },
+  ];
+
+  return {
+    id: `gen-dots-${a}-${b}`,
+    titleEn: 'Factor with DOTS, step by step',
+    titleEs: 'Factoriza con DOTS, paso a paso',
+    steps,
+  };
+}
+
 /** slope_two_points template: line through (x1, y1) and (x2, y2). */
 export function buildSlopeFromPoints(
   x1: number,
@@ -903,6 +1246,36 @@ export function buildScriptForProblem(
     const ga = num('a');
     const gb = num('b');
     if (g !== null && ga !== null && gb !== null) return buildFactorGcf(g, ga, gb);
+    return null;
+  }
+
+  // evaluate_expression: a·x² + b·x + c evaluated at x = v
+  if (skillSlug === 'evaluate-expressions') {
+    const [ea, eb, ec, ev] = ['a', 'b', 'c', 'v'].map(num);
+    if (ea === null || eb === null || ec === null || ev === null) return null;
+    return buildEvaluateExpression(ea, eb, ec, ev);
+  }
+
+  // combine-like-terms hosts combine_like_terms {a, b, c, d, e} and
+  // distribute_simplify {k, a, b, c, d} — the `k` key tells them apart.
+  if (skillSlug === 'combine-like-terms') {
+    const [ca, cb, cc, cd] = ['a', 'b', 'c', 'd'].map(num);
+    if (ca === null || cb === null || cc === null || cd === null) return null;
+    const k = num('k');
+    if (k !== null) return buildDistributeSimplify(k, ca, cb, cc, cd);
+    const e = num('e');
+    if (e !== null) return buildCombineLikeTerms(ca, cb, cc, cd, e);
+    return null;
+  }
+
+  // factor-trinomials hosts factor_trinomial {p, q} and dots {a, b}.
+  if (skillSlug === 'factor-trinomials') {
+    const fp = num('p');
+    const fq = num('q');
+    if (fp !== null && fq !== null) return buildFactorTrinomial(fp, fq);
+    const da = num('a');
+    const db = num('b');
+    if (da !== null && db !== null) return buildDots(da, db);
     return null;
   }
 
