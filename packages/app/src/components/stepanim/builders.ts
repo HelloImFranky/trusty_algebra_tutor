@@ -20,4 +20,8 @@ export {
   buildSimplifyRadical,
   buildRadicalAdd,
   buildRadicalMultiply,
+  buildEvaluateFunction,
+  buildSolveSqrt,
+  buildSolveQuadraticFactoring,
+  buildProjectileGround,
 } from '@tutor/core';

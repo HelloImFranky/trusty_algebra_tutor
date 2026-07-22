@@ -5,14 +5,18 @@ import {
   buildDistributeSimplify,
   buildDots,
   buildEvaluateExpression,
+  buildEvaluateFunction,
   buildExponentProduct,
   buildFactorGcf,
   buildFactorTrinomial,
   buildFoil,
   buildGcfMonomials,
+  buildProjectileGround,
   buildRadicalAdd,
   buildRadicalMultiply,
   buildSimplifyRadical,
+  buildSolveQuadraticFactoring,
+  buildSolveSqrt,
   buildMultiStepEquation,
   buildScriptForProblem,
   buildSlopeFromPoints,
@@ -298,6 +302,51 @@ describe('buildDots', () => {
   });
 });
 
+describe('buildEvaluateFunction', () => {
+  it('substitutes, squares, and adds (f(x)=ax²+b)', () => {
+    // f(x) = 2x² − 5, f(-3) = 18 − 5 = 13
+    const l = lines(buildEvaluateFunction(2, -5, -3));
+    expect(l[0]).toBe('2x² − 5');
+    expect(l[1]).toBe('2(−3)² − 5');
+    expect(l[l.length - 1]).toBe('13');
+  });
+});
+
+describe('buildSolveSqrt', () => {
+  it('isolates, divides, and roots with ± (a>1)', () => {
+    // 3x² − 75 = 0 → x² = 25 → x = ±5
+    const l = lines(buildSolveSqrt(3, 5));
+    expect(l[0]).toBe('3x² − 75 = 0');
+    expect(l).toContain('x² = 25');
+    expect(l[l.length - 1]).toBe('x = ±5');
+  });
+  it('skips the divide step when a = 1', () => {
+    const l = lines(buildSolveSqrt(1, 4)); // x² − 16 = 0 → x = ±4
+    expect(l[0]).toBe('x² − 16 = 0');
+    expect(l[l.length - 1]).toBe('x = ±4');
+  });
+});
+
+describe('buildSolveQuadraticFactoring', () => {
+  it('factors then applies the zero-product property', () => {
+    // x² − 2x − 15 = 0 → (x+3)(x−5)=0 → x = −3, 5
+    const l = lines(buildSolveQuadraticFactoring(3, -5));
+    expect(l[0]).toBe('x² − 2x − 15 = 0');
+    expect(l).toContain('(x + 3) (x − 5) = 0');
+    expect(l[l.length - 1]).toBe('x = −3, 5');
+  });
+});
+
+describe('buildProjectileGround', () => {
+  it('sets height 0, factors the GCF, and lands at T', () => {
+    // T=5, v=80: −16t² + 80t = 0 → −16t(t − 5) = 0 → t = 5
+    const l = lines(buildProjectileGround(5));
+    expect(l[0]).toBe('−16t² + 80t = 0');
+    expect(l[1]).toBe('−16t(t − 5) = 0');
+    expect(l[l.length - 1]).toBe('t = 5');
+  });
+});
+
 describe('buildExponentProduct', () => {
   it('adds the exponents (same base)', () => {
     expect(lines(buildExponentProduct(2, 3))).toEqual(['x² · x³', 'x² · x³', 'x⁵']);
@@ -509,6 +558,17 @@ describe('buildScriptForProblem dispatch', () => {
     const dots = buildScriptForProblem('factor-trinomials', { a: 2, b: 3 });
     expect(lines(dots)[0]).toBe('4x² − 9');
     expect(lines(dots).pop()).toBe('(2x + 3) (2x − 3)');
+  });
+
+  it('routes evaluate-functions params to the function-evaluation builder', () => {
+    expect(lines(buildScriptForProblem('evaluate-functions', { a: 2, b: -5, v: -3 })).pop()).toBe('13');
+    expect(buildScriptForProblem('evaluate-functions', { xs: [1, 2, 3] })).toBeNull();
+  });
+
+  it('routes quadratic-solving skills to their builders', () => {
+    expect(lines(buildScriptForProblem('quadratics-sqrt', { a: 3, x: 5 })).pop()).toBe('x = ±5');
+    expect(lines(buildScriptForProblem('quadratics-factoring', { p: 3, q: -5 })).pop()).toBe('x = −3, 5');
+    expect(lines(buildScriptForProblem('quadratics-realworld', { t: 5 })).pop()).toBe('t = 5');
   });
 
   it('routes exponents-perfect-squares exponent params to the exponent builder', () => {

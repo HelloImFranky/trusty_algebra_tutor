@@ -1365,6 +1365,238 @@ export function buildRadicalMultiply(a: number, b: number): EqScript {
 }
 
 /**
+ * evaluate_function template: f(x) = a·x² + b evaluated at x = v, params
+ * {a, b, v} (a, b, v nonzero). Substitute (v) for x, square, then add.
+ */
+export function buildEvaluateFunction(a: number, b: number, v: number): EqScript {
+  const q2 = a * v * v;
+  const ans = q2 + b;
+  const paren = `(${M(v)})`;
+  const tail = (): EqToken[] => [tok('o0', signOp(b), 'op'), tok('t0', M(Math.abs(b)), 'num')];
+  const steps: EqStep[] = [
+    {
+      tokens: [tok('t2', cf(a, 'x²'), 'var'), ...tail()],
+      explainEn: `f(x) = ${cf(a, 'x²')} ${signOp(b)} ${Math.abs(b)}. To find f(${M(v)}), INPUT ${M(v)} for x.`,
+      explainEs: `f(x) = ${cf(a, 'x²')} ${signOp(b)} ${Math.abs(b)}. Para hallar f(${M(v)}), INGRESA ${M(v)} por x.`,
+    },
+    {
+      tokens: [tok('t2', cf(a, `${paren}²`), 'var', { emph: 'focus' }), ...tail()],
+      explainEn: `Substitute: every x becomes ${paren}. Keep the parentheses so the sign is clear.`,
+      explainEs: `Sustituye: cada x se convierte en ${paren}. Mantén los paréntesis para que el signo quede claro.`,
+    },
+    {
+      tokens: [tok('t2', M(q2), 'num', { emph: 'result' }), ...tail()],
+      explainEn: `${paren}² = ${v * v}${v < 0 ? ' (a negative squared is positive)' : ''}, and ${M(a)}·${v * v} = ${M(q2)}.`,
+      explainEs: `${paren}² = ${v * v}${v < 0 ? ' (un negativo al cuadrado es positivo)' : ''}, y ${M(a)}·${v * v} = ${M(q2)}.`,
+    },
+    {
+      tokens: [tok('r', M(ans), 'num', { emph: 'result' })],
+      explainEn: `${M(q2)} ${signOp(b)} ${Math.abs(b)} = ${M(ans)}. So f(${M(v)}) = ${M(ans)}.`,
+      explainEs: `${M(q2)} ${signOp(b)} ${Math.abs(b)} = ${M(ans)}. Así que f(${M(v)}) = ${M(ans)}.`,
+      holdMs: 3000,
+    },
+  ];
+  return {
+    id: `gen-eval-fn-${a}-${b}-${v}`,
+    titleEn: 'Evaluate the function, step by step',
+    titleEs: 'Evalúa la función, paso a paso',
+    steps,
+  };
+}
+
+/**
+ * solve_sqrt_method template: a·x² − c = 0 (c = a·x²) → x = ±x, params
+ * {a, x}. Isolate x², divide out a, then square-root both sides (± beat).
+ */
+export function buildSolveSqrt(a: number, x: number): EqScript {
+  const c = a * x * x;
+  const steps: EqStep[] = [
+    {
+      tokens: [
+        tok('ax', cf(a, 'x²'), 'var'),
+        tok('mns', '−', 'op'),
+        tok('c', M(c), 'num'),
+        tok('rel', '=', 'rel'),
+        tok('z', '0', 'num'),
+      ],
+      explainEn: `Solve with square roots. First isolate x²: undo the − ${c}.`,
+      explainEs: `Resuelve con raíces cuadradas. Primero aísla x²: deshaz el − ${c}.`,
+    },
+    {
+      tokens: [
+        tok('ax', cf(a, 'x²'), 'var'),
+        tok('mns', '−', 'op'),
+        tok('c', M(c), 'num'),
+        tok('addL', `+ ${c}`, 'op', { emph: 'apply' }),
+        tok('rel', '=', 'rel'),
+        tok('z', '0', 'num'),
+        tok('addR', `+ ${c}`, 'op', { emph: 'apply' }),
+      ],
+      explainEn: `Add ${c} to BOTH sides.`,
+      explainEs: `Suma ${c} a AMBOS lados.`,
+    },
+    {
+      tokens: [tok('ax', cf(a, 'x²'), 'var'), tok('rel', '=', 'rel'), tok('c', M(c), 'num', { emph: 'result' })],
+      explainEn: `${cf(a, 'x²')} = ${c}.`,
+      explainEs: `${cf(a, 'x²')} = ${c}.`,
+    },
+  ];
+  if (a > 1) {
+    steps.push(
+      {
+        tokens: [
+          tok('ax', cf(a, 'x²'), 'var'),
+          tok('dL', `÷ ${a}`, 'op', { emph: 'apply' }),
+          tok('rel', '=', 'rel'),
+          tok('c', M(c), 'num'),
+          tok('dR', `÷ ${a}`, 'op', { emph: 'apply' }),
+        ],
+        explainEn: `Divide BOTH sides by ${a} to get x² alone.`,
+        explainEs: `Divide AMBOS lados entre ${a} para dejar x² sola.`,
+      },
+      {
+        tokens: [tok('x2', 'x²', 'var'), tok('rel', '=', 'rel'), tok('xsq', M(x * x), 'num', { emph: 'result' })],
+        explainEn: `x² = ${c} ÷ ${a} = ${x * x}.`,
+        explainEs: `x² = ${c} ÷ ${a} = ${x * x}.`,
+      },
+    );
+  }
+  steps.push({
+    tokens: [tok('x', 'x', 'var'), tok('rel', '=', 'rel'), tok('pm', `±${M(x)}`, 'num', { emph: 'result' })],
+    explainEn: `Square-root BOTH sides — a positive number has TWO roots, so remember ±. x = ±${x}.`,
+    explainEs: `Saca la raíz cuadrada en AMBOS lados — un número positivo tiene DOS raíces, así que recuerda ±. x = ±${x}.`,
+    holdMs: 3400,
+  });
+  return {
+    id: `gen-solve-sqrt-${a}-${x}`,
+    titleEn: 'Solve with square roots, step by step',
+    titleEs: 'Resuelve con raíces, paso a paso',
+    steps,
+  };
+}
+
+/**
+ * solve_quadratic_factoring template: x² + Bx + C = 0 → (x+p)(x+q) = 0 →
+ * x = −p, −q, params {p, q}. Factor (reverse FOIL), then Zero-Product.
+ */
+export function buildSolveQuadraticFactoring(p: number, q: number): EqScript {
+  const B = p + q;
+  const C = p * q;
+  const trinomial = (cEmph?: Emph, bEmph?: Emph): EqToken[] => [
+    tok('x2', 'x²', 'var'),
+    ...(B !== 0
+      ? [tok('ob', signOp(B), 'op'), tok('bx', cf(Math.abs(B), 'x'), 'var', bEmph ? { emph: bEmph } : undefined)]
+      : []),
+    tok('oc', signOp(C), 'op'),
+    tok('c', M(Math.abs(C)), 'num', cEmph ? { emph: cEmph } : undefined),
+    tok('rel', '=', 'rel'),
+    tok('z', '0', 'num'),
+  ];
+  const factored = (emph?: Emph): EqToken[] => [
+    tok('lp1', '(', 'op'),
+    tok('x1', 'x', 'var', { tight: true }),
+    tok('s1', signOp(p), 'op'),
+    tok('p', M(Math.abs(p)), 'num', emph ? { emph } : undefined),
+    tok('rp1', ')', 'op', { tight: true }),
+    tok('lp2', '(', 'op'),
+    tok('x2b', 'x', 'var', { tight: true }),
+    tok('s2', signOp(q), 'op'),
+    tok('q', M(Math.abs(q)), 'num', emph ? { emph } : undefined),
+    tok('rp2', ')', 'op', { tight: true }),
+    tok('rel', '=', 'rel'),
+    tok('z', '0', 'num'),
+  ];
+  const bTxt = B === 0 ? '0' : M(B);
+  const steps: EqStep[] = [
+    {
+      tokens: trinomial(),
+      explainEn: `Solve by factoring. Find two numbers that MULTIPLY to ${M(C)} and ADD to ${bTxt}.`,
+      explainEs: `Resuelve factorizando. Encuentra dos números que MULTIPLIQUEN a ${M(C)} y SUMEN ${bTxt}.`,
+    },
+    {
+      tokens: trinomial('focus', 'focus'),
+      explainEn: `${M(p)} and ${M(q)} work: ${M(p)}·${M(q)} = ${M(C)} and ${M(p)} + ${M(q)} = ${bTxt}.`,
+      explainEs: `${M(p)} y ${M(q)} funcionan: ${M(p)}·${M(q)} = ${M(C)} y ${M(p)} + ${M(q)} = ${bTxt}.`,
+    },
+    {
+      tokens: factored('focus'),
+      explainEn: `Factor: (x ${signOp(p)} ${Math.abs(p)})(x ${signOp(q)} ${Math.abs(q)}) = 0. Zero-Product: set each factor = 0.`,
+      explainEs: `Factoriza: (x ${signOp(p)} ${Math.abs(p)})(x ${signOp(q)} ${Math.abs(q)}) = 0. Producto Cero: iguala cada factor a 0.`,
+    },
+    {
+      tokens: [
+        tok('x', 'x', 'var'),
+        tok('rel', '=', 'rel'),
+        tok('r1', M(-p), 'num', { emph: 'result' }),
+        tok('comma', ',', 'op', { tight: true }),
+        tok('r2', M(-q), 'num', { emph: 'result' }),
+      ],
+      explainEn: `x ${signOp(p)} ${Math.abs(p)} = 0 gives x = ${M(-p)}; x ${signOp(q)} ${Math.abs(q)} = 0 gives x = ${M(-q)}.`,
+      explainEs: `x ${signOp(p)} ${Math.abs(p)} = 0 da x = ${M(-p)}; x ${signOp(q)} ${Math.abs(q)} = 0 da x = ${M(-q)}.`,
+      holdMs: 3400,
+    },
+  ];
+  return {
+    id: `gen-solve-quad-${p}-${q}`,
+    titleEn: 'Solve by factoring, step by step',
+    titleEs: 'Resuelve factorizando, paso a paso',
+    steps,
+  };
+}
+
+/**
+ * projectile_ground template: h(t) = −16t² + v·t, find when h = 0 (v = 16T),
+ * params {t} (= the landing time T). Set = 0, factor the GCF −16t, then the
+ * ball lands at t = T (t = 0 is the throw).
+ */
+export function buildProjectileGround(T: number): EqScript {
+  const v = 16 * T;
+  const steps: EqStep[] = [
+    {
+      tokens: [
+        tok('h2', '−16t²', 'var'),
+        tok('op', '+', 'op'),
+        tok('h1', `${v}t`, 'var'),
+        tok('rel', '=', 'rel'),
+        tok('z', '0', 'num'),
+      ],
+      explainEn: `The ball is on the ground when the height is 0. Solve −16t² + ${v}t = 0.`,
+      explainEs: `La pelota está en el suelo cuando la altura es 0. Resuelve −16t² + ${v}t = 0.`,
+    },
+    {
+      tokens: [
+        tok('gcf', '−16t', 'var', { emph: 'apply' }),
+        tok('lp', '(', 'op', { tight: true }),
+        tok('in1', 't', 'var', { tight: true }),
+        tok('mns', '−', 'op'),
+        tok('in2', M(T), 'num'),
+        tok('rp', ')', 'op', { tight: true }),
+        tok('rel', '=', 'rel'),
+        tok('z', '0', 'num'),
+      ],
+      explainEn: `Factor out the GCF −16t: −16t(t − ${T}) = 0.`,
+      explainEs: `Factoriza el MCD −16t: −16t(t − ${T}) = 0.`,
+    },
+    {
+      tokens: [
+        tok('t', 't', 'var'),
+        tok('rel', '=', 'rel'),
+        tok('T', M(T), 'num', { emph: 'result' }),
+      ],
+      explainEn: `Zero-Product: t = 0 (the throw) OR t − ${T} = 0. The ball lands at t = ${T} seconds.`,
+      explainEs: `Producto Cero: t = 0 (el lanzamiento) O t − ${T} = 0. La pelota aterriza en t = ${T} segundos.`,
+      holdMs: 3400,
+    },
+  ];
+  return {
+    id: `gen-projectile-${T}`,
+    titleEn: 'When does it land? step by step',
+    titleEs: '¿Cuándo aterriza? paso a paso',
+    steps,
+  };
+}
+
+/**
  * Pick a builder from the problem's skill slug + params shape.
  * Returns null when no builder understands the problem.
  */
@@ -1477,6 +1709,36 @@ export function buildScriptForProblem(
     const ra = num('a');
     const rb = num('b');
     if (ra !== null && rb !== null) return buildRadicalMultiply(ra, rb);
+    return null;
+  }
+
+  // evaluate_function {a, b, v}. domain_from_points ({xs}) is a read-off — null.
+  if (skillSlug === 'evaluate-functions') {
+    const [fa, fb, fv] = ['a', 'b', 'v'].map(num);
+    if (fa !== null && fb !== null && fv !== null) return buildEvaluateFunction(fa, fb, fv);
+    return null;
+  }
+
+  // solve_sqrt_method {a, x}
+  if (skillSlug === 'quadratics-sqrt') {
+    const sa = num('a');
+    const sx = num('x');
+    if (sa !== null && sx !== null) return buildSolveSqrt(sa, sx);
+    return null;
+  }
+
+  // solve_quadratic_factoring {p, q}
+  if (skillSlug === 'quadratics-factoring') {
+    const qp = num('p');
+    const qq = num('q');
+    if (qp !== null && qq !== null) return buildSolveQuadraticFactoring(qp, qq);
+    return null;
+  }
+
+  // projectile_ground {t} (= landing time)
+  if (skillSlug === 'quadratics-realworld') {
+    const T = num('t');
+    if (T !== null) return buildProjectileGround(T);
     return null;
   }
 
