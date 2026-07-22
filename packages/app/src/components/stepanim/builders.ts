@@ -16,4 +16,8 @@ export {
   buildDistributeSimplify,
   buildFactorTrinomial,
   buildDots,
+  buildExponentProduct,
+  buildSimplifyRadical,
+  buildRadicalAdd,
+  buildRadicalMultiply,
 } from '@tutor/core';

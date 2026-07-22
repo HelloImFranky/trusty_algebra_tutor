@@ -49,6 +49,12 @@ const ftok = (
 /** "+"/"−" operator for a signed value. */
 const signOp = (n: number) => (n >= 0 ? '+' : '−');
 
+/** Radical value as display text: rad(2) → "√2". */
+const rad = (inner: number) => `√${inner}`;
+/** Coefficient · radical: 1√2 → "√2", −1√2 → "−√2", 3√2 → "3√2". */
+const radCf = (c: number, inner: number) =>
+  c === 1 ? rad(inner) : c === -1 ? `−${rad(inner)}` : `${M(c)}${rad(inner)}`;
+
 /**
  * Result tokens for a polynomial in standard form (highest degree first),
  * dropping zero terms — e.g. [{2,'x²'},{0,'x'},{−3,''}] → "2x² − 3". Emits a
@@ -1193,6 +1199,172 @@ export function buildSlopeInterceptRewrite(m: number, b: number): EqScript | nul
 }
 
 /**
+ * exponent_product_rule template: xᵃ · xᵇ → xᵃ⁺ᵇ, params {a, b} (a, b ≥ 2).
+ * Same base → add the exponents.
+ */
+export function buildExponentProduct(a: number, b: number): EqScript {
+  const steps: EqStep[] = [
+    {
+      tokens: [tok('xa', xp(a), 'var'), tok('mul', '·', 'op'), tok('xb', xp(b), 'var')],
+      explainEn: `Multiply ${xp(a)} · ${xp(b)}. The base x is the SAME in both.`,
+      explainEs: `Multiplica ${xp(a)} · ${xp(b)}. La base x es la MISMA en ambos.`,
+    },
+    {
+      tokens: [
+        tok('xa', xp(a), 'var', { emph: 'focus' }),
+        tok('mul', '·', 'op'),
+        tok('xb', xp(b), 'var', { emph: 'focus' }),
+      ],
+      explainEn: `Same base → ADD the exponents: ${a} + ${b} = ${a + b}.`,
+      explainEs: `Misma base → SUMA los exponentes: ${a} + ${b} = ${a + b}.`,
+    },
+    {
+      tokens: [tok('r', xp(a + b), 'var', { emph: 'result' })],
+      explainEn: `${xp(a)} · ${xp(b)} = ${xp(a + b)}.`,
+      explainEs: `${xp(a)} · ${xp(b)} = ${xp(a + b)}.`,
+      holdMs: 3000,
+    },
+  ];
+  return {
+    id: `gen-exp-prod-${a}-${b}`,
+    titleEn: 'Multiply powers, step by step',
+    titleEs: 'Multiplica potencias, paso a paso',
+    steps,
+  };
+}
+
+/**
+ * simplify_radical template: √(outer²·inner) → outer√inner, params
+ * {outer, inner}. Pull the largest perfect square out of the radical.
+ */
+export function buildSimplifyRadical(outer: number, inner: number): EqScript {
+  const n = outer * outer * inner;
+  const sq = outer * outer;
+  const steps: EqStep[] = [
+    {
+      tokens: [tok('r', rad(n), 'num')],
+      explainEn: `Simplify ${rad(n)}. Find the largest PERFECT SQUARE that divides ${n} — it is ${sq} (= ${outer}²).`,
+      explainEs: `Simplifica ${rad(n)}. Encuentra el CUADRADO PERFECTO más grande que divide a ${n} — es ${sq} (= ${outer}²).`,
+    },
+    {
+      tokens: [
+        tok('sq', rad(sq), 'num', { emph: 'focus' }),
+        tok('mul', '·', 'op'),
+        tok('inr', rad(inner), 'num'),
+      ],
+      explainEn: `${n} = ${sq} · ${inner}, so ${rad(n)} = ${rad(sq)} · ${rad(inner)}. Split the radical.`,
+      explainEs: `${n} = ${sq} · ${inner}, así que ${rad(n)} = ${rad(sq)} · ${rad(inner)}. Separa el radical.`,
+    },
+    {
+      tokens: [
+        tok('o', String(outer), 'num', { emph: 'result' }),
+        tok('inr', rad(inner), 'num', { emph: 'result', tight: true }),
+      ],
+      explainEn: `${rad(sq)} = ${outer}. The ${rad(inner)} has no perfect square left, so ${rad(n)} = ${outer}${rad(inner)}.`,
+      explainEs: `${rad(sq)} = ${outer}. El ${rad(inner)} ya no tiene cuadrado perfecto, así que ${rad(n)} = ${outer}${rad(inner)}.`,
+      holdMs: 3000,
+    },
+  ];
+  return {
+    id: `gen-simp-rad-${outer}-${inner}`,
+    titleEn: 'Simplify the radical, step by step',
+    titleEs: 'Simplifica el radical, paso a paso',
+    steps,
+  };
+}
+
+/**
+ * radical_add template: c1√k ± c2√k → (c1+c2)√k, params {inner, c1, c2}
+ * (like radicals — same radicand — so combine the coefficients).
+ */
+export function buildRadicalAdd(inner: number, c1: number, c2: number): EqScript {
+  const sum = c1 + c2;
+  const result: EqToken[] =
+    sum === 0
+      ? [tok('r', '0', 'num', { emph: 'result' })]
+      : [tok('r', radCf(sum, inner), 'num', { emph: 'result' })];
+  const steps: EqStep[] = [
+    {
+      tokens: [
+        tok('t1', radCf(c1, inner), 'num'),
+        tok('op', signOp(c2), 'op'),
+        tok('t2', radCf(Math.abs(c2), inner), 'num'),
+      ],
+      explainEn: `${radCf(c1, inner)} and ${radCf(c2, inner)} are LIKE radicals — same ${rad(inner)}. Combine the coefficients.`,
+      explainEs: `${radCf(c1, inner)} y ${radCf(c2, inner)} son radicales SEMEJANTES — el mismo ${rad(inner)}. Combina los coeficientes.`,
+    },
+    {
+      tokens: [
+        tok('t1', radCf(c1, inner), 'num', { emph: 'focus' }),
+        tok('op', signOp(c2), 'op'),
+        tok('t2', radCf(Math.abs(c2), inner), 'num', { emph: 'focus' }),
+      ],
+      explainEn: `${c1} ${signOp(c2)} ${Math.abs(c2)} = ${sum}. The radical ${rad(inner)} stays the same.`,
+      explainEs: `${c1} ${signOp(c2)} ${Math.abs(c2)} = ${sum}. El radical ${rad(inner)} no cambia.`,
+    },
+    {
+      tokens: result,
+      explainEn:
+        sum === 0
+          ? `The coefficients cancel to 0, so the whole expression is 0.`
+          : `Put it together: ${radCf(sum, inner)}.`,
+      explainEs:
+        sum === 0
+          ? `Los coeficientes se cancelan a 0, así que toda la expresión es 0.`
+          : `Júntalo: ${radCf(sum, inner)}.`,
+      holdMs: 3000,
+    },
+  ];
+  return {
+    id: `gen-rad-add-${inner}-${c1}-${c2}`,
+    titleEn: 'Add like radicals, step by step',
+    titleEs: 'Suma radicales semejantes, paso a paso',
+    steps,
+  };
+}
+
+/**
+ * radical_multiply template: √a · √b → √(ab), params {a, b}. Multiply the
+ * radicands; collapse to an integer when the product is a perfect square.
+ */
+export function buildRadicalMultiply(a: number, b: number): EqScript {
+  const prod = a * b;
+  const root = Math.sqrt(prod);
+  const perfect = Number.isInteger(root);
+  const steps: EqStep[] = [
+    {
+      tokens: [tok('ra', rad(a), 'num'), tok('mul', '·', 'op'), tok('rb', rad(b), 'num')],
+      explainEn: `Multiply radicals by multiplying what's INSIDE: ${rad(a)} · ${rad(b)} = √(${a}·${b}).`,
+      explainEs: `Multiplica radicales multiplicando lo de ADENTRO: ${rad(a)} · ${rad(b)} = √(${a}·${b}).`,
+    },
+    {
+      tokens: [tok('r', rad(prod), 'num', { emph: perfect ? 'focus' : 'result' })],
+      explainEn: perfect
+        ? `${a} · ${b} = ${prod}, so we get ${rad(prod)}. And ${prod} is a perfect square…`
+        : `${a} · ${b} = ${prod}, so ${rad(a)} · ${rad(b)} = ${rad(prod)} — already simplest.`,
+      explainEs: perfect
+        ? `${a} · ${b} = ${prod}, así que obtenemos ${rad(prod)}. Y ${prod} es un cuadrado perfecto…`
+        : `${a} · ${b} = ${prod}, así que ${rad(a)} · ${rad(b)} = ${rad(prod)} — ya es lo más simple.`,
+      ...(perfect ? {} : { holdMs: 3000 }),
+    },
+  ];
+  if (perfect) {
+    steps.push({
+      tokens: [tok('r2', String(root), 'num', { emph: 'result' })],
+      explainEn: `${rad(prod)} = ${root}.`,
+      explainEs: `${rad(prod)} = ${root}.`,
+      holdMs: 3000,
+    });
+  }
+  return {
+    id: `gen-rad-mul-${a}-${b}`,
+    titleEn: 'Multiply radicals, step by step',
+    titleEs: 'Multiplica radicales, paso a paso',
+    steps,
+  };
+}
+
+/**
  * Pick a builder from the problem's skill slug + params shape.
  * Returns null when no builder understands the problem.
  */
@@ -1276,6 +1448,35 @@ export function buildScriptForProblem(
     const da = num('a');
     const db = num('b');
     if (da !== null && db !== null) return buildDots(da, db);
+    return null;
+  }
+
+  // exponents-perfect-squares: exponent_product_rule {a, b}. perfect_square_root
+  // {n} is a bare recall — nothing to walk through.
+  if (skillSlug === 'exponents-perfect-squares') {
+    const ea = num('a');
+    const eb = num('b');
+    if (ea !== null && eb !== null) return buildExponentProduct(ea, eb);
+    return null;
+  }
+
+  // simplify_radical {outer, inner}
+  if (skillSlug === 'simplify-radicals') {
+    const outer = num('outer');
+    const inner = num('inner');
+    if (outer !== null && inner !== null) return buildSimplifyRadical(outer, inner);
+    return null;
+  }
+
+  // radical-operations: radical_add {inner, c1, c2} and radical_multiply {a, b}.
+  if (skillSlug === 'radical-operations') {
+    const inner = num('inner');
+    const c1 = num('c1');
+    const c2 = num('c2');
+    if (inner !== null && c1 !== null && c2 !== null) return buildRadicalAdd(inner, c1, c2);
+    const ra = num('a');
+    const rb = num('b');
+    if (ra !== null && rb !== null) return buildRadicalMultiply(ra, rb);
     return null;
   }
 

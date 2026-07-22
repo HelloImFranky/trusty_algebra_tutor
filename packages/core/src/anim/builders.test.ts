@@ -5,10 +5,14 @@ import {
   buildDistributeSimplify,
   buildDots,
   buildEvaluateExpression,
+  buildExponentProduct,
   buildFactorGcf,
   buildFactorTrinomial,
   buildFoil,
   buildGcfMonomials,
+  buildRadicalAdd,
+  buildRadicalMultiply,
+  buildSimplifyRadical,
   buildMultiStepEquation,
   buildScriptForProblem,
   buildSlopeFromPoints,
@@ -294,6 +298,45 @@ describe('buildDots', () => {
   });
 });
 
+describe('buildExponentProduct', () => {
+  it('adds the exponents (same base)', () => {
+    expect(lines(buildExponentProduct(2, 3))).toEqual(['x² · x³', 'x² · x³', 'x⁵']);
+    expect(lines(buildExponentProduct(6, 6)).pop()).toBe('x¹²');
+  });
+});
+
+describe('buildSimplifyRadical', () => {
+  it('pulls the perfect square out of the radical', () => {
+    // √72 = √(36·2) = 6√2
+    const l = lines(buildSimplifyRadical(6, 2));
+    expect(l[0]).toBe('√72');
+    expect(l[1]).toBe('√36 · √2');
+    expect(l[l.length - 1]).toBe('6√2');
+  });
+});
+
+describe('buildRadicalAdd', () => {
+  it('combines like-radical coefficients', () => {
+    // 5√3 + 2√3 = 7√3
+    expect(lines(buildRadicalAdd(3, 5, 2)).pop()).toBe('7√3');
+    // 3√2 − 3√2 = 0
+    expect(lines(buildRadicalAdd(2, 3, -3)).pop()).toBe('0');
+    // 2√5 − √5 = √5 (coefficient 1 hides)
+    expect(lines(buildRadicalAdd(5, 2, -1)).pop()).toBe('√5');
+  });
+});
+
+describe('buildRadicalMultiply', () => {
+  it('multiplies radicands, collapsing perfect squares', () => {
+    // √2 · √3 = √6
+    expect(lines(buildRadicalMultiply(2, 3)).pop()).toBe('√6');
+    // √5 · √5 = √25 = 5
+    const l = lines(buildRadicalMultiply(5, 5));
+    expect(l[1]).toBe('√25');
+    expect(l[l.length - 1]).toBe('5');
+  });
+});
+
 describe('buildGcfMonomials', () => {
   it('finds the GCF of two monomials, using the smaller exponent', () => {
     // GCF(6x², 9x³) = 3x²
@@ -466,6 +509,21 @@ describe('buildScriptForProblem dispatch', () => {
     const dots = buildScriptForProblem('factor-trinomials', { a: 2, b: 3 });
     expect(lines(dots)[0]).toBe('4x² − 9');
     expect(lines(dots).pop()).toBe('(2x + 3) (2x − 3)');
+  });
+
+  it('routes exponents-perfect-squares exponent params to the exponent builder', () => {
+    expect(lines(buildScriptForProblem('exponents-perfect-squares', { a: 2, b: 3 })).pop()).toBe('x⁵');
+    // perfect_square_root {n} is a bare recall — nothing to animate
+    expect(buildScriptForProblem('exponents-perfect-squares', { n: 12 })).toBeNull();
+  });
+
+  it('routes simplify-radicals params to the radical builder', () => {
+    expect(lines(buildScriptForProblem('simplify-radicals', { outer: 6, inner: 2 }))[0]).toBe('√72');
+  });
+
+  it('routes radical-operations shapes to add vs multiply', () => {
+    expect(lines(buildScriptForProblem('radical-operations', { inner: 3, c1: 5, c2: 2 })).pop()).toBe('7√3');
+    expect(lines(buildScriptForProblem('radical-operations', { a: 2, b: 3 })).pop()).toBe('√6');
   });
 
   it('routes factor-gcf gcf_monomials params to the GCF-of-monomials builder', () => {
