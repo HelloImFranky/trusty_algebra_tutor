@@ -23,7 +23,6 @@ import { client } from '../lib/trpc';
 import { attemptOrQueue } from '../lib/offline';
 import { useI18n } from '../lib/i18n';
 import { useRequireAuth } from '../components/AppChrome';
-import { Mascot } from '../components/Mascot';
 import { MathInput } from '../components/MathInput';
 import type { KeypadKind } from '../components/MathKeypad';
 import { MathText } from '../components/MathText';
@@ -350,63 +349,45 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
               <MathText text={hintText} size={14} />
             </Feedback>
           ) : null}
-          <XStack gap={8} flexWrap="wrap" marginTop={4}>
-            {phase === 'answer' && (
-              <>
-                <PrimaryButton onPress={submit}>{t('check')}</PrimaryButton>
-                <SecondaryButton icon={<Lightbulb size={15} />} onPress={nudge}>
-                  {t('hint')}
-                </SecondaryButton>
-                {(animScript || problem.steps.length > 0) && (
-                  <GhostButton
-                    icon={<Footprints size={15} />}
-                    onPress={() => {
-                      // "Walk me through it" IS the animated worked example.
-                      // Toggle the animation when a builder understands this
-                      // problem; only fall back to the per-step guided mode
-                      // when there's no animation to play.
-                      if (animScript) {
-                        if (showAnim) setShowAnim(false);
-                        else openAnim(0);
-                      } else {
-                        setPhase('steps');
-                        setHintsUsed((h) => h + 1);
-                      }
-                    }}
-                  >
-                    {t('showStep')}
-                  </GhostButton>
-                )}
-              </>
-            )}
-            {phase === 'done' && (
-              <>
-                <PrimaryButton onPress={loadNext}>{t('next')} →</PrimaryButton>
-                {animScript && (
-                  <GhostButton
-                    icon={<Film size={15} />}
-                    onPress={() => {
-                      // reinforcement after a correct answer — not a hint
-                      setAnimStart(0);
-                      setShowAnim((s) => !s);
-                    }}
-                  >
-                    {t('animatedExample')}
-                  </GhostButton>
-                )}
-              </>
-            )}
+          {/* Primary action sits at the bottom-right INSIDE the answer box. */}
+          <XStack justifyContent="flex-end" marginTop={4}>
+            {phase === 'answer' && <PrimaryButton onPress={submit}>{t('check')}</PrimaryButton>}
+            {phase === 'done' && <PrimaryButton onPress={loadNext}>{t('next')} →</PrimaryButton>}
           </XStack>
         </AppCard>
       )}
 
-      {phase === 'answer' && feedback !== 'good' && (
-        <AppCard flexDirection="row" alignItems="center" gap={10}>
-          <Mascot size={44} />
-          <Text fontSize={13} fontWeight="600" color={tokens.ink} flexShrink={1}>
-            {t('practiceEncourage')}
-          </Text>
-        </AppCard>
+      {/* Secondary actions live OUTSIDE and under the answer box. The hint they
+          reveal still renders inside the box (via hintText above). */}
+      {phase === 'answer' && (
+        <XStack gap={8} flexWrap="wrap">
+          <SecondaryButton icon={<Lightbulb size={15} />} onPress={nudge}>
+            {t('hint')}
+          </SecondaryButton>
+          {/* Only offer "Walk me through it" when there's a real animated
+              walkthrough to play. Without one it used to drop into solve-it-
+              yourself guided steps (locked rows) — which reads as broken. */}
+          {animScript && (
+            <GhostButton
+              icon={<Footprints size={15} />}
+              onPress={() => (showAnim ? setShowAnim(false) : openAnim(0))}
+            >
+              {t('showStep')}
+            </GhostButton>
+          )}
+        </XStack>
+      )}
+      {phase === 'done' && animScript && (
+        <GhostButton
+          icon={<Film size={15} />}
+          onPress={() => {
+            // reinforcement after a correct answer — not a hint
+            setAnimStart(0);
+            setShowAnim((s) => !s);
+          }}
+        >
+          {t('animatedExample')}
+        </GhostButton>
       )}
 
       {phase === 'steps' && (

@@ -699,8 +699,8 @@ export const generators: Record<string, Generator> = {
       ? `(${x1},${ri(rng, 1, 9)})\\; (${x1 + 1},${ri(rng, 1, 9)})\\; (${x1 + 2},${ri(rng, 1, 9)})\\; (${x1 + 3},${ri(rng, 1, 9)})`
       : `(${x1},${ri(rng, 1, 4)})\\; (${x1},${ri(rng, 5, 9)})\\; (${x1 + 2},${ri(rng, 1, 9)})\\; (${x1 + 3},${ri(rng, 1, 9)})`;
     return {
-      promptEn: `Is this relation a **function**? $${pairs}$ (answer: yes / no)`,
-      promptEs: `¿Es esta relación una **función**? $${pairs}$ (responde: yes / no)`,
+      promptEn: `Is this relation a **function**? $${pairs}$`,
+      promptEs: `¿Es esta relación una **función**? $${pairs}$`,
       answerLatex: isFn ? 'yes' : 'no',
       gradingMode: 'exact',
       steps: [
