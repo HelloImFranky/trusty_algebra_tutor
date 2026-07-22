@@ -400,6 +400,13 @@ describe('lesson script registry', () => {
   it('registers the add-polynomials and FOIL scripts for lesson 2.3', () => {
     expect(scriptsByLessonCode['2.3']?.map((s) => s.id)).toEqual(['poly-add', 'foil']);
   });
+
+  it('registers the trinomial and DOTS scripts for lesson 7.2', () => {
+    expect(scriptsByLessonCode['7.2']?.map((s) => s.id)).toEqual(['factor-trinomial', 'dots']);
+    // generated from the builders → identical to the practice walkthroughs
+    expect(stepToText(scriptsByLessonCode['7.2']![0].steps[0])).toBe('x² − 7x − 30');
+    expect(stepToText(scriptsByLessonCode['7.2']![1].steps[0])).toBe('4x² − 9');
+  });
 });
 
 describe('buildScriptForProblem dispatch', () => {
