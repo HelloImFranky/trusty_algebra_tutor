@@ -490,21 +490,6 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
               </Text>
             </AppCard>
           ))}
-
-          <XStack
-            alignSelf="flex-start"
-            backgroundColor={tokens.poster}
-            borderWidth={tokens.mode === 'dark' ? 1 : 0}
-            borderColor={tokens.posterBorder}
-            borderRadius={16}
-            borderBottomLeftRadius={4}
-            paddingHorizontal={12}
-            paddingVertical={8}
-          >
-            <Text color={tokens.posterInk} fontWeight="600" fontSize={12}>
-              {t('practiceEncourage')}
-            </Text>
-          </XStack>
         </YStack>
       )}
 
