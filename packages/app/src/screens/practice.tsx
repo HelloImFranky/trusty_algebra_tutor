@@ -18,6 +18,7 @@ import {
   X,
 } from '@tamagui/lucide-icons';
 import { Button, Text, XStack, YStack } from 'tamagui';
+import { requiresJustificationFor } from '@tutor/core';
 import { client } from '../lib/trpc';
 import { attemptOrQueue } from '../lib/offline';
 import { useI18n } from '../lib/i18n';
@@ -78,6 +79,9 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
   const [stepFeedback, setStepFeedback] = useState('');
   const [showAnim, setShowAnim] = useState(false);
   const [animStart, setAnimStart] = useState(0);
+  // True while a correctly-answered yes/no problem is collecting the required
+  // justification step (e.g. "understanding functions"): verdict → prove why.
+  const [justifying, setJustifying] = useState(false);
   const [animViews, setAnimViews] = useState(0);
   const [solved, setSolved] = useState(0);
   const [startedAt, setStartedAt] = useState(Date.now());
@@ -108,6 +112,7 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
     setShowAnim(false);
     setAnimStart(0);
     setAnimViews(0);
+    setJustifying(false);
     setStartedAt(Date.now());
     try {
       const r = await client.practice.next.query({ skillId, locale });
@@ -140,9 +145,20 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
       return;
     }
     if (res.correct) {
-      setFeedback('good');
-      setPhase('done');
-      setSolved((s) => s + 1);
+      // Some questions (e.g. "is this a function?") require the student to
+      // justify a correct verdict by naming the evidence before moving on.
+      if (requiresJustificationFor(problem.params) && problem.steps.length > 0) {
+        setFeedback('');
+        setJustifying(true);
+        setStepIndex(0);
+        setStepAnswer('');
+        setStepFeedback('');
+        setPhase('steps');
+      } else {
+        setFeedback('good');
+        setPhase('done');
+        setSolved((s) => s + 1);
+      }
     } else if (res.equivalentButNotCanonical) {
       setFeedback('warn');
       setMessage(res.message ?? '');
@@ -195,6 +211,12 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
         setStepAnswer('');
         if (stepIndex + 1 < problem.steps.length) {
           setStepIndex((i) => i + 1);
+        } else if (justifying) {
+          // justified a correct verdict — the problem is complete
+          setJustifying(false);
+          setFeedback('good');
+          setPhase('done');
+          setSolved((s) => s + 1);
         } else {
           // walked every step — return to the final answer
           setPhase('answer');
@@ -364,6 +386,14 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
 
       {phase === 'steps' && (
         <YStack gap={10}>
+          {justifying && (
+            <AppCard flexDirection="row" alignItems="center" gap={10}>
+              <Check size={18} color={accent} />
+              <Text fontSize={13} fontWeight="700" color={tokens.ink} flexShrink={1}>
+                {t('justifyLead')}
+              </Text>
+            </AppCard>
+          )}
           {problem.steps.slice(0, stepIndex).map((s) => (
             <AppCard
               key={s.position}

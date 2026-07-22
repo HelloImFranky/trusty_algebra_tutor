@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { answerChoicesFor } from './choices.js';
+import { answerChoicesFor, requiresJustificationFor } from './choices.js';
 import { generators, generateProblem, makeRng } from './generators.js';
 import { grade } from './engine.js';
 
@@ -42,6 +42,30 @@ describe('answerChoicesFor', () => {
       expect(choices).not.toBeNull();
       expect(choices).toContain(p.answerLatex);
       expect(grade(p.answerLatex, p.answerLatex, p.gradingMode, p.tolerance).correct).toBe(true);
+    }
+  });
+
+  it('flags only is_function as needing a justification', () => {
+    expect(requiresJustificationFor({ template: 'is_function' })).toBe(true);
+    expect(requiresJustificationFor({ template: 'domain_from_points' })).toBe(false);
+    expect(requiresJustificationFor(null)).toBe(false);
+    expect(requiresJustificationFor({})).toBe(false);
+  });
+
+  it('is_function carries a checkable evidence step matching the verdict', () => {
+    const rng = makeRng(3);
+    for (let i = 0; i < 40; i++) {
+      const p = generateProblem('is_function', rng);
+      const step = p.steps?.[0];
+      expect(step).toBeDefined();
+      // 'none' when it IS a function, otherwise the repeated input (a number)
+      if (p.answerLatex === 'yes') expect(step!.expectedLatex).toBe('none');
+      else {
+        expect(step!.expectedLatex).not.toBe('none');
+        expect(Number.isInteger(Number(step!.expectedLatex))).toBe(true);
+      }
+      // the evidence answer self-grades, so checkStep can accept it
+      expect(grade(step!.expectedLatex, step!.expectedLatex, step!.gradingMode).correct).toBe(true);
     }
   });
 
