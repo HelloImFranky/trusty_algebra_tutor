@@ -36,3 +36,16 @@ export function answerChoicesFor(params: unknown): string[] | null {
       return null;
   }
 }
+
+/**
+ * Templates whose yes/no verdict must be justified with a checkable
+ * follow-up — the student names the evidence (e.g. the input that has two
+ * outputs, or "none"). The practice flow uses this to require the
+ * justification step even after a correct verdict, so every student proves
+ * *why*, not just *what*. Keyed off the generator `template` in params.
+ */
+export function requiresJustificationFor(params: unknown): boolean {
+  if (!params || typeof params !== 'object') return false;
+  const template = (params as Record<string, unknown>).template;
+  return template === 'is_function';
+}

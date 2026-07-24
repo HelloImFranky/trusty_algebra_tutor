@@ -1,7 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildAddPolynomials,
+  buildCombineLikeTerms,
+  buildDistributeSimplify,
+  buildDots,
+  buildEvaluateExpression,
+  buildEvaluateFunction,
+  buildExponentProduct,
+  buildFactorGcf,
+  buildFactorTrinomial,
   buildFoil,
+  buildGcfMonomials,
+  buildProjectileGround,
+  buildRadicalAdd,
+  buildRadicalMultiply,
+  buildSimplifyRadical,
+  buildSolveQuadraticFactoring,
+  buildSolveSqrt,
+  buildSystemElimination,
+  buildSystemSubstitution,
   buildMultiStepEquation,
   buildScriptForProblem,
   buildSlopeFromPoints,
@@ -202,6 +219,232 @@ describe('buildFoil', () => {
   });
 });
 
+describe('buildEvaluateExpression', () => {
+  it('substitutes, squares, multiplies, then sums (negative value)', () => {
+    // 2x² + 3x − 5 at x = −1 → 2 − 3 − 5 = −6
+    const s = buildEvaluateExpression(2, 3, -5, -1);
+    const l = lines(s);
+    expect(l[0]).toBe('2x² + 3x − 5');
+    expect(l[1]).toBe('2(−1)² + 3(−1) − 5');
+    expect(l[2]).toBe('2 − 3 − 5');
+    expect(l[l.length - 1]).toBe('−6');
+  });
+
+  it('drops the constant term when c = 0', () => {
+    // 3x² − 2x at x = 2 → 12 − 4 = 8
+    const s = buildEvaluateExpression(3, -2, 0, 2);
+    const l = lines(s);
+    expect(l[0]).toBe('3x² − 2x');
+    expect(l[l.length - 1]).toBe('8');
+  });
+});
+
+describe('buildCombineLikeTerms', () => {
+  it('groups x-terms and constants, writes standard form', () => {
+    // 3x + 6 + 2x² + 4x + 5 → 2x² + 7x + 11
+    const s = buildCombineLikeTerms(2, 3, 4, 5, 6);
+    const l = lines(s);
+    expect(l[0]).toBe('3x + 6 + 2x² + 4x + 5');
+    expect(l[l.length - 1]).toBe('2x² + 7x + 11');
+  });
+
+  it('drops terms that combine to zero', () => {
+    // −4x + 8 + x² + 4x − 8 → x² (x-terms and constants both cancel)
+    expect(lines(buildCombineLikeTerms(1, -4, 4, -8, 8)).pop()).toBe('x²');
+  });
+});
+
+describe('buildDistributeSimplify', () => {
+  it('distributes then combines into standard form', () => {
+    // 2(3x + 1) + 4x + 5 → 10x + 7
+    const s = buildDistributeSimplify(2, 3, 1, 4, 5);
+    const l = lines(s);
+    expect(l[0]).toBe('2(3x + 1) + 4x + 5');
+    expect(l[l.length - 1]).toBe('10x + 7');
+  });
+
+  it('handles negatives and a vanishing x-term', () => {
+    // −2(x − 3) + 2x + 1 → −2x + 6 + 2x + 1 → 7
+    expect(lines(buildDistributeSimplify(-2, 1, -3, 2, 1)).pop()).toBe('7');
+  });
+});
+
+describe('buildFactorTrinomial', () => {
+  it('factors x² + Bx + C into (x + p)(x + q)', () => {
+    // x² − 2x − 15 = (x + 3)(x − 5)
+    const s = buildFactorTrinomial(3, -5);
+    const l = lines(s);
+    expect(l[0]).toBe('x² − 2x − 15');
+    expect(l[l.length - 1]).toBe('(x + 3) (x − 5)');
+  });
+
+  it('drops the middle term when the numbers are opposites (B = 0)', () => {
+    // x² − 16 = (x + 4)(x − 4)
+    const s = buildFactorTrinomial(4, -4);
+    const l = lines(s);
+    expect(l[0]).toBe('x² − 16');
+    expect(l[l.length - 1]).toBe('(x + 4) (x − 4)');
+  });
+});
+
+describe('buildDots', () => {
+  it('factors a difference of squares with a leading coefficient', () => {
+    // 4x² − 9 = (2x + 3)(2x − 3)
+    const s = buildDots(2, 3);
+    const l = lines(s);
+    expect(l[0]).toBe('4x² − 9');
+    expect(l[l.length - 1]).toBe('(2x + 3) (2x − 3)');
+  });
+
+  it('handles a = 1 (bare x²)', () => {
+    // x² − 16 = (x + 4)(x − 4)
+    const s = buildDots(1, 4);
+    expect(lines(s)[0]).toBe('x² − 16');
+    expect(lines(s).pop()).toBe('(x + 4) (x − 4)');
+  });
+});
+
+describe('buildSystemSubstitution', () => {
+  it('substitutes, solves y, back-solves x, ends at the point', () => {
+    // x = 2y + k, cx + y = d with solution (x,y)=(3,-1), a=2, c=1
+    const s = buildSystemSubstitution(3, -1, 2, 1);
+    const l = lines(s);
+    expect(l[l.length - 1]).toBe('(3, −1)');
+    expect(l).toContain('y = −1');
+    expect(l).toContain('x = 3');
+  });
+});
+
+describe('buildSystemElimination', () => {
+  it('adds equations to eliminate y and ends at the point', () => {
+    // solution (2, 3), a=1,b=2,c=3 → eq1: x+2y=8, eq2: 3x−2y=0
+    const s = buildSystemElimination(2, 3, 1, 2, 3);
+    const l = lines(s);
+    expect(l[0]).toBe('x + 2y = 8');
+    expect(l[1]).toBe('3x − 2y = 0');
+    expect(l[l.length - 1]).toBe('(2, 3)');
+  });
+});
+
+describe('buildEvaluateFunction', () => {
+  it('substitutes, squares, and adds (f(x)=ax²+b)', () => {
+    // f(x) = 2x² − 5, f(-3) = 18 − 5 = 13
+    const l = lines(buildEvaluateFunction(2, -5, -3));
+    expect(l[0]).toBe('2x² − 5');
+    expect(l[1]).toBe('2(−3)² − 5');
+    expect(l[l.length - 1]).toBe('13');
+  });
+});
+
+describe('buildSolveSqrt', () => {
+  it('isolates, divides, and roots with ± (a>1)', () => {
+    // 3x² − 75 = 0 → x² = 25 → x = ±5
+    const l = lines(buildSolveSqrt(3, 5));
+    expect(l[0]).toBe('3x² − 75 = 0');
+    expect(l).toContain('x² = 25');
+    expect(l[l.length - 1]).toBe('x = ±5');
+  });
+  it('skips the divide step when a = 1', () => {
+    const l = lines(buildSolveSqrt(1, 4)); // x² − 16 = 0 → x = ±4
+    expect(l[0]).toBe('x² − 16 = 0');
+    expect(l[l.length - 1]).toBe('x = ±4');
+  });
+});
+
+describe('buildSolveQuadraticFactoring', () => {
+  it('factors then applies the zero-product property', () => {
+    // x² − 2x − 15 = 0 → (x+3)(x−5)=0 → x = −3, 5
+    const l = lines(buildSolveQuadraticFactoring(3, -5));
+    expect(l[0]).toBe('x² − 2x − 15 = 0');
+    expect(l).toContain('(x + 3) (x − 5) = 0');
+    expect(l[l.length - 1]).toBe('x = −3, 5');
+  });
+});
+
+describe('buildProjectileGround', () => {
+  it('sets height 0, factors the GCF, and lands at T', () => {
+    // T=5, v=80: −16t² + 80t = 0 → −16t(t − 5) = 0 → t = 5
+    const l = lines(buildProjectileGround(5));
+    expect(l[0]).toBe('−16t² + 80t = 0');
+    expect(l[1]).toBe('−16t(t − 5) = 0');
+    expect(l[l.length - 1]).toBe('t = 5');
+  });
+});
+
+describe('buildExponentProduct', () => {
+  it('adds the exponents (same base)', () => {
+    expect(lines(buildExponentProduct(2, 3))).toEqual(['x² · x³', 'x² · x³', 'x⁵']);
+    expect(lines(buildExponentProduct(6, 6)).pop()).toBe('x¹²');
+  });
+});
+
+describe('buildSimplifyRadical', () => {
+  it('pulls the perfect square out of the radical', () => {
+    // √72 = √(36·2) = 6√2
+    const l = lines(buildSimplifyRadical(6, 2));
+    expect(l[0]).toBe('√72');
+    expect(l[1]).toBe('√36 · √2');
+    expect(l[l.length - 1]).toBe('6√2');
+  });
+});
+
+describe('buildRadicalAdd', () => {
+  it('combines like-radical coefficients', () => {
+    // 5√3 + 2√3 = 7√3
+    expect(lines(buildRadicalAdd(3, 5, 2)).pop()).toBe('7√3');
+    // 3√2 − 3√2 = 0
+    expect(lines(buildRadicalAdd(2, 3, -3)).pop()).toBe('0');
+    // 2√5 − √5 = √5 (coefficient 1 hides)
+    expect(lines(buildRadicalAdd(5, 2, -1)).pop()).toBe('√5');
+  });
+});
+
+describe('buildRadicalMultiply', () => {
+  it('multiplies radicands, collapsing perfect squares', () => {
+    // √2 · √3 = √6
+    expect(lines(buildRadicalMultiply(2, 3)).pop()).toBe('√6');
+    // √5 · √5 = √25 = 5
+    const l = lines(buildRadicalMultiply(5, 5));
+    expect(l[1]).toBe('√25');
+    expect(l[l.length - 1]).toBe('5');
+  });
+});
+
+describe('buildGcfMonomials', () => {
+  it('finds the GCF of two monomials, using the smaller exponent', () => {
+    // GCF(6x², 9x³) = 3x²
+    const s = buildGcfMonomials(6, 9, 2, 3);
+    const l = lines(s);
+    expect(l[0]).toBe('6x², 9x³');
+    expect(l[l.length - 1]).toBe('3x²');
+    const final = lastStep(s).tokens.filter((t) => t.emph === 'result');
+    expect(final.map((t) => t.text).join('')).toBe('3x²');
+  });
+
+  it('reduces the coefficient GCF and keeps the lowest power (up to x⁶)', () => {
+    // GCF(12x⁴, 8x⁶) = 4x⁴
+    expect(lines(buildGcfMonomials(12, 8, 4, 6)).pop()).toBe('4x⁴');
+  });
+});
+
+describe('buildFactorGcf', () => {
+  it('factors (g·a)x² + (g·b)x as g·x(a·x + b)', () => {
+    // 12x² + 6x = 6x(2x + 1)  (g=6, a=2, b=1)
+    const s = buildFactorGcf(6, 2, 1);
+    const l = lines(s);
+    expect(l[0]).toBe('12x² + 6x');
+    expect(l[l.length - 1]).toBe('6x(2x + 1)');
+  });
+
+  it('handles a negative second coefficient', () => {
+    // 12x² − 15x = 3x(4x − 5)  (g=3, a=4, b=-5)
+    const s = buildFactorGcf(3, 4, -5);
+    const l = lines(s);
+    expect(l[0]).toBe('12x² − 15x');
+    expect(l[l.length - 1]).toBe('3x(4x − 5)');
+  });
+});
+
 describe('buildSlopeFromPoints', () => {
   it('substitutes, computes, and simplifies the fraction', () => {
     // (1, 2) → (5, 8): rise 6, run 4 → 3/2
@@ -273,6 +516,13 @@ describe('lesson script registry', () => {
   it('registers the add-polynomials and FOIL scripts for lesson 2.3', () => {
     expect(scriptsByLessonCode['2.3']?.map((s) => s.id)).toEqual(['poly-add', 'foil']);
   });
+
+  it('registers the trinomial and DOTS scripts for lesson 7.2', () => {
+    expect(scriptsByLessonCode['7.2']?.map((s) => s.id)).toEqual(['factor-trinomial', 'dots']);
+    // generated from the builders → identical to the practice walkthroughs
+    expect(stepToText(scriptsByLessonCode['7.2']![0].steps[0])).toBe('x² − 7x − 30');
+    expect(stepToText(scriptsByLessonCode['7.2']![1].steps[0])).toBe('4x² − 9');
+  });
 });
 
 describe('buildScriptForProblem dispatch', () => {
@@ -309,6 +559,74 @@ describe('buildScriptForProblem dispatch', () => {
     expect(lines(s).pop()).toBe('x² − x − 30');
     // mono_times_poly ({m, a, b}) shares the skill but stays unanimated
     expect(buildScriptForProblem('polynomial-operations', { m: 2, a: 3, b: 4 })).toBeNull();
+  });
+
+  it('routes evaluate-expressions params to the evaluate builder', () => {
+    const s = buildScriptForProblem('evaluate-expressions', { a: 2, b: 3, c: -5, v: -1 });
+    expect(lines(s)[0]).toBe('2x² + 3x − 5');
+    expect(lines(s).pop()).toBe('−6');
+  });
+
+  it('routes combine-like-terms shapes to the right builder (k splits them)', () => {
+    // distribute_simplify has k; combine_like_terms has e
+    const dist = buildScriptForProblem('combine-like-terms', { k: 2, a: 3, b: 1, c: 4, d: 5 });
+    expect(lines(dist).pop()).toBe('10x + 7');
+    const comb = buildScriptForProblem('combine-like-terms', { a: 2, b: 3, c: 4, d: 5, e: 6 });
+    expect(lines(comb)[0]).toBe('3x + 6 + 2x² + 4x + 5');
+    expect(lines(comb).pop()).toBe('2x² + 7x + 11');
+  });
+
+  it('routes factor-trinomials shapes to trinomial vs DOTS builders', () => {
+    const tri = buildScriptForProblem('factor-trinomials', { p: 3, q: -5 });
+    expect(lines(tri).pop()).toBe('(x + 3) (x − 5)');
+    const dots = buildScriptForProblem('factor-trinomials', { a: 2, b: 3 });
+    expect(lines(dots)[0]).toBe('4x² − 9');
+    expect(lines(dots).pop()).toBe('(2x + 3) (2x − 3)');
+  });
+
+  it('routes systems skills to their builders (null on the degenerate sub case)', () => {
+    expect(lines(buildScriptForProblem('systems-substitution', { x: 3, y: -1, a: 2, c: 1 })).pop()).toBe('(3, −1)');
+    expect(lines(buildScriptForProblem('systems-elimination', { x: 2, y: 3, a: 1, b: 2, c: 3 })).pop()).toBe('(2, 3)');
+    // c·a + 1 = 0 → substitution degenerates → null
+    expect(buildScriptForProblem('systems-substitution', { x: 1, y: 1, a: -1, c: 1 })).toBeNull();
+  });
+
+  it('routes evaluate-functions params to the function-evaluation builder', () => {
+    expect(lines(buildScriptForProblem('evaluate-functions', { a: 2, b: -5, v: -3 })).pop()).toBe('13');
+    expect(buildScriptForProblem('evaluate-functions', { xs: [1, 2, 3] })).toBeNull();
+  });
+
+  it('routes quadratic-solving skills to their builders', () => {
+    expect(lines(buildScriptForProblem('quadratics-sqrt', { a: 3, x: 5 })).pop()).toBe('x = ±5');
+    expect(lines(buildScriptForProblem('quadratics-factoring', { p: 3, q: -5 })).pop()).toBe('x = −3, 5');
+    expect(lines(buildScriptForProblem('quadratics-realworld', { t: 5 })).pop()).toBe('t = 5');
+  });
+
+  it('routes exponents-perfect-squares exponent params to the exponent builder', () => {
+    expect(lines(buildScriptForProblem('exponents-perfect-squares', { a: 2, b: 3 })).pop()).toBe('x⁵');
+    // perfect_square_root {n} is a bare recall — nothing to animate
+    expect(buildScriptForProblem('exponents-perfect-squares', { n: 12 })).toBeNull();
+  });
+
+  it('routes simplify-radicals params to the radical builder', () => {
+    expect(lines(buildScriptForProblem('simplify-radicals', { outer: 6, inner: 2 }))[0]).toBe('√72');
+  });
+
+  it('routes radical-operations shapes to add vs multiply', () => {
+    expect(lines(buildScriptForProblem('radical-operations', { inner: 3, c1: 5, c2: 2 })).pop()).toBe('7√3');
+    expect(lines(buildScriptForProblem('radical-operations', { a: 2, b: 3 })).pop()).toBe('√6');
+  });
+
+  it('routes factor-gcf gcf_monomials params to the GCF-of-monomials builder', () => {
+    const s = buildScriptForProblem('factor-gcf', { m1: 6, m2: 9, e1: 2, e2: 3 });
+    expect(lines(s)[0]).toBe('6x², 9x³');
+    expect(lines(s).pop()).toBe('3x²');
+  });
+
+  it('routes factor-gcf factor_gcf params to the factoring builder', () => {
+    const s = buildScriptForProblem('factor-gcf', { g: 6, a: 2, b: 1 });
+    expect(lines(s)[0]).toBe('12x² + 6x');
+    expect(lines(s).pop()).toBe('6x(2x + 1)');
   });
 
   it('routes slope-intercepts point params to the slope builder', () => {

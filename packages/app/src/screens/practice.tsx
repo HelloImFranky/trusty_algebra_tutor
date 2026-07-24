@@ -18,11 +18,11 @@ import {
   X,
 } from '@tamagui/lucide-icons';
 import { Button, Text, XStack, YStack } from 'tamagui';
+import { requiresJustificationFor } from '@tutor/core';
 import { client } from '../lib/trpc';
 import { attemptOrQueue } from '../lib/offline';
 import { useI18n } from '../lib/i18n';
 import { useRequireAuth } from '../components/AppChrome';
-import { Mascot } from '../components/Mascot';
 import { MathInput } from '../components/MathInput';
 import type { KeypadKind } from '../components/MathKeypad';
 import { MathText } from '../components/MathText';
@@ -78,6 +78,9 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
   const [stepFeedback, setStepFeedback] = useState('');
   const [showAnim, setShowAnim] = useState(false);
   const [animStart, setAnimStart] = useState(0);
+  // True while a correctly-answered yes/no problem is collecting the required
+  // justification step (e.g. "understanding functions"): verdict → prove why.
+  const [justifying, setJustifying] = useState(false);
   const [animViews, setAnimViews] = useState(0);
   const [solved, setSolved] = useState(0);
   const [startedAt, setStartedAt] = useState(Date.now());
@@ -108,6 +111,7 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
     setShowAnim(false);
     setAnimStart(0);
     setAnimViews(0);
+    setJustifying(false);
     setStartedAt(Date.now());
     try {
       const r = await client.practice.next.query({ skillId, locale });
@@ -126,9 +130,30 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
 
   const submit = async () => {
     if (!answer.trim()) return;
+    // Justification-required questions (e.g. "is this a function?") grade the
+    // verdict AND the evidence as a single attempt. Collect the evidence first,
+    // then submit both together — so a right verdict with a wrong "why" counts
+    // as incorrect toward mastery.
+    if (requiresJustificationFor(problem.params) && problem.steps.length > 0 && !justifying) {
+      setJustifying(true);
+      setStepIndex(0);
+      setStepAnswer('');
+      setStepFeedback('');
+      setFeedback('');
+      setPhase('steps');
+      return;
+    }
+    await gradeAttempt();
+  };
+
+  /** Record the graded attempt (optionally with the justification evidence)
+   * and react to the result. Shared by the plain answer flow and the two-part
+   * justify flow. */
+  const gradeAttempt = async (justificationLatex?: string) => {
     const res = await attemptOrQueue({
       problemId: problem.id,
       submittedLatex: answer,
+      justificationLatex,
       hintsUsed,
       animViews,
       stepReached: stepIndex,
@@ -136,14 +161,29 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
       locale,
     });
     if (res.queued) {
+      setJustifying(false);
+      setPhase('answer');
       setFeedback('queued');
       return;
     }
     if (res.correct) {
+      setJustifying(false);
       setFeedback('good');
       setPhase('done');
       setSolved((s) => s + 1);
-    } else if (res.equivalentButNotCanonical) {
+      return;
+    }
+    // Wrong. If the verdict was right but the evidence was wrong, keep the
+    // student on the evidence step to fix it; otherwise the verdict itself is
+    // wrong, so surface it on the main question.
+    if (justifying && res.verdictCorrect && !res.justificationCorrect) {
+      setStepFeedback(res.steps?.[0]?.hint ?? 'bad');
+      setHintsUsed((h) => h + 1);
+      return;
+    }
+    setJustifying(false);
+    setPhase('answer');
+    if (res.equivalentButNotCanonical) {
       setFeedback('warn');
       setMessage(res.message ?? '');
     } else {
@@ -159,6 +199,12 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
         openAnim(Math.max(0, flipStep));
       }
     }
+  };
+
+  /** Evidence "Check" in the justify sub-phase: submit verdict + evidence. */
+  const submitJustified = async () => {
+    if (!stepAnswer.trim()) return;
+    await gradeAttempt(stepAnswer);
   };
 
   /** The Hint button is a simple on/off toggle: first tap shows the nudge,
@@ -303,67 +349,57 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
               <MathText text={hintText} size={14} />
             </Feedback>
           ) : null}
-          <XStack gap={8} flexWrap="wrap" marginTop={4}>
-            {phase === 'answer' && (
-              <>
-                <PrimaryButton onPress={submit}>{t('check')}</PrimaryButton>
-                <SecondaryButton icon={<Lightbulb size={15} />} onPress={nudge}>
-                  {t('hint')}
-                </SecondaryButton>
-                {(animScript || problem.steps.length > 0) && (
-                  <GhostButton
-                    icon={<Footprints size={15} />}
-                    onPress={() => {
-                      // "Walk me through it" IS the animated worked example.
-                      // Toggle the animation when a builder understands this
-                      // problem; only fall back to the per-step guided mode
-                      // when there's no animation to play.
-                      if (animScript) {
-                        if (showAnim) setShowAnim(false);
-                        else openAnim(0);
-                      } else {
-                        setPhase('steps');
-                        setHintsUsed((h) => h + 1);
-                      }
-                    }}
-                  >
-                    {t('showStep')}
-                  </GhostButton>
-                )}
-              </>
-            )}
-            {phase === 'done' && (
-              <>
-                <PrimaryButton onPress={loadNext}>{t('next')} →</PrimaryButton>
-                {animScript && (
-                  <GhostButton
-                    icon={<Film size={15} />}
-                    onPress={() => {
-                      // reinforcement after a correct answer — not a hint
-                      setAnimStart(0);
-                      setShowAnim((s) => !s);
-                    }}
-                  >
-                    {t('animatedExample')}
-                  </GhostButton>
-                )}
-              </>
-            )}
+          {/* Primary action sits at the bottom-right INSIDE the answer box. */}
+          <XStack justifyContent="flex-end" marginTop={4}>
+            {phase === 'answer' && <PrimaryButton onPress={submit}>{t('check')}</PrimaryButton>}
+            {phase === 'done' && <PrimaryButton onPress={loadNext}>{t('next')} →</PrimaryButton>}
           </XStack>
         </AppCard>
       )}
 
-      {phase === 'answer' && feedback !== 'good' && (
-        <AppCard flexDirection="row" alignItems="center" gap={10}>
-          <Mascot size={44} />
-          <Text fontSize={13} fontWeight="600" color={tokens.ink} flexShrink={1}>
-            {t('practiceEncourage')}
-          </Text>
-        </AppCard>
+      {/* Secondary actions live OUTSIDE and under the answer box. The hint they
+          reveal still renders inside the box (via hintText above). */}
+      {phase === 'answer' && (
+        <XStack gap={8} flexWrap="wrap">
+          <SecondaryButton icon={<Lightbulb size={15} />} onPress={nudge}>
+            {t('hint')}
+          </SecondaryButton>
+          {/* Only offer "Walk me through it" when there's a real animated
+              walkthrough to play. Without one it used to drop into solve-it-
+              yourself guided steps (locked rows) — which reads as broken. */}
+          {animScript && (
+            <GhostButton
+              icon={<Footprints size={15} />}
+              onPress={() => (showAnim ? setShowAnim(false) : openAnim(0))}
+            >
+              {t('showStep')}
+            </GhostButton>
+          )}
+        </XStack>
+      )}
+      {phase === 'done' && animScript && (
+        <GhostButton
+          icon={<Film size={15} />}
+          onPress={() => {
+            // reinforcement after a correct answer — not a hint
+            setAnimStart(0);
+            setShowAnim((s) => !s);
+          }}
+        >
+          {t('animatedExample')}
+        </GhostButton>
       )}
 
       {phase === 'steps' && (
         <YStack gap={10}>
+          {justifying && (
+            <AppCard flexDirection="row" alignItems="center" gap={10}>
+              <Lightbulb size={18} color={accent} />
+              <Text fontSize={13} fontWeight="700" color={tokens.ink} flexShrink={1}>
+                {t('justifyLead')}
+              </Text>
+            </AppCard>
+          )}
           {problem.steps.slice(0, stepIndex).map((s) => (
             <AppCard
               key={s.position}
@@ -383,13 +419,15 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
           {step && (
             <AppCard gap={10} borderRadius={22}>
               <Text fontSize={11} fontWeight="800" textTransform="uppercase" letterSpacing={0.6} color={accent}>
-                {t('step')} {stepIndex + 1} {t('of')} {problem.steps.length}
+                {justifying
+                  ? t('evidenceLabel')
+                  : `${t('step')} ${stepIndex + 1} ${t('of')} ${problem.steps.length}`}
               </Text>
               <MathText text={step.prompt} />
               <MathInput
                 value={stepAnswer}
                 onChange={setStepAnswer}
-                onSubmit={checkStep}
+                onSubmit={justifying ? submitJustified : checkStep}
                 // Steps are intermediate and often algebraic even when the
                 // final answer is a bare number, so use the full algebra pad
                 // (choice questions type their word answer instead).
@@ -403,7 +441,9 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
                 </Feedback>
               )}
               <XStack gap={8} marginTop={4} flexWrap="wrap">
-                <PrimaryButton onPress={checkStep}>{t('check')}</PrimaryButton>
+                <PrimaryButton onPress={justifying ? submitJustified : checkStep}>
+                  {t('check')}
+                </PrimaryButton>
                 {animScript && (
                   <GhostButton
                     icon={<Film size={15} />}
@@ -431,21 +471,6 @@ export function PracticeScreen({ skillId, lessonId }: { skillId: number; lessonI
               </Text>
             </AppCard>
           ))}
-
-          <XStack
-            alignSelf="flex-start"
-            backgroundColor={tokens.poster}
-            borderWidth={tokens.mode === 'dark' ? 1 : 0}
-            borderColor={tokens.posterBorder}
-            borderRadius={16}
-            borderBottomLeftRadius={4}
-            paddingHorizontal={12}
-            paddingVertical={8}
-          >
-            <Text color={tokens.posterInk} fontWeight="600" fontSize={12}>
-              {t('practiceEncourage')}
-            </Text>
-          </XStack>
         </YStack>
       )}
 

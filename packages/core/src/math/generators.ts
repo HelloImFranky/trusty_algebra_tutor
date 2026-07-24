@@ -699,18 +699,25 @@ export const generators: Record<string, Generator> = {
       ? `(${x1},${ri(rng, 1, 9)})\\; (${x1 + 1},${ri(rng, 1, 9)})\\; (${x1 + 2},${ri(rng, 1, 9)})\\; (${x1 + 3},${ri(rng, 1, 9)})`
       : `(${x1},${ri(rng, 1, 4)})\\; (${x1},${ri(rng, 5, 9)})\\; (${x1 + 2},${ri(rng, 1, 9)})\\; (${x1 + 3},${ri(rng, 1, 9)})`;
     return {
-      promptEn: `Is this relation a **function**? $${pairs}$ (answer: yes / no)`,
-      promptEs: `¿Es esta relación una **función**? $${pairs}$ (responde: yes / no)`,
+      promptEn: `Is this relation a **function**? $${pairs}$`,
+      promptEs: `¿Es esta relación una **función**? $${pairs}$`,
       answerLatex: isFn ? 'yes' : 'no',
       gradingMode: 'exact',
       steps: [
         {
-          promptEn: 'A relation is a function when each INPUT has exactly ONE output. Check the x-values: does any input repeat with a different output? (yes/no)',
-          promptEs: 'Una relación es una función cuando cada ENTRADA tiene exactamente UNA salida. Revisa los valores de x: ¿algún valor de entrada se repite con una salida diferente? (yes/no)',
-          expectedLatex: isFn ? 'no' : 'yes',
+          // The "why": name the evidence. A relation fails to be a function
+          // exactly when one input has two outputs — so students prove their
+          // yes/no by pointing to that input (or confirming none exists).
+          promptEn: `Now show how you'd CHECK it: $${pairs}$. Scan the inputs (x-values) — which input appears with **more than one** output? Type that x-value, or type **none** if every input has exactly one output.`,
+          promptEs: `Ahora muestra cómo lo COMPROBARÍAS: $${pairs}$. Revisa las entradas (valores de x): ¿qué entrada aparece con **más de una** salida? Escribe ese valor de x, o escribe **none** si cada entrada tiene exactamente una salida.`,
+          expectedLatex: isFn ? 'none' : String(x1),
           gradingMode: 'exact',
-          hintEn: 'Look only at the first number in each ordered pair.',
-          hintEs: 'Mira solo el primer número de cada par ordenado.',
+          hintEn: isFn
+            ? 'Look at just the first number of each pair. Every x-value shows up once — no input repeats — so the answer is "none".'
+            : 'Look at just the first number of each pair. One x-value is listed twice with two different y-values — that repeated input is your evidence.',
+          hintEs: isFn
+            ? 'Mira solo el primer número de cada par. Cada valor de x aparece una vez — ninguna entrada se repite — así que la respuesta es "none".'
+            : 'Mira solo el primer número de cada par. Un valor de x aparece dos veces con dos valores de y diferentes — esa entrada repetida es tu evidencia.',
         },
       ],
       params: { isFn },

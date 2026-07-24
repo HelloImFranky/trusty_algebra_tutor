@@ -92,6 +92,64 @@ function renderTex(tex: string, block: boolean): string {
 }
 
 /**
+ * Break points for wrapping a long *block* worked example onto multiple lines
+ * so it stays readable on a narrow (phone) screen instead of shrinking to
+ * nothing or overflowing the card. Relations (=, <, ≥…) and arrows (→) lead
+ * the next unit; a top-level comma ends the current unit (list separator);
+ * `\quad`/`\qquad` become a plain line break (the horizontal spacer is dropped
+ * since the wrap already separates the sides). Anything inside braces (a
+ * `\frac`, a `\text{…}`) never breaks.
+ */
+const BLOCK_BREAKS = [
+  '\\longrightarrow', '\\Longrightarrow', '\\Rightarrow', '\\rightarrow', '\\to',
+  '\\qquad', '\\quad',
+  '\\leq', '\\geq', '\\neq', '\\approx', '\\le', '\\ge', '\\ne', '\\lt', '\\gt',
+];
+
+function splitBlockUnits(tex: string): string[] {
+  const units: string[] = [];
+  let depth = 0;
+  let cur = '';
+  const flush = () => {
+    if (cur.trim()) units.push(cur.trim());
+    cur = '';
+  };
+  for (let i = 0; i < tex.length; ) {
+    const c = tex[i];
+    if (c === '{') { depth++; cur += c; i++; continue; }
+    if (c === '}') { depth--; cur += c; i++; continue; }
+    if (depth === 0) {
+      const macro = BLOCK_BREAKS.find(
+        (r) => tex.startsWith(r, i) && !/[a-zA-Z]/.test(tex[i + r.length] ?? ''),
+      );
+      if (macro) {
+        const spacer = macro === '\\quad' || macro === '\\qquad';
+        flush();
+        if (!spacer) cur = macro; // relations/arrows lead the next line; spacers just break
+        i += macro.length;
+        continue;
+      }
+      if ((c === '=' || c === '<' || c === '>') && !/\\(left|right)$/.test(cur)) {
+        flush();
+        cur = c;
+        i++;
+        continue;
+      }
+      if (c === ',') {
+        cur += c;
+        flush();
+        i++;
+        continue;
+      }
+    }
+    cur += c;
+    i++;
+  }
+  flush();
+  return units.length ? units : [tex.trim()];
+}
+
+/**
  * Inline prompt math that wraps instead of overflowing its card. A long
  * equation breaks at its relation onto a new line (each side stays intact);
  * an expression with no relation wraps at its operators. Anything still too
@@ -174,12 +232,17 @@ function FitInlineKatex({ tex, color }: { tex: string; color: string }) {
 }
 
 /**
- * Block worked answer that never overflows its card. A long expression is
- * scaled down (not wrapped) until it fits the available width, so it stays
- * on one line and inside the background box instead of running past the
- * edge. Content that already fits renders at full size (scale 1).
+ * Block worked example that never overflows its card. A long expression is
+ * broken at its top-level operators (=, →, commas, \quad) and WRAPS onto
+ * multiple lines — so it stays full-size and readable on a narrow phone
+ * instead of shrinking to nothing or running past the card edge. Each unit is
+ * itself unbreakable; only if a single unit is still wider than the card (a
+ * long \frac or radical) is everything scaled down as a last resort. Content
+ * that already fits renders on one line.
  */
-function FitBlockKatex({ html, color }: { html: string; color: string }) {
+function FitBlockKatex({ tex, color }: { tex: string; color: string }) {
+  const units = useMemo(() => splitBlockUnits(tex), [tex]);
+  const htmls = useMemo(() => units.map((u) => renderTex(u, false)), [units]);
   const outerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState<{ scale: number; height: number }>({ scale: 1, height: 0 });
@@ -189,9 +252,10 @@ function FitBlockKatex({ html, color }: { html: string; color: string }) {
     const inner = innerRef.current;
     if (!outer || !inner) return;
     const fit = () => {
-      // Measure at natural size first, then compute the shrink ratio.
       inner.style.transform = 'scale(1)';
       const avail = outer.clientWidth;
+      // scrollWidth after wrapping is the widest unit that still can't break;
+      // shrink everything only if even that beats the available width.
       const natural = inner.scrollWidth;
       const naturalH = inner.offsetHeight;
       const scale = natural > avail && natural > 0 ? avail / natural : 1;
@@ -201,12 +265,9 @@ function FitBlockKatex({ html, color }: { html: string; color: string }) {
     const ro = new ResizeObserver(fit);
     ro.observe(outer);
     return () => ro.disconnect();
-  }, [html]);
+  }, [tex]);
 
   return (
-    // textAlign centers the inline-block child, and scaling from the top
-    // center keeps it centered whether it renders at full size or is shrunk
-    // to fit — matching KaTeX's default display-mode centering.
     <div
       ref={outerRef}
       style={{ width: '100%', overflow: 'hidden', height: box.height || undefined, textAlign: 'center' }}
@@ -216,12 +277,21 @@ function FitBlockKatex({ html, color }: { html: string; color: string }) {
         style={{
           color,
           display: 'inline-block',
-          whiteSpace: 'nowrap',
+          // wrap BETWEEN units (each unit is nowrap), scaling only as a fallback
+          whiteSpace: 'normal',
           transform: `scale(${box.scale})`,
           transformOrigin: 'top center',
+          lineHeight: 1.9,
         }}
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
+      >
+        {htmls.map((h, i) => (
+          <span
+            key={i}
+            style={{ display: 'inline-block', whiteSpace: 'nowrap', margin: '0 0.12em' }}
+            dangerouslySetInnerHTML={{ __html: h }}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -242,12 +312,9 @@ function FitBlockKatex({ html, color }: { html: string; color: string }) {
 export function Katex({ tex, block = false }: { tex: string; block?: boolean }) {
   const tokens = useTokens();
   if (block) {
-    // renderToString can still throw on some inputs even with
-    // throwOnError:false. This component renders untrusted text (tutor/model
-    // replies and the student's own chat messages via MathText), so the raw
-    // string must NEVER be injected as HTML — escape it to literal text.
-    const html = renderTex(tex, true);
-    return <FitBlockKatex html={html} color={tokens.ink} />;
+    // FitBlockKatex renders each wrap-unit through renderTex (throwOnError:false
+    // + escape fallback), so untrusted text never reaches innerHTML unescaped.
+    return <FitBlockKatex tex={tex} color={tokens.ink} />;
   }
   return <FitInlineKatex tex={tex} color={tokens.ink} />;
 }

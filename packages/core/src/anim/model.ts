@@ -7,7 +7,14 @@
  * it drops in; missing id → it fades out. This is what lets us *show* the
  * arithmetic (terms moving across the equals sign, like terms merging,
  * canceling pairs being struck out) instead of just swapping lines.
+ *
+ * Most lesson scripts below are hand-authored literals. A few (lesson 7.2)
+ * are generated from the practice builders so the lesson-page example is
+ * identical to the per-problem walkthrough; that import is type-only in the
+ * other direction (builders.ts imports only types from here), so there is no
+ * runtime import cycle.
  */
+import { buildDots, buildFactorTrinomial } from './builders.js';
 
 export type TokenKind = 'num' | 'var' | 'op' | 'rel' | 'frac';
 
@@ -832,6 +839,25 @@ export const slopeInterceptScript: EqScript = {
   ],
 };
 
+/**
+ * Lesson 7.2 worked examples (the classroom canonical problems), generated
+ * from the practice builders so the lesson-page animation matches exactly
+ * what students see when they hit "Walk me through it". Ids/titles are
+ * overridden for the examples library and the lesson picker.
+ */
+export const factorTrinomialScript: EqScript = {
+  ...buildFactorTrinomial(-10, 3), // x² − 7x − 30 = (x − 10)(x + 3)
+  id: 'factor-trinomial',
+  titleEn: 'Factor a trinomial',
+  titleEs: 'Factoriza un trinomio',
+};
+export const dotsScript: EqScript = {
+  ...buildDots(2, 3), // 4x² − 9 = (2x + 3)(2x − 3)
+  id: 'dots',
+  titleEn: 'Difference of squares (DOTS)',
+  titleEs: 'Diferencia de cuadrados (DOTS)',
+};
+
 export const demoScripts: EqScript[] = [
   twoStepScript,
   likeTermsScript,
@@ -843,6 +869,8 @@ export const demoScripts: EqScript[] = [
   foilScript,
   slopeTwoPointsScript,
   slopeInterceptScript,
+  factorTrinomialScript,
+  dotsScript,
 ];
 
 /**
@@ -858,6 +886,7 @@ export const scriptsByLessonCode: Record<string, EqScript[]> = {
   '3.3': [inequalityScript],
   '5.2': [slopeTwoPointsScript],
   '5.3': [slopeInterceptScript],
+  '7.2': [factorTrinomialScript, dotsScript],
 };
 
 /** Split a step at its relation token (=, ≤, …) for the balance scale. */

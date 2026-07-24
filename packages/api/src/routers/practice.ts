@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma, Prisma } from '@tutor/db';
 import {
   answerChoicesFor,
+  requiresJustificationFor,
   keypadKindForProblem,
   decayedScore,
   tierForScore,
@@ -138,6 +139,11 @@ async function topUpSprintDrills(topics: string[], perTopic: number): Promise<vo
 const attemptInput = z.object({
   problemId: z.number().int(),
   submittedLatex: z.string().max(2000),
+  // Justification for questions that require one (e.g. "is this a function?"):
+  // the student's evidence, graded against the problem's first step. When the
+  // problem requires a justification, the attempt is correct only if BOTH the
+  // main answer and this evidence are correct.
+  justificationLatex: z.string().max(2000).optional(),
   hintsUsed: z.number().int().min(0).max(20).default(0),
   // animated-walkthrough opens for this problem (subset of hintsUsed during
   // guided practice; tracked separately to measure impact on mastery)
@@ -204,10 +210,36 @@ export const practiceRouter = router({
       prob.gradingMode as GradingMode,
       prob.tolerance,
     );
+
+    // Questions that require a justification (e.g. "is this a function?") are
+    // correct only if the student ALSO named the right evidence. The evidence
+    // is graded against the problem's first step. A correct verdict with wrong
+    // (or missing) evidence does NOT count as correct — that is what makes the
+    // "why" count toward mastery.
+    const needsJustification = requiresJustificationFor(prob.paramsJson);
+    let justificationCorrect = true;
+    if (needsJustification) {
+      const evidenceStep = await prisma.problemStep.findFirst({
+        where: { problemId: prob.id },
+        orderBy: { position: 'asc' },
+      });
+      justificationCorrect =
+        input.justificationLatex !== undefined && evidenceStep
+          ? grade(
+              input.justificationLatex,
+              evidenceStep.expectedLatex,
+              evidenceStep.gradingMode as GradingMode,
+              prob.tolerance,
+            ).correct
+          : false;
+    }
+    const verdictCorrect = result.correct;
+    const correct = verdictCorrect && justificationCorrect;
+
     // Wrong answers get a diagnosis: does the submission match a wrong answer
     // this problem's error patterns predict (added instead of subtracted,
     // forgot the inequality flip, ...)?
-    const misconception = result.correct
+    const misconception = verdictCorrect
       ? null
       : diagnoseMisconception(
           input.submittedLatex,
@@ -219,7 +251,7 @@ export const practiceRouter = router({
         userId: BigInt(ctx.user.id),
         problemId: prob.id,
         submittedLatex: input.submittedLatex,
-        correct: result.correct,
+        correct,
         misconceptionId: misconception?.id ?? null,
         hintsUsed: input.hintsUsed,
         animViews: input.animViews,
@@ -228,9 +260,9 @@ export const practiceRouter = router({
         context: input.context,
       },
     });
-    await applyMastery(ctx.user.id, Number(prob.skillId), result.correct, input.hintsUsed);
+    await applyMastery(ctx.user.id, Number(prob.skillId), correct, input.hintsUsed);
 
-    const steps = result.correct
+    const steps = correct
       ? []
       : (
           await prisma.problemStep.findMany({
@@ -244,7 +276,9 @@ export const practiceRouter = router({
         }));
 
     return {
-      correct: result.correct,
+      correct,
+      verdictCorrect,
+      justificationCorrect,
       equivalentButNotCanonical: result.equivalentButNotCanonical ?? false,
       misconceptionId: misconception?.id ?? null,
       // Reveal the target answer only after the attempt has been graded and
