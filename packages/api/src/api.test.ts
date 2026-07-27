@@ -1381,6 +1381,45 @@ describe('admin approval (teacher provisioning)', () => {
     const gone = await prisma.user.findUnique({ where: { id: BigInt(t.user.id) } });
     expect(gone).toBeNull();
   });
+
+  /**
+   * Disabling a teacher must also cut off the per-student drill-down, not just
+   * the teacher-only endpoints. Disabling does NOT delete their classes, so the
+   * roster link that authorizes `progress.student` outlives the account — and
+   * that endpoint is `protectedProcedure` + a role check, so it never saw the
+   * `status !== 'active'` gate that `teacherProcedure` applies. Regression test
+   * for a disabled teacher retaining full read access to student records.
+   */
+  it('disabling a teacher also revokes the per-student drill-down', async () => {
+    const teacherCreds = { username: 'revoke_me', password: 'password123' };
+    const t = await anon.auth.register({
+      role: 'teacher',
+      ...teacherCreds,
+      displayName: 'Revoke Me',
+      email: 'revoke@example.com',
+    });
+    await as(admin).admin.teachers.approve({ userId: t.user.id });
+    const active = (await anon.auth.login(teacherCreds)).user;
+
+    // The student joins this teacher's class, which is what grants access.
+    const cls = await as(active).teacher.classes.create({ name: 'Revocation Test' });
+    await as(student).teacher.classes.join({ code: cls.joinCode });
+
+    // While active, the drill-down works (the access being revoked below).
+    const seen = await as(active).progress.student({ studentId: student.id });
+    expect(seen.student.displayName).toBe('Student One');
+
+    await as(admin).admin.teachers.disable({ userId: t.user.id });
+    const disabled = (await anon.auth.login(teacherCreds)).user;
+    expect(disabled.status).toBe('disabled');
+
+    // Teacher-only endpoints were already closed...
+    await expect(as(disabled).teacher.classes.list()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    // ...and the student record itself must be closed too.
+    await expect(
+      as(disabled).progress.student({ studentId: student.id }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
 });
 
 describe('tutor sessions', () => {

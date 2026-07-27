@@ -9,8 +9,23 @@ import { prisma } from '@tutor/db';
  * non-archived class the teacher owns (FERPA §9). Used by both the per-student
  * progress drill-down and guardian-consent attestation so the two can never
  * drift. Fail closed — no shared class, no access.
+ *
+ * The teacher's own account must also still be ACTIVE. Owning the class is not
+ * enough: `admin.teachers.disable` revokes a teacher's access without deleting
+ * their classes, so a disabled (or never-approved 'pending') teacher keeps
+ * owning rosters full of students. Checking only the enrollment would let them
+ * keep reading student records through `progress.student` — the richest
+ * student-data endpoint there is — long after an admin cut them off. The
+ * status is read fresh here rather than taken from the caller's access token,
+ * so a disable takes effect on the very next request instead of waiting out
+ * the token TTL.
  */
 export async function teacherCanSeeStudent(teacherId: number, studentId: number): Promise<boolean> {
+  const teacher = await prisma.user.findFirst({
+    where: { id: BigInt(teacherId), role: 'teacher', status: 'active' },
+    select: { id: true },
+  });
+  if (!teacher) return false;
   const enrolled = await prisma.classEnrollment.findFirst({
     where: {
       studentUserId: BigInt(studentId),

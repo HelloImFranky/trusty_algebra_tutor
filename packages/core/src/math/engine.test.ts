@@ -149,4 +149,24 @@ describe('grade()', () => {
     // The whole set resolves near-instantly because nothing is allocated.
     expect(Date.now() - started).toBeLessThan(1000);
   });
+
+  it('never lets a submission mutate the shared instance config', () => {
+    // The grading instance is a module-level singleton, so a config change made
+    // from inside an evaluated expression would persist for every later call —
+    // `number:"BigNumber"` silently changes everyone's numeric semantics, and a
+    // large `precision` turns evaluation into a CPU-bound hang. `config` is on
+    // the denylist, so these are rejected like any other disabled function.
+    const baseline = grade('1/3', '0.3333333333333333', 'numeric_tolerance', 1e-6);
+    expect(baseline.correct).toBe(true);
+
+    expect(grade('config({number:"BigNumber"})', '1', 'numeric_tolerance', 0.05).correct).toBe(false);
+    expect(grade('config({precision:1000000})', '1', 'numeric_tolerance', 0.05).correct).toBe(false);
+    // Also via the paren form, so this doesn't rely on normalizeInput's
+    // incidental `{`→`(` LaTeX rewriting to be the thing that blocks it.
+    expect(grade('config(1)', '1', 'numeric_tolerance', 0.05).correct).toBe(false);
+
+    // Grading still behaves exactly as it did before those submissions.
+    expect(grade('1/3', '0.3333333333333333', 'numeric_tolerance', 1e-6).correct).toBe(true);
+    expect(grade('0.5', '1/2', 'exact').correct).toBe(true);
+  });
 });
