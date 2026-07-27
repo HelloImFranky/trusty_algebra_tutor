@@ -31,8 +31,18 @@ const DISABLED = [
   'concat', 'resize', 'reshape', 'fill', 'flatten', 'rotate',
   // randomness (also cheap to spam, and non-deterministic in grading)
   'random', 'randomInt', 'pickRandom',
-  // config / environment mutation — never needed from an expression
-  'import', 'createUnit',
+  // config / environment mutation — never needed from an expression.
+  // `config` matters as much as `import` here: these instances are module-level
+  // singletons shared by every grading call in the process, and a config change
+  // made from inside an evaluated expression persists process-wide. A single
+  // submission of `config({number:"BigNumber"})` would silently change the
+  // numeric semantics of everyone else's grading, and a large `precision` turns
+  // ordinary evaluation into a CPU-bound hang. Today `normalizeInput` happens to
+  // mangle the object literal (it rewrites `{`→`(` for LaTeX), so this is not
+  // reachable through grading — but that is an incidental side effect of LaTeX
+  // handling, not a security boundary, and it would not survive a change to
+  // normalization or a new caller that skips it. Deny it here instead.
+  'import', 'createUnit', 'config',
 ] as const;
 
 /**
