@@ -16,7 +16,7 @@
     "@tutor/app": "*",
     "@tutor/core": "*",
     "@tutor/db": "*",
-    "next": "^15.2.0",
+    "next": "^15.5.22",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native-web": "^0.20.0",
